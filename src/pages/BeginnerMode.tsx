@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Beaker, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, X, Zap, ArrowRightLeft, Sparkles, Target, Droplets } from "lucide-react";
+import { ArrowLeft, Beaker, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, X, Zap, ArrowRightLeft, Sparkles, Target, Droplets, Activity, SkipForward, SkipBack } from "lucide-react";
+import { Legend } from "recharts";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useChartColors } from "@/hooks/use-chart-theme";
@@ -549,6 +550,15 @@ const BeginnerMode = () => {
             </motion.div>
           </div>
 
+          {/* Scenario Simulator */}
+          <ScenarioSimulator
+            selectedTemplate={selectedTemplate}
+            liquidity={liquidity}
+            feeRate={feeRate}
+            volMultiplier={volMultiplier}
+            colors={colors}
+          />
+
           {/* Risk Dashboard */}
           <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <h3 className="text-sm font-semibold text-foreground mb-4">Risk Dashboard</h3>
@@ -788,5 +798,224 @@ const SwapStat = ({ label, value, level }: { label: string; value: string; level
     </motion.div>
   );
 };
+
+/* ─── Scenario Simulator ─── */
+
+type ScenarioId = "trending" | "mean_revert" | "chop" | "crash";
+
+const scenariosList: { id: ScenarioId; label: string; emoji: string; desc: string }[] = [
+  { id: "trending", label: "Trending Up", emoji: "📈", desc: "Steady 40% annual drift upward" },
+  { id: "mean_revert", label: "Mean-Reverting", emoji: "🔄", desc: "Oscillates ±15% around starting price" },
+  { id: "chop", label: "High Vol Chop", emoji: "⚡", desc: "High volatility, no trend — the IL killer" },
+  { id: "crash", label: "One-Sided Crash", emoji: "💥", desc: "Token A drops 70% over 90 days" },
+];
+
+const generateScenarioData = (
+  scenario: ScenarioId,
+  template: Template,
+  liq: number,
+  fRate: number,
+  _volMult: number,
+  days: number
+) => {
+  const data: { day: number; price: number; lpValue: number; holdValue: number; fees: number; il: number }[] = [];
+  const startPrice = 100;
+  let price = startPrice;
+  let cumulativeFees = 0;
+
+  for (let d = 0; d <= days; d++) {
+    const t = d / days;
+    switch (scenario) {
+      case "trending":
+        price = startPrice * (1 + 0.4 * t + Math.sin(d * 0.15) * 0.05);
+        break;
+      case "mean_revert":
+        price = startPrice * (1 + Math.sin(d * 0.08) * 0.15 + Math.cos(d * 0.03) * 0.05);
+        break;
+      case "chop":
+        price = startPrice * (1 + Math.sin(d * 0.3) * 0.2 + Math.cos(d * 0.7) * 0.1);
+        break;
+      case "crash":
+        price = startPrice * (1 - 0.7 * t * t + Math.sin(d * 0.1) * 0.03);
+        break;
+    }
+    price = Math.max(price, 1);
+
+    const r = price / startPrice;
+    const sqrtR = Math.sqrt(r);
+    const baseIL = 2 * sqrtR / (1 + r) - 1;
+    let ilMult = 1;
+    if (template === "stable_swap") ilMult = 0.3;
+    else if (template === "weighted") ilMult = 0.7;
+    else if (template === "concentrated") ilMult = 1.8;
+    const il = baseIL * ilMult;
+
+    const dailyVol = Math.abs(d > 0 ? (price / (data[d - 1]?.price || startPrice) - 1) : 0);
+    const dailyFee = liq * fRate * (0.5 + dailyVol * 10) * 0.001;
+    cumulativeFees += dailyFee;
+
+    const holdValue = liq * (0.5 * (price / startPrice) + 0.5);
+    const lpValue = holdValue * (1 + il) + cumulativeFees;
+
+    data.push({
+      day: d,
+      price: parseFloat(price.toFixed(2)),
+      lpValue: parseFloat(lpValue.toFixed(0)),
+      holdValue: parseFloat(holdValue.toFixed(0)),
+      fees: parseFloat(cumulativeFees.toFixed(0)),
+      il: parseFloat((il * 100).toFixed(2)),
+    });
+  }
+  return data;
+};
+
+const ScenarioSimulator = ({
+  selectedTemplate,
+  liquidity: liq,
+  feeRate: fRate,
+  volMultiplier: vMult,
+  colors,
+}: {
+  selectedTemplate: Template;
+  liquidity: number;
+  feeRate: number;
+  volMultiplier: number;
+  colors: ReturnType<typeof useChartColors>;
+}) => {
+  const [activeScenario, setActiveScenario] = useState<ScenarioId>("trending");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentDay, setCurrentDay] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const totalDays = 90;
+
+  const fullData = useMemo(
+    () => generateScenarioData(activeScenario, selectedTemplate, liq, fRate, vMult, totalDays),
+    [activeScenario, selectedTemplate, liq, fRate, vMult]
+  );
+
+  const visibleData = fullData.slice(0, currentDay + 1);
+  const currentPoint = visibleData[visibleData.length - 1];
+
+  useEffect(() => {
+    if (isPlaying) {
+      timerRef.current = setInterval(() => {
+        setCurrentDay(prev => {
+          if (prev >= totalDays) { setIsPlaying(false); return totalDays; }
+          return prev + 1;
+        });
+      }, 100 / speed);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isPlaying, speed]);
+
+  useEffect(() => {
+    setCurrentDay(0);
+    setIsPlaying(false);
+  }, [activeScenario, selectedTemplate, liq]);
+
+  const pnlPct = currentPoint ? ((currentPoint.lpValue / liq - 1) * 100).toFixed(1) : "0";
+  const holdPnl = currentPoint ? ((currentPoint.holdValue / liq - 1) * 100).toFixed(1) : "0";
+  const lpBeatsHold = currentPoint ? currentPoint.lpValue > currentPoint.holdValue : false;
+
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+
+  return (
+    <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
+          <Activity className="w-3.5 h-3.5 text-foreground" />
+        </div>
+        <h3 className="text-sm font-semibold text-foreground">Scenario Simulator</h3>
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-secondary text-muted-foreground">INTERACTIVE</span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+        {scenariosList.map(s => (
+          <motion.button key={s.id} onClick={() => setActiveScenario(s.id)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            className={`p-2.5 rounded-lg border text-left transition-all ${activeScenario === s.id ? "border-foreground/30 bg-foreground/5" : "border-border bg-card hover:border-foreground/10"}`}>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-sm">{s.emoji}</span>
+              <span className="text-[11px] font-medium text-foreground">{s.label}</span>
+            </div>
+            <p className="text-[9px] text-muted-foreground leading-snug">{s.desc}</p>
+          </motion.button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 mb-4 p-2.5 rounded-lg bg-secondary border border-border">
+        <button onClick={() => { setCurrentDay(0); setIsPlaying(false); }} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background transition-colors">
+          <SkipBack className="w-3.5 h-3.5" />
+        </button>
+        <motion.button onClick={() => { if (currentDay >= totalDays) setCurrentDay(0); setIsPlaying(!isPlaying); }} whileTap={{ scale: 0.9 }}
+          className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+        </motion.button>
+        <button onClick={() => { setCurrentDay(totalDays); setIsPlaying(false); }} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-background transition-colors">
+          <SkipForward className="w-3.5 h-3.5" />
+        </button>
+        <div className="flex-1 flex items-center gap-2">
+          <input type="range" min={0} max={totalDays} value={currentDay} onChange={e => { setCurrentDay(Number(e.target.value)); setIsPlaying(false); }} className="flex-1 accent-foreground h-1" />
+          <span className="text-[10px] font-mono text-foreground w-14 text-right">Day {currentDay}</span>
+        </div>
+        <div className="flex items-center gap-1 border-l border-border pl-3">
+          {[1, 2, 4].map(s => (
+            <button key={s} onClick={() => setSpeed(s)} className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-all ${speed === s ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>{s}x</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+        <LiveStat label="LP Value" value={`$${currentPoint?.lpValue.toLocaleString() || "—"}`} />
+        <LiveStat label="LP P&L" value={`${Number(pnlPct) >= 0 ? "+" : ""}${pnlPct}%`} color={Number(pnlPct) >= 0 ? "text-success" : "text-destructive"} />
+        <LiveStat label="Hold P&L" value={`${Number(holdPnl) >= 0 ? "+" : ""}${holdPnl}%`} color={Number(holdPnl) >= 0 ? "text-success" : "text-destructive"} />
+        <LiveStat label="Fees Earned" value={`$${currentPoint?.fees.toLocaleString() || "0"}`} color="text-success" />
+        <LiveStat label="LP vs Hold" value={lpBeatsHold ? "LP Wins 🏆" : "Hold Wins"} color={lpBeatsHold ? "text-success" : "text-warning"} />
+      </div>
+
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={visibleData}>
+            <defs>
+              <linearGradient id="lpGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={colors.green} stopOpacity={0.2} />
+                <stop offset="100%" stopColor={colors.green} stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="holdGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={colors.gray} stopOpacity={0.1} />
+                <stop offset="100%" stopColor={colors.gray} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+            <XAxis dataKey="day" tick={{ fontSize: 9, fill: colors.tick }} tickFormatter={v => `D${v}`} domain={[0, totalDays]} />
+            <YAxis tick={{ fontSize: 9, fill: colors.tick }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={v => `Day ${v}`} formatter={(v: number, name: string) => [`$${v.toLocaleString()}`, name === "lpValue" ? "LP Position" : "Hold Only"]} />
+            <Legend wrapperStyle={{ fontSize: 10 }} formatter={v => v === "lpValue" ? "LP Position" : "Hold Only"} />
+            <Area type="monotone" dataKey="holdValue" stroke={colors.gray} fill="url(#holdGrad)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+            <Area type="monotone" dataKey="lpValue" stroke={colors.green} fill="url(#lpGrad)" strokeWidth={2} dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-[10px]">
+        <span className="text-muted-foreground">Price: <span className="font-mono text-foreground">${currentPoint?.price.toFixed(2) || "—"}</span></span>
+        <span className="text-muted-foreground">IL: <span className={`font-mono ${(currentPoint?.il || 0) < -2 ? "text-destructive" : "text-foreground"}`}>{currentPoint?.il.toFixed(2) || "0"}%</span></span>
+        <span className="text-muted-foreground">Fees: <span className="font-mono text-success">${currentPoint?.fees.toLocaleString() || "0"}</span></span>
+      </div>
+    </motion.div>
+  );
+};
+
+const LiveStat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+  <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+    <p className="text-[9px] text-muted-foreground mb-0.5">{label}</p>
+    <AnimatePresence mode="wait">
+      <motion.p key={value} className={`text-xs font-semibold font-mono-data ${color || "text-foreground"}`}
+        initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.15 }}>
+        {value}
+      </motion.p>
+    </AnimatePresence>
+  </div>
+);
 
 export default BeginnerMode;
