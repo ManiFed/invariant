@@ -6,7 +6,16 @@ export interface LessonStep {
   type: "lesson";
   title: string;
   content: string[];
-  visual?: "pool-intro" | "reserves-diagram" | "curve-preview" | "trade-animation" | "il-diagram" | "arb-diagram" | "fees-diagram";
+  visual?: string;
+  interactive?: string;
+}
+
+export interface FollowUpQuiz {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  wrongExplanation: string;
 }
 
 export interface QuizStep {
@@ -15,6 +24,9 @@ export interface QuizStep {
   options: string[];
   correctIndex: number;
   explanation: string;
+  wrongExplanation: string;
+  followUpQuiz?: FollowUpQuiz;
+  calculatorNeeded?: boolean;
 }
 
 export type CourseStep = LessonStep | QuizStep;
@@ -25,7 +37,7 @@ export interface CourseModule {
   subtitle: string;
   emoji: string;
   steps: CourseStep[];
-  reveals: string[]; // dashboard sections revealed after completing this module
+  reveals: string[];
 }
 
 export const COURSE_MODULES: CourseModule[] = [
@@ -52,6 +64,14 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["A human market maker", "A mathematical formula using token reserves", "The last trade price on a centralized exchange"],
         correctIndex: 1,
         explanation: "AMMs use a mathematical formula based on the current reserves of each token to determine prices automatically — no humans or order books needed.",
+        wrongExplanation: "Think simpler: AMMs are automatic. There's no person involved. The pool itself figures out the price using math based on how many tokens it holds.",
+        followUpQuiz: {
+          question: "What two inputs does the AMM formula need to calculate a price?",
+          options: ["Trading volume and time", "The amounts of each token in the pool", "External market data and user preferences"],
+          correctIndex: 1,
+          explanation: "The formula only needs the reserves — how much of Token X and Token Y are in the pool. Nothing else.",
+          wrongExplanation: "The AMM is self-contained. It doesn't look outside itself. It only knows how many tokens it's holding right now.",
+        },
       },
       {
         type: "lesson",
@@ -68,6 +88,7 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["The blockchain itself", "Order books and human market makers", "Token smart contracts"],
         correctIndex: 1,
         explanation: "AMMs replace the traditional order book model. Instead of matching buyers with sellers, a formula automatically provides liquidity and determines prices.",
+        wrongExplanation: "Think about what's different: in a normal exchange, people place buy/sell orders and wait. In an AMM, there's a pool of tokens and a formula. No waiting, no order matching.",
       },
     ],
   },
@@ -94,6 +115,7 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["Both increase", "ETH reserve decreases, USDC reserve increases", "Nothing changes"],
         correctIndex: 1,
         explanation: "The trader takes ETH out (decreasing its reserve) and puts USDC in (increasing its reserve). Reserves always move in opposite directions during a trade.",
+        wrongExplanation: "Picture a pool with two buckets. When someone takes from one bucket, they must pour into the other. ETH leaves → USDC comes in.",
       },
       {
         type: "lesson",
@@ -103,6 +125,7 @@ export const COURSE_MODULES: CourseModule[] = [
           "x is the reserve of token X, y is the reserve of token Y, and k is a constant that never changes.",
           "This means: when one reserve goes down, the other must go up to keep the product the same. This is what creates the pricing mechanism.",
         ],
+        visual: "constant-product",
       },
       {
         type: "quiz",
@@ -110,6 +133,8 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["2,000", "1,000,000", "1,000"],
         correctIndex: 1,
         explanation: "k = x × y = 1,000 × 1,000 = 1,000,000. This product must remain constant through all trades (before fees).",
+        wrongExplanation: "It's multiplication, not addition! x TIMES y. So 1,000 × 1,000 = 1,000,000. The formula is x × y = k.",
+        calculatorNeeded: true,
       },
       {
         type: "quiz",
@@ -117,6 +142,15 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["500", "1,500", "2,000"],
         correctIndex: 2,
         explanation: "If x = 500, then y = k/x = 1,000,000/500 = 2,000. The reserves shifted dramatically — the pool now holds much more Y.",
+        wrongExplanation: "Use the formula: x × y = k. If x = 500 and k = 1,000,000, then y = 1,000,000 ÷ 500. Try the calculator!",
+        calculatorNeeded: true,
+        followUpQuiz: {
+          question: "In that same scenario (x went from 1000→500, y went from 1000→2000), how many Y tokens did the trader put IN?",
+          options: ["500", "1,000", "2,000"],
+          correctIndex: 1,
+          explanation: "Y went from 1,000 to 2,000, so the trader added 1,000 Y tokens. They also took out 500 X tokens (1000→500).",
+          wrongExplanation: "Look at how Y changed: it was 1,000, now it's 2,000. The difference (2,000 - 1,000 = 1,000) is what the trader put in.",
+        },
       },
     ],
   },
@@ -143,15 +177,18 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["4.0", "0.25", "2,500"],
         correctIndex: 1,
         explanation: "Price = Y/X = 500/2,000 = 0.25. There's a lot of X and little Y, so X is cheap relative to Y.",
+        wrongExplanation: "Price = Y ÷ X. There's lots of X (2,000) but little Y (500). When something is abundant, it's cheap. 500 ÷ 2,000 = 0.25.",
+        calculatorNeeded: true,
       },
       {
         type: "lesson",
         title: "The Curve Shape",
         content: [
-          "Look at the curve on the right — it's a hyperbola. Notice how it gets steeper at the edges.",
+          "Look at the curve in the center panel — it's a hyperbola. Notice how it gets steeper at the edges.",
           "Near the center, the curve is relatively flat. Small trades here have minimal price impact.",
           "At the extremes, the curve is very steep. Trades here move the price dramatically. This steepness is the visual representation of slippage.",
         ],
+        visual: "curve-steepness",
       },
       {
         type: "quiz",
@@ -159,6 +196,14 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["At the edges where it's steep", "In the middle where it's flatter", "The impact is the same everywhere"],
         correctIndex: 1,
         explanation: "The flatter section of the curve means small reserve changes produce small price changes. At the steep edges, even small trades cause large price moves.",
+        wrongExplanation: "Think of a hill: walking on flat ground barely changes your height. Walking on a steep slope changes it a lot. The curve works the same way — flat = small impact, steep = big impact.",
+        followUpQuiz: {
+          question: "If the pool has very unequal reserves (e.g., 10,000 X and 100 Y), where are you on the curve?",
+          options: ["In the flat middle section", "On a steep edge", "It doesn't matter"],
+          correctIndex: 1,
+          explanation: "Unequal reserves mean you're on the steep part of the curve. Trading Y here costs a lot because Y is scarce. The pool is 'stretched' to one side.",
+          wrongExplanation: "When one token is much more abundant than the other, you've moved far from the balanced center. That puts you on the steep part of the curve.",
+        },
       },
     ],
   },
@@ -180,20 +225,35 @@ export const COURSE_MODULES: CourseModule[] = [
         visual: "trade-animation",
       },
       {
+        type: "lesson",
+        title: "WHY Does Slippage Happen?",
+        content: [
+          "Here's the intuition: imagine the pool has 1,000 apples and 1,000 oranges. You want oranges.",
+          "Your first orange costs about 1 apple — fair enough. But each orange you take makes oranges scarcer in the pool. Meanwhile, you're adding more apples, making them more abundant.",
+          "Scarcer things are more expensive. So your 10th orange costs more than your 1st, your 100th costs WAY more than your 10th. The pool is protecting itself from being drained of one token.",
+          "This is WHY the constant product formula (x × y = k) exists — it ensures the pool never runs out of either token, but the price gets exponentially worse as you try to take more.",
+        ],
+        visual: "slippage-why",
+      },
+      {
         type: "quiz",
         question: "You want to buy Y. You expect a price of 1.0, but the actual average price is 1.05. What's your slippage?",
         options: ["0%", "5%", "1.05%"],
         correctIndex: 1,
         explanation: "Slippage = (1.05 - 1.0) / 1.0 = 5%. You paid 5% more than the ideal price because your trade moved the price as it executed.",
+        wrongExplanation: "Slippage is just the percentage difference. You expected to pay 1.0, you actually paid 1.05. The extra 0.05 out of 1.0 = 5% more than expected.",
+        calculatorNeeded: true,
       },
       {
         type: "lesson",
-        title: "Slippage is Nonlinear",
+        title: "Slippage is Nonlinear — Here's Why",
         content: [
-          "Here's the crucial insight: if you double your trade size, slippage more than doubles.",
-          "A trade using 1% of the pool might have 1% slippage. But a trade using 10% of the pool might have 11% slippage — not just 10%.",
-          "This is because the curve gets steeper as you move further along it. Each additional unit pushes you into increasingly expensive territory.",
+          "If you double your trade size, slippage MORE than doubles. Why?",
+          "Think of it step by step: your first chunk of the trade moves you along the flat part of the curve. The second chunk starts where the first left off — but now you're on a steeper part.",
+          "It's like climbing a mountain: the first 100 meters of elevation are easy trails. The next 100 meters are steeper switchbacks. The next 100 are near-vertical cliffs.",
+          "Try it yourself! Use the controls on the left to set trade size to 50, then 100, then 200. Watch how slippage accelerates.",
         ],
+        visual: "slippage-nonlinear",
       },
       {
         type: "quiz",
@@ -201,6 +261,14 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["10% (doubles again)", "More than 10% (accelerates)", "Exactly 8%"],
         correctIndex: 1,
         explanation: "Slippage accelerates nonlinearly. The curve gets steeper and steeper, so each additional unit of trade size adds more slippage than the last.",
+        wrongExplanation: "Notice the pattern: 50→100 (2x size) went from 2%→5% (more than 2x slippage). It's accelerating, not just growing proportionally. So 200 would cause MORE than double the slippage of 100.",
+        followUpQuiz: {
+          question: "A whale wants to buy 40% of the pool's Y tokens. Approximate slippage?",
+          options: ["~5%", "~40%", "~67%"],
+          correctIndex: 2,
+          explanation: "Buying 40% of a pool's reserves causes enormous slippage — around 67%. The curve becomes extremely steep when you're taking that much from one side.",
+          wrongExplanation: "Taking 40% of the pool is massive. The curve gets incredibly steep. Slippage isn't proportional to trade size — it's much worse for large trades.",
+        },
       },
       {
         type: "quiz",
@@ -208,6 +276,7 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["Trade against a larger pool", "Trade faster", "Use a different blockchain"],
         correctIndex: 0,
         explanation: "Larger pools absorb trades more easily. A $100 trade in a $1M pool barely moves the price. The same trade in a $10K pool causes major slippage.",
+        wrongExplanation: "Think about proportions: a small fish in a big ocean barely makes waves. The same fish in a bathtub causes a splash. Bigger pool = less impact per trade.",
       },
     ],
   },
@@ -220,13 +289,32 @@ export const COURSE_MODULES: CourseModule[] = [
     steps: [
       {
         type: "lesson",
+        title: "What Does HODL Mean?",
+        content: [
+          "Before we dive into impermanent loss, you need to understand one term: HODL.",
+          "HODL stands for \"Hold On for Dear Life\" — it's crypto slang that simply means holding your tokens in your wallet without doing anything with them.",
+          "For example, if you have 100 ETH and 100,000 USDC, your HODL value is just what those tokens are worth at any given time. If ETH goes to $3,000, your HODL value = (100 × $3,000) + $100,000 = $400,000.",
+          "We use HODL value as a benchmark: would you have been better off just holding, or was providing liquidity worth it?",
+        ],
+        visual: "hodl-explain",
+      },
+      {
+        type: "quiz",
+        question: "What does 'HODL value' represent?",
+        options: ["The value of tokens locked in a pool", "What your tokens would be worth if you just held them", "The profit from trading"],
+        correctIndex: 1,
+        explanation: "HODL value = what your tokens would be worth if you never deposited them anywhere — just held them in your wallet and watched the prices change.",
+        wrongExplanation: "HODL = Hold. It's the simplest thing you can do with tokens: absolutely nothing. Just hold them. The HODL value is what they'd be worth if you did that.",
+      },
+      {
+        type: "lesson",
         title: "What is Impermanent Loss?",
         content: [
           "Liquidity providers (LPs) deposit tokens into the pool. But as the price changes, the pool automatically rebalances — selling the token that's going up and buying the one going down.",
-          "This means LPs always end up with more of the cheaper token and less of the expensive one. Compared to simply holding, LPs lose value.",
-          "This difference between LP value and HODL value is called Impermanent Loss (IL).",
+          "This means LPs always end up with more of the cheaper token and less of the expensive one. Compared to simply HODLing, LPs lose value.",
+          "This difference between LP value and HODL value is called Impermanent Loss (IL). It's the price you pay for providing liquidity.",
         ],
-        visual: "il-diagram",
+        visual: "il-animated",
       },
       {
         type: "quiz",
@@ -234,6 +322,14 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["Buy more X", "Sell X and accumulate Y", "Nothing — the pool is static"],
         correctIndex: 1,
         explanation: "The constant product formula forces the pool to sell the appreciating token (X) as its price rises. Arbitrageurs execute these trades. LPs end up with less X and more Y.",
+        wrongExplanation: "Remember the constant product: x × y = k. If X becomes more valuable, people buy X from the pool (removing it) and add Y. The pool ends up with less X, more Y.",
+        followUpQuiz: {
+          question: "After X doubles, an LP withdraws. Compared to HODLing, they have:",
+          options: ["More X than if they'd held", "Less X AND less value overall", "The same amount of each token"],
+          correctIndex: 1,
+          explanation: "The pool sold X as it appreciated. The LP ends up with less X and more Y than if they'd HODLed. The total value is also lower — that's IL.",
+          wrongExplanation: "The pool was selling X as the price rose. So the LP has less X. And since X is now worth more, having less of it means lower total value compared to just holding.",
+        },
       },
       {
         type: "lesson",
@@ -243,6 +339,7 @@ export const COURSE_MODULES: CourseModule[] = [
           "If price doubles (2x), IL ≈ 5.7%. If price quadruples (4x), IL ≈ 20%. If price 10x's, IL ≈ 42%.",
           "Notice: a 2x price drop (to 0.5x) gives the same IL as a 2x increase. IL is symmetric.",
         ],
+        interactive: "il-slider",
       },
       {
         type: "quiz",
@@ -250,6 +347,8 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["~50%", "~5.7%", "~25%"],
         correctIndex: 1,
         explanation: "A 50% drop means price ratio = 0.5x, which is the inverse of 2x. IL ≈ 5.7% — the same as a 2x increase. IL only depends on the magnitude of the ratio change.",
+        wrongExplanation: "IL isn't proportional to the price change! A 50% drop = 0.5x ratio. The IL formula gives ~5.7% for any 2x change in either direction. It's about the ratio, not the direction.",
+        calculatorNeeded: true,
       },
       {
         type: "quiz",
@@ -257,6 +356,7 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["Because LPs can withdraw anytime", "Because the loss reverses if prices return to the entry ratio", "Because it's very small"],
         correctIndex: 1,
         explanation: "If the price returns to exactly where it was when you deposited, the loss disappears entirely. It only becomes permanent (\"realized\") if you withdraw while prices have diverged.",
+        wrongExplanation: "The key word is 'impermanent' = not permanent. The loss exists only while prices have moved. If they come back to where they started, the loss goes to zero. It's only real if you withdraw at the wrong time.",
       },
     ],
   },
@@ -283,6 +383,14 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["Sell ETH to the pool", "Buy ETH from the pool (it's cheap!) and sell on the open market", "Wait for the price to correct itself"],
         correctIndex: 1,
         explanation: "The arbitrageur buys cheap ETH from the pool and sells at $2,000 on a centralized exchange. This removes ETH from the pool, pushing the pool price up toward $2,000.",
+        wrongExplanation: "The pool is selling ETH too cheaply ($1,900 vs $2,000 market). So you'd BUY from the pool (cheap!) and sell elsewhere (expensive!). Profit = $100 per ETH.",
+        followUpQuiz: {
+          question: "After the arbitrage, the pool has less ETH and more USDC. Who 'paid' for the arbitrageur's profit?",
+          options: ["The protocol treasury", "The liquidity providers", "Nobody — it was free money"],
+          correctIndex: 1,
+          explanation: "LPs paid. They sold ETH at $1,900 (too cheaply) when the market price was $2,000. This is exactly how impermanent loss works — arbitrageurs extract value from LPs.",
+          wrongExplanation: "Someone always pays. The pool sold ETH at a discount ($1,900 vs $2,000). The LP's tokens were used for that sale. LPs bear the cost.",
+        },
       },
       {
         type: "lesson",
@@ -292,6 +400,7 @@ export const COURSE_MODULES: CourseModule[] = [
           "Every arbitrage trade extracts value from the pool — buying cheap assets from LPs.",
           "But arbitrage is also essential: without it, the pool price would be meaningless. It's the cost of having an accurate, trustworthy market.",
         ],
+        visual: "arb-flow",
       },
       {
         type: "quiz",
@@ -299,6 +408,7 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["It becomes more profitable for LPs", "The pool price drifts away from the real market price", "Nothing changes"],
         correctIndex: 1,
         explanation: "Without arbitrage, the pool price only changes from direct trades. As the market moves, the pool becomes increasingly mispriced and unreliable.",
+        wrongExplanation: "No arbitrage = no one correcting the price. The external market keeps moving, but the pool stays stuck at its old price. The gap just grows and grows.",
       },
     ],
   },
@@ -325,6 +435,15 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["$3,000", "$30,000", "$300"],
         correctIndex: 0,
         explanation: "$1,000,000 × 0.003 = $3,000 per day in fees, distributed proportionally to all LPs based on their share of the pool.",
+        wrongExplanation: "0.3% = 0.003 as a decimal. $1,000,000 × 0.003 = $3,000. Try the calculator!",
+        calculatorNeeded: true,
+        followUpQuiz: {
+          question: "If the pool has $10M in liquidity and you provided $100K, what's your share of the $3,000 daily fees?",
+          options: ["$30", "$300", "$3"],
+          correctIndex: 0,
+          explanation: "Your share = $100K / $10M = 1%. 1% of $3,000 = $30 per day. That's about $10,950 per year — but only if IL doesn't eat it up!",
+          wrongExplanation: "Your share of the pool = your deposit ÷ total pool. $100,000 ÷ $10,000,000 = 1%. Then 1% of $3,000 in fees = $30.",
+        },
       },
       {
         type: "lesson",
@@ -334,6 +453,7 @@ export const COURSE_MODULES: CourseModule[] = [
           "High volatility → more arbitrage trades → more fee revenue. But also: more price movement → more impermanent loss.",
           "The fee tier matters hugely. Too low and you can't cover IL. Too high and traders go elsewhere, reducing volume.",
         ],
+        visual: "fees-vs-il",
       },
       {
         type: "quiz",
@@ -341,14 +461,15 @@ export const COURSE_MODULES: CourseModule[] = [
         options: ["Always profitable for LPs", "High risk, high reward", "Always unprofitable for LPs"],
         correctIndex: 1,
         explanation: "High volatility drives both fee revenue AND impermanent loss. Whether the LP profits depends on the balance between the two — it's genuinely a risk/reward tradeoff.",
+        wrongExplanation: "Neither 'always' option is correct. High volatility means more trading (= more fees) BUT also bigger price moves (= more IL). It could go either way — that's why it's a tradeoff.",
       },
       {
         type: "lesson",
         title: "🎓 You've Completed the Course!",
         content: [
           "You now understand the core mechanics of AMMs: reserves, pricing, slippage, impermanent loss, arbitrage, and fees.",
-          "The full dashboard is now unlocked. You can freely experiment with all controls, switch between lesson tabs, run simulations, and test your knowledge with quizzes.",
-          "Try increasing trade size to see nonlinear slippage. Run the auto-simulator to watch IL accumulate. Toggle arbitrage on and off. The best way to learn is to experiment.",
+          "The full dashboard is now unlocked. You can freely experiment with all controls, run simulations, and test your knowledge with quizzes.",
+          "Try increasing trade size to see nonlinear slippage. Run the auto-simulator to watch IL accumulate. Toggle arbitrage on and off. The best way to learn is to experiment!",
         ],
       },
     ],
@@ -364,3 +485,13 @@ export function getRevealedSections(completedModules: number): Set<string> {
   }
   return revealed;
 }
+
+export const MODULE_TAB_MAP: Record<string, string> = {
+  intro: "slippage",
+  reserves: "slippage",
+  price: "slippage",
+  trading: "slippage",
+  il: "il",
+  arbitrage: "arbitrage",
+  fees: "fees",
+};

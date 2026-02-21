@@ -5,8 +5,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import LabControls, { type LessonTab, type Controls } from "@/components/teaching/LabControls";
 import LabSimulation from "@/components/teaching/LabSimulation";
 import LabLearning from "@/components/teaching/LabLearning";
-import CourseOverlay from "@/components/teaching/CourseOverlay";
-import { COURSE_MODULES, getRevealedSections } from "@/lib/course-content";
+import CourseSidebar from "@/components/teaching/CourseSidebar";
+import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 
 export default function TeachingLab() {
@@ -20,7 +20,7 @@ export default function TeachingLab() {
   const revealedSections = getRevealedSections(completedModules);
   const courseComplete = completedModules >= COURSE_MODULES.length;
 
-  // Simulation state (same as before)
+  // Simulation state
   const [tab, setTab] = useState<LessonTab>("slippage");
   const [controls, setControls] = useState<Controls>({
     reserveX: 1000, reserveY: 1000, feeRate: 0.003, volatility: 0.3,
@@ -135,6 +135,20 @@ export default function TeachingLab() {
   }, [isRunning, controls.timeSpeed, addHistoryPoint]);
 
   const handleAdvanceStep = () => setCourseStep(s => s + 1);
+
+  const handleGoBack = () => {
+    if (courseStep > 0) {
+      setCourseStep(s => s - 1);
+    } else if (courseModule > 0) {
+      const prevMod = courseModule - 1;
+      setCourseModule(prevMod);
+      setCourseStep(COURSE_MODULES[prevMod].steps.length - 1);
+      // Update tab to match the module we're going back to
+      const mappedTab = MODULE_TAB_MAP[COURSE_MODULES[prevMod].id] as LessonTab;
+      if (mappedTab) setTab(mappedTab);
+    }
+  };
+
   const handleCompleteModule = () => {
     const next = courseModule + 1;
     setCompletedModules(m => Math.max(m, courseModule + 1));
@@ -143,6 +157,23 @@ export default function TeachingLab() {
     } else {
       setCourseModule(next);
       setCourseStep(0);
+      const mappedTab = MODULE_TAB_MAP[COURSE_MODULES[next].id] as LessonTab;
+      if (mappedTab) setTab(mappedTab);
+    }
+  };
+
+  const handleSkipCourse = () => {
+    setCourseActive(false);
+    setCompletedModules(COURSE_MODULES.length);
+  };
+
+  const handleNavigateModule = (idx: number) => {
+    if (idx < completedModules || courseComplete) {
+      setCourseModule(idx);
+      setCourseStep(0);
+      if (!courseActive && !courseComplete) {
+        setCourseActive(true);
+      }
     }
   };
 
@@ -155,7 +186,7 @@ export default function TeachingLab() {
   const showLearning = courseComplete || revealedSections.has("learning");
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden relative">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
       <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -175,7 +206,7 @@ export default function TeachingLab() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {courseComplete && !courseActive && (
+          {courseComplete && (
             <button
               onClick={() => { setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
               className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
@@ -187,21 +218,10 @@ export default function TeachingLab() {
         </div>
       </header>
 
-      {/* Course overlay */}
-      {courseActive && (
-        <CourseOverlay
-          currentModule={courseModule}
-          currentStep={courseStep}
-          onAdvanceStep={handleAdvanceStep}
-          onCompleteModule={handleCompleteModule}
-          totalModules={COURSE_MODULES.length}
-        />
-      )}
-
-      {/* Three columns — progressive reveal */}
+      {/* Three columns */}
       <div className="flex-1 flex min-h-0">
         {/* Left: Controls */}
-        <div className={`w-64 border-r border-border shrink-0 transition-opacity duration-500 ${showControls ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
+        <div className={`w-80 border-r border-border shrink-0 transition-opacity duration-500 ${showControls ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
           <LabControls
             tab={tab}
             onTabChange={setTab}
@@ -211,6 +231,10 @@ export default function TeachingLab() {
             onReset={handleReset}
             isRunning={isRunning}
             onToggleRun={() => setIsRunning(r => !r)}
+            courseActive={courseActive}
+            courseModule={courseModule}
+            completedModules={completedModules}
+            onNavigateModule={handleNavigateModule}
           />
         </div>
 
@@ -229,19 +253,33 @@ export default function TeachingLab() {
           />
         </div>
 
-        {/* Right: Learning */}
-        <div className={`w-72 border-l border-border shrink-0 transition-opacity duration-500 ${(showMetrics || showLearning) ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
-          <LabLearning
-            pool={pool}
-            history={history}
-            lastTrade={lastTrade}
-            tab={tab}
-            initialX={initialX.current}
-            initialY={initialY.current}
-            initialPrice={initialPrice.current}
-            rangeLower={controls.rangeLower}
-            rangeUpper={controls.rangeUpper}
-          />
+        {/* Right: Course sidebar or Learning panel */}
+        <div className={`w-72 border-l border-border shrink-0 transition-opacity duration-500 ${
+          courseActive || showMetrics || showLearning ? "opacity-100" : "opacity-20 pointer-events-none"
+        }`}>
+          {courseActive && !courseComplete ? (
+            <CourseSidebar
+              currentModule={courseModule}
+              currentStep={courseStep}
+              onAdvanceStep={handleAdvanceStep}
+              onGoBack={handleGoBack}
+              onCompleteModule={handleCompleteModule}
+              onSkipCourse={handleSkipCourse}
+              totalModules={COURSE_MODULES.length}
+            />
+          ) : (
+            <LabLearning
+              pool={pool}
+              history={history}
+              lastTrade={lastTrade}
+              tab={tab}
+              initialX={initialX.current}
+              initialY={initialY.current}
+              initialPrice={initialPrice.current}
+              rangeLower={controls.rangeLower}
+              rangeUpper={controls.rangeUpper}
+            />
+          )}
         </div>
       </div>
     </div>
