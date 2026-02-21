@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Beaker, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, X, Zap, ArrowRightLeft, Sparkles, Target, Droplets, Activity, SkipForward, SkipBack, Crosshair, Ruler } from "lucide-react";
+import { ArrowLeft, ArrowRight, Beaker, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, X, Zap, ArrowRightLeft, Sparkles, Target, Droplets, Activity, SkipForward, SkipBack, Crosshair, Ruler } from "lucide-react";
 import { Legend } from "recharts";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -206,6 +206,19 @@ const BeginnerMode = () => {
           <ThemeToggle />
         </div>
       </header>
+
+      {/* Teaching Lab banner */}
+      <div className="border-b border-border px-6 py-2 bg-secondary/50 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          Have questions about how AMMs work?
+        </p>
+        <button
+          onClick={() => navigate("/learn")}
+          className="text-xs font-medium text-foreground hover:underline inline-flex items-center gap-1"
+        >
+          Try the Teaching Lab <ArrowRight className="w-3 h-3" />
+        </button>
+      </div>
 
       {/* Step indicator — hidden when wizard complete */}
       {!wizardComplete && (

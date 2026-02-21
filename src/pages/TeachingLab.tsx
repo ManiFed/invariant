@@ -5,25 +5,28 @@ import ThemeToggle from "@/components/ThemeToggle";
 import LabControls, { type LessonTab, type Controls } from "@/components/teaching/LabControls";
 import LabSimulation from "@/components/teaching/LabSimulation";
 import LabLearning from "@/components/teaching/LabLearning";
+import CourseOverlay from "@/components/teaching/CourseOverlay";
+import { COURSE_MODULES, getRevealedSections } from "@/lib/course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 
 export default function TeachingLab() {
   const navigate = useNavigate();
 
+  // Course state
+  const [courseActive, setCourseActive] = useState(true);
+  const [courseModule, setCourseModule] = useState(0);
+  const [courseStep, setCourseStep] = useState(0);
+  const [completedModules, setCompletedModules] = useState(0);
+  const revealedSections = getRevealedSections(completedModules);
+  const courseComplete = completedModules >= COURSE_MODULES.length;
+
+  // Simulation state (same as before)
   const [tab, setTab] = useState<LessonTab>("slippage");
   const [controls, setControls] = useState<Controls>({
-    reserveX: 1000,
-    reserveY: 1000,
-    feeRate: 0.003,
-    volatility: 0.3,
-    tradeSize: 50,
-    direction: "buyY",
-    timeSpeed: 0,
-    rangeLower: 0.8,
-    rangeUpper: 1.2,
-    arbEnabled: true,
+    reserveX: 1000, reserveY: 1000, feeRate: 0.003, volatility: 0.3,
+    tradeSize: 50, direction: "buyY", timeSpeed: 0, rangeLower: 0.8,
+    rangeUpper: 1.2, arbEnabled: true,
   });
-
   const [pool, setPool] = useState<PoolState>(() => createPool(1000, 1000, 0.003));
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [lastTrade, setLastTrade] = useState<TradeResult | null>(null);
@@ -47,7 +50,6 @@ export default function TeachingLab() {
   const handleControlChange = useCallback((partial: Partial<Controls>) => {
     setControls(prev => {
       const next = { ...prev, ...partial };
-      // If reserves or fee rate changed, reset pool
       if (partial.reserveX !== undefined || partial.reserveY !== undefined || partial.feeRate !== undefined) {
         const newPool = createPool(next.reserveX, next.reserveY, next.feeRate);
         setPool(newPool);
@@ -72,16 +74,9 @@ export default function TeachingLab() {
     const lp = lpValue(p, price);
     const hodl = hodlValue(initialX.current, initialY.current, price);
     const point: HistoryPoint = {
-      step: s,
-      poolPrice: price,
-      externalPrice: extP,
-      lpValue: lp,
-      hodlValue: hodl,
-      ilPct: il,
-      feesAccum: p.totalFees,
-      reserveX: p.x,
-      reserveY: p.y,
-      arbEvent: arb,
+      step: s, poolPrice: price, externalPrice: extP, lpValue: lp,
+      hodlValue: hodl, ilPct: il, feesAccum: p.totalFees,
+      reserveX: p.x, reserveY: p.y, arbEvent: arb,
     };
     setHistory(prev => [...prev, point]);
   }, []);
@@ -115,41 +110,52 @@ export default function TeachingLab() {
     setIsRunning(false);
   }, []);
 
-  // Auto-run simulation
   useEffect(() => {
     if (!isRunning || controls.timeSpeed === 0) return;
-
     const interval = setInterval(() => {
       const c = controlsRef.current;
-      // Step external price
       const newExtPrice = gbmStep(externalPriceRef.current, c.volatility, 1 / 252);
       externalPriceRef.current = newExtPrice;
       setExternalPrice(newExtPrice);
-
       let currentPool = poolRef.current;
       let arbed = false;
-
-      // Arb if enabled
       if (c.arbEnabled) {
         const arbResult = executeArbitrage(currentPool, newExtPrice);
         currentPool = arbResult.pool;
         arbed = arbResult.traded;
       }
-
       setPool(currentPool);
       poolRef.current = currentPool;
-
       const s = stepRef.current + 1;
       setStep(s);
       stepRef.current = s;
       addHistoryPoint(currentPool, newExtPrice, s, arbed);
     }, Math.max(50, 1000 / controls.timeSpeed));
-
     return () => clearInterval(interval);
   }, [isRunning, controls.timeSpeed, addHistoryPoint]);
 
+  const handleAdvanceStep = () => setCourseStep(s => s + 1);
+  const handleCompleteModule = () => {
+    const next = courseModule + 1;
+    setCompletedModules(m => Math.max(m, courseModule + 1));
+    if (next >= COURSE_MODULES.length) {
+      setCourseActive(false);
+    } else {
+      setCourseModule(next);
+      setCourseStep(0);
+    }
+  };
+
+  // Determine what to show based on progress
+  const showControls = courseComplete || revealedSections.has("controls");
+  const showCurve = courseComplete || revealedSections.has("curve");
+  const showReserves = courseComplete || revealedSections.has("reserves");
+  const showMetrics = courseComplete || revealedSections.has("metrics");
+  const showPriceChart = courseComplete || revealedSections.has("price-chart");
+  const showLearning = courseComplete || revealedSections.has("learning");
+
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-screen flex flex-col bg-background overflow-hidden relative">
       {/* Header */}
       <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -157,15 +163,45 @@ export default function TeachingLab() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-border text-muted-foreground">INTERACTIVE</span>
+          {!courseComplete && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
+              MODULE {courseModule + 1}/{COURSE_MODULES.length}
+            </span>
+          )}
+          {courseComplete && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-success/30 text-success">
+              COMPLETE ✓
+            </span>
+          )}
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          {courseComplete && !courseActive && (
+            <button
+              onClick={() => { setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
+              className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Restart Course
+            </button>
+          )}
+          <ThemeToggle />
+        </div>
       </header>
 
-      {/* Three columns */}
+      {/* Course overlay */}
+      {courseActive && (
+        <CourseOverlay
+          currentModule={courseModule}
+          currentStep={courseStep}
+          onAdvanceStep={handleAdvanceStep}
+          onCompleteModule={handleCompleteModule}
+          totalModules={COURSE_MODULES.length}
+        />
+      )}
+
+      {/* Three columns — progressive reveal */}
       <div className="flex-1 flex min-h-0">
         {/* Left: Controls */}
-        <div className="w-64 border-r border-border shrink-0">
+        <div className={`w-64 border-r border-border shrink-0 transition-opacity duration-500 ${showControls ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
           <LabControls
             tab={tab}
             onTabChange={setTab}
@@ -179,7 +215,7 @@ export default function TeachingLab() {
         </div>
 
         {/* Center: Simulation */}
-        <div className="flex-1 min-w-0">
+        <div className={`flex-1 min-w-0 transition-opacity duration-500 ${(showCurve || showReserves) ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
           <LabSimulation
             pool={pool}
             history={history}
@@ -187,11 +223,14 @@ export default function TeachingLab() {
             tab={tab}
             rangeLower={controls.rangeLower}
             rangeUpper={controls.rangeUpper}
+            showCurve={showCurve}
+            showReserves={showReserves}
+            showPriceChart={showPriceChart}
           />
         </div>
 
         {/* Right: Learning */}
-        <div className="w-72 border-l border-border shrink-0">
+        <div className={`w-72 border-l border-border shrink-0 transition-opacity duration-500 ${(showMetrics || showLearning) ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
           <LabLearning
             pool={pool}
             history={history}
