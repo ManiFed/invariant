@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FlaskConical, FileText } from "lucide-react";
+import { ArrowRight, Beaker, FlaskConical, FileText, GraduationCap } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -74,6 +74,37 @@ const Index = () => {
             <FileText className="w-4 h-4" />
             Documentation
           </button>
+        </motion.div>
+      </section>
+
+      {/* Teaching Lab Banner */}
+      <section className="max-w-4xl mx-auto px-8 pb-6">
+        <motion.div
+          className="surface-elevated rounded-xl p-6 cursor-pointer group hover:border-foreground/20 transition-all duration-300"
+          onClick={() => navigate("/learn")}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.35 }}
+          whileHover={{ y: -2 }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <GraduationCap className="w-5 h-5 text-foreground" />
+              <h3 className="text-lg font-semibold text-foreground">Interactive Teaching Lab</h3>
+            </div>
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded border border-success/30 text-success">NEW</span>
+          </div>
+          <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+            Learn how AMMs actually behave. Manipulate trades, volatility, and fees — then predict outcomes before they happen. Six guided lessons from slippage to concentrated liquidity.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {["Pricing & Slippage", "Impermanent Loss", "Arbitrage", "Fees & Revenue", "Volatility Risk", "Concentrated LP"].map(f => (
+              <span key={f} className="text-[11px] font-mono px-2 py-1 rounded bg-secondary text-muted-foreground">{f}</span>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+            Start Learning <ArrowRight className="w-3 h-3" />
+          </div>
         </motion.div>
       </section>
 
