@@ -66,7 +66,6 @@ const Index = () => {
           >
             <FlaskConical className="w-4 h-4" />
             Advanced Mode
-            <ArrowRight className="w-4 h-4" />
           </button>
           <button
             onClick={() => navigate("/docs")}
