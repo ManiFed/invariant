@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Beaker, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, X, Zap, ArrowRightLeft, Sparkles, Target, Droplets, Activity, SkipForward, SkipBack } from "lucide-react";
+import { ArrowLeft, Beaker, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, X, Zap, ArrowRightLeft, Sparkles, Target, Droplets, Activity, SkipForward, SkipBack, Crosshair, Ruler } from "lucide-react";
 import { Legend } from "recharts";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -559,6 +559,16 @@ const BeginnerMode = () => {
             colors={colors}
           />
 
+          {/* Liquidity Range Assistant */}
+          <LiquidityRangeAssistant
+            selectedTemplate={selectedTemplate}
+            tokenAPrice={tokenAPrice}
+            liquidity={liquidity}
+            volMultiplier={volMultiplier}
+            feeRate={feeRate}
+            colors={colors}
+          />
+
           {/* Risk Dashboard */}
           <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <h3 className="text-sm font-semibold text-foreground mb-4">Risk Dashboard</h3>
@@ -1017,5 +1027,226 @@ const LiveStat = ({ label, value, color }: { label: string; value: string; color
     </AnimatePresence>
   </div>
 );
+
+/* ─── Liquidity Range Assistant ─── */
+
+const riskProfiles = [
+  { label: "Conservative", emoji: "🛡️", rangePct: 0.15, desc: "Tight range, high fees, frequent rebalancing" },
+  { label: "Moderate", emoji: "⚖️", rangePct: 0.35, desc: "Balanced risk and reward" },
+  { label: "Aggressive", emoji: "🔥", rangePct: 0.6, desc: "Wide range, lower fees, less maintenance" },
+];
+
+const LiquidityRangeAssistant = ({
+  selectedTemplate,
+  tokenAPrice,
+  liquidity: liq,
+  volMultiplier: vMult,
+  feeRate: fRate,
+  colors,
+}: {
+  selectedTemplate: Template;
+  tokenAPrice: number;
+  liquidity: number;
+  volMultiplier: number;
+  feeRate: number;
+  colors: ReturnType<typeof useChartColors>;
+}) => {
+  const [capital, setCapital] = useState(liq);
+  const [riskTolerance, setRiskTolerance] = useState(1); // 0=conservative, 1=moderate, 2=aggressive
+  const profile = riskProfiles[riskTolerance];
+
+  // Range calculation based on risk + volatility
+  const rangePct = profile.rangePct * (1 + (vMult - 1) * 0.3);
+  const priceLower = tokenAPrice * (1 - rangePct);
+  const priceUpper = tokenAPrice * (1 + rangePct);
+
+  // Capital efficiency multiplier: narrower range = higher efficiency
+  const efficiencyMultiplier = (1 / rangePct).toFixed(1);
+
+  // Estimated daily fees within range
+  const dailyFeesInRange = (capital * fRate * vMult * 0.01 * parseFloat(efficiencyMultiplier)).toFixed(0);
+
+  // Out-of-range probability (simplified)
+  const outOfRangeDays = Math.round((1 - rangePct) * 30 * vMult);
+
+  // Price distribution visualization
+  const rangeData = useMemo(() => {
+    const data: { price: number; density: number; inRange: boolean }[] = [];
+    const center = tokenAPrice;
+    const spread = tokenAPrice * 0.8;
+    for (let i = 0; i <= 60; i++) {
+      const price = center - spread / 2 + (spread / 60) * i;
+      const z = (price - center) / (tokenAPrice * vMult * 0.15);
+      const density = Math.exp(-0.5 * z * z) * 100;
+      const inRange = price >= priceLower && price <= priceUpper;
+      data.push({ price: parseFloat(price.toFixed(0)), density: parseFloat(density.toFixed(1)), inRange });
+    }
+    return data;
+  }, [tokenAPrice, priceLower, priceUpper, vMult]);
+
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+
+  const isConcentrated = selectedTemplate === "concentrated";
+
+  return (
+    <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
+          <Crosshair className="w-3.5 h-3.5 text-foreground" />
+        </div>
+        <h3 className="text-sm font-semibold text-foreground">Liquidity Range Assistant</h3>
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-secondary text-muted-foreground">
+          {isConcentrated ? "CONCENTRATED" : "ALL MODELS"}
+        </span>
+      </div>
+
+      {!isConcentrated && (
+        <div className="mb-4 p-3 rounded-lg bg-secondary border border-border">
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            💡 Range positioning is most impactful with <strong className="text-foreground">Concentrated Liquidity</strong>. 
+            Switch to the Concentrated template for maximum capital efficiency. The preview below shows approximate range behavior for your current model.
+          </p>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-3 gap-4 mb-4">
+        {/* Capital input */}
+        <div>
+          <label className="text-[10px] text-muted-foreground block mb-1">Capital to Deploy</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+            <input
+              type="number"
+              value={capital}
+              onChange={e => setCapital(Math.max(100, Number(e.target.value)))}
+              className="w-full bg-secondary border border-border rounded-md pl-6 pr-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <div className="flex gap-1 mt-1.5">
+            {[10000, 50000, 100000, 500000].map(v => (
+              <button key={v} onClick={() => setCapital(v)}
+                className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-all ${capital === v ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                ${(v / 1000).toFixed(0)}k
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Risk tolerance */}
+        <div>
+          <label className="text-[10px] text-muted-foreground block mb-1">Risk Tolerance</label>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={1}
+            value={riskTolerance}
+            onChange={e => setRiskTolerance(Number(e.target.value))}
+            className="w-full accent-foreground h-1 mb-2"
+          />
+          <div className="flex justify-between text-[9px] text-muted-foreground -mt-1">
+            <span>Conservative</span><span>Moderate</span><span>Aggressive</span>
+          </div>
+          <div className="mt-2 p-2 rounded-md bg-secondary border border-border">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">{profile.emoji}</span>
+              <span className="text-[11px] font-medium text-foreground">{profile.label}</span>
+            </div>
+            <p className="text-[9px] text-muted-foreground mt-0.5">{profile.desc}</p>
+          </div>
+        </div>
+
+        {/* Suggested range */}
+        <div>
+          <label className="text-[10px] text-muted-foreground block mb-1">Suggested Range</label>
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center p-2 rounded-md bg-secondary border border-border">
+              <span className="text-[10px] text-muted-foreground">Lower</span>
+              <span className="text-xs font-mono font-semibold text-foreground">${priceLower.toFixed(0)}</span>
+            </div>
+            <div className="flex items-center justify-center">
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-foreground/5 border border-border">
+                <Ruler className="w-3 h-3 text-muted-foreground" />
+                <span className="text-[9px] font-mono text-foreground">±{(rangePct * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+            <div className="flex justify-between items-center p-2 rounded-md bg-secondary border border-border">
+              <span className="text-[10px] text-muted-foreground">Upper</span>
+              <span className="text-xs font-mono font-semibold text-foreground">${priceUpper.toFixed(0)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+        <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+          <p className="text-[9px] text-muted-foreground mb-0.5">Capital Efficiency</p>
+          <p className="text-xs font-semibold font-mono-data text-foreground">{efficiencyMultiplier}x</p>
+        </div>
+        <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+          <p className="text-[9px] text-muted-foreground mb-0.5">Daily Fees (est.)</p>
+          <p className="text-xs font-semibold font-mono-data text-success">${dailyFeesInRange}</p>
+        </div>
+        <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+          <p className="text-[9px] text-muted-foreground mb-0.5">Out-of-Range Risk</p>
+          <p className={`text-xs font-semibold font-mono-data ${outOfRangeDays > 15 ? "text-destructive" : outOfRangeDays > 8 ? "text-warning" : "text-success"}`}>
+            ~{outOfRangeDays}d / 30d
+          </p>
+        </div>
+        <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+          <p className="text-[9px] text-muted-foreground mb-0.5">Effective Liquidity</p>
+          <p className="text-xs font-semibold font-mono-data text-foreground">${(capital * parseFloat(efficiencyMultiplier)).toLocaleString()}</p>
+        </div>
+      </div>
+
+      {/* Range visualization chart */}
+      <div className="h-48">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={rangeData}>
+            <defs>
+              <linearGradient id="rangeInGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={colors.green} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={colors.green} stopOpacity={0.05} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+            <XAxis dataKey="price" tick={{ fontSize: 9, fill: colors.tick }} tickFormatter={v => `$${v}`} />
+            <YAxis tick={{ fontSize: 9, fill: colors.tick }} hide />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              labelFormatter={v => `Price: $${v}`}
+              formatter={(v: number, name: string, entry: any) => [
+                `${v.toFixed(1)}%`,
+                entry.payload.inRange ? "In Range ✅" : "Out of Range",
+              ]}
+            />
+            <Area
+              type="monotone"
+              dataKey="density"
+              stroke={colors.green}
+              fill="url(#rangeInGrad)"
+              strokeWidth={2}
+              dot={false}
+            />
+            {/* Render out-of-range as overlay using reference areas concept via custom shape */}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-[10px]">
+        <span className="text-muted-foreground">
+          Current Price: <span className="font-mono text-foreground">${tokenAPrice.toLocaleString()}</span>
+        </span>
+        <span className="text-muted-foreground">
+          Range Width: <span className="font-mono text-foreground">${(priceUpper - priceLower).toFixed(0)}</span>
+        </span>
+        <span className="text-muted-foreground">
+          APR (est.): <span className="font-mono text-success">{((parseFloat(dailyFeesInRange) * 365 / capital) * 100).toFixed(1)}%</span>
+        </span>
+      </div>
+    </motion.div>
+  );
+};
 
 export default BeginnerMode;
