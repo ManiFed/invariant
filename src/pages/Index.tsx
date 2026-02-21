@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FlaskConical, FileText, GraduationCap } from "lucide-react";
+import { ArrowRight, Beaker, FlaskConical, FileText, GraduationCap, Zap, TrendingDown, ArrowRightLeft, DollarSign, BarChart3, Target } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -27,7 +27,6 @@ const Index = () => {
 
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-8 pt-24 pb-20">
-
         <motion.h1
           className="text-5xl sm:text-7xl font-bold tracking-tight leading-[1.05] mb-6 text-foreground"
           initial={{ opacity: 0, y: 20 }}
@@ -77,14 +76,90 @@ const Index = () => {
         </motion.div>
       </section>
 
+      {/* What is an AMM? */}
+      <section className="max-w-4xl mx-auto px-8 pb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          <h2 className="text-2xl font-bold text-foreground mb-3">What is an Automated Market Maker?</h2>
+          <p className="text-muted-foreground leading-relaxed mb-8 max-w-2xl">
+            An AMM is a smart contract that holds two tokens and uses a mathematical formula to price trades between them. No order book, no matching engine — just math. Anyone can deposit tokens to provide liquidity, and anyone can trade against the pool.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {[
+              { icon: ArrowRightLeft, title: "Constant Product", desc: "The formula x × y = k ensures trades always have a price. As one reserve decreases, the other must increase." },
+              { icon: TrendingDown, title: "Price Discovery", desc: "Prices emerge from reserve ratios. Arbitrageurs keep pool prices aligned with external markets." },
+              { icon: DollarSign, title: "LP Revenue", desc: "Liquidity providers earn trading fees. Every swap pays a small fee that accrues to the pool." },
+            ].map((item, i) => (
+              <motion.div
+                key={item.title}
+                className="surface-elevated rounded-xl p-5"
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.1 }}
+              >
+                <item.icon className="w-5 h-5 text-foreground mb-3" />
+                <h3 className="text-sm font-semibold text-foreground mb-1.5">{item.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Key Concepts */}
+      <section className="max-w-4xl mx-auto px-8 pb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          <h2 className="text-2xl font-bold text-foreground mb-3">Key Concepts You'll Explore</h2>
+          <p className="text-muted-foreground leading-relaxed mb-8 max-w-2xl">
+            Understanding these mechanics is essential for designing, deploying, or interacting with any DeFi protocol.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {[
+              { icon: Zap, title: "Slippage", desc: "Why larger trades cost more. The curve gets steeper as you move further, making each additional unit more expensive.", color: "text-warning" },
+              { icon: TrendingDown, title: "Impermanent Loss", desc: "How automatic rebalancing causes LPs to underperform vs simply holding. IL ≈ 5.7% when price doubles.", color: "text-destructive" },
+              { icon: ArrowRightLeft, title: "Arbitrage", desc: "Profit-seeking traders who keep AMM prices aligned with external markets — at the LP's expense.", color: "text-chart-1" },
+              { icon: DollarSign, title: "Fee Revenue", desc: "Trading fees compensate LPs for impermanent loss. The tradeoff: higher fees discourage volume.", color: "text-success" },
+              { icon: BarChart3, title: "Volatility Risk", desc: "Price volatility drives both fee income and IL. Whether LPs profit depends on the fee tier vs volatility ratio.", color: "text-chart-4" },
+              { icon: Target, title: "Concentrated Liquidity", desc: "Capital efficiency through range-bound positions. Higher fee yield within range, zero fees outside it.", color: "text-primary" },
+            ].map((item, i) => (
+              <motion.div
+                key={item.title}
+                className="flex gap-3 p-4 rounded-xl bg-card border border-border"
+                initial={{ opacity: 0, x: -10 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+              >
+                <item.icon className={`w-4 h-4 mt-0.5 shrink-0 ${item.color}`} />
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-0.5">{item.title}</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </section>
+
       {/* Teaching Lab Banner */}
       <section className="max-w-4xl mx-auto px-8 pb-6">
         <motion.div
           className="surface-elevated rounded-xl p-6 cursor-pointer group hover:border-foreground/20 transition-all duration-300"
           onClick={() => navigate("/learn")}
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.35 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
           whileHover={{ y: -2 }}
         >
           <div className="flex items-center justify-between mb-3">
@@ -95,15 +170,46 @@ const Index = () => {
             <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded border border-success/30 text-success">NEW</span>
           </div>
           <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
-            Learn how AMMs actually behave. Manipulate trades, volatility, and fees — then predict outcomes before they happen. Six guided lessons from slippage to concentrated liquidity.
+            New to AMMs? Start here. A guided course that teaches you everything from scratch — with quizzes at every step. The dashboard unlocks piece-by-piece as you learn each concept.
           </p>
           <div className="flex flex-wrap gap-2">
-            {["Pricing & Slippage", "Impermanent Loss", "Arbitrage", "Fees & Revenue", "Volatility Risk", "Concentrated LP"].map(f => (
+            {["What is an AMM?", "Reserves & Pools", "Price Curves", "Slippage", "Impermanent Loss", "Arbitrage", "Fees"].map(f => (
               <span key={f} className="text-[11px] font-mono px-2 py-1 rounded bg-secondary text-muted-foreground">{f}</span>
             ))}
           </div>
           <div className="mt-3 flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
             Start Learning <ArrowRight className="w-3 h-3" />
+          </div>
+        </motion.div>
+      </section>
+
+      {/* How It Works */}
+      <section className="max-w-4xl mx-auto px-8 pb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          <h2 className="text-2xl font-bold text-foreground mb-8">How Invariant Studio Works</h2>
+          <div className="grid sm:grid-cols-3 gap-6">
+            {[
+              { step: "01", title: "Choose Your Level", desc: "Start with the Teaching Lab for guided learning, Beginner Mode for template-based experimentation, or Advanced Mode for formal analysis." },
+              { step: "02", title: "Configure & Simulate", desc: "Set pool parameters, execute trades, run auto-simulations with GBM price paths, and observe how reserves, prices, and LP value evolve." },
+              { step: "03", title: "Analyze & Understand", desc: "Real-time metrics, contextual explanations, and prediction quizzes help you build deep intuition for AMM mechanics." },
+            ].map((item, i) => (
+              <motion.div
+                key={item.step}
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.1 }}
+              >
+                <span className="text-4xl font-bold text-border">{item.step}</span>
+                <h3 className="text-sm font-semibold text-foreground mt-2 mb-1.5">{item.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+              </motion.div>
+            ))}
           </div>
         </motion.div>
       </section>
@@ -117,7 +223,7 @@ const Index = () => {
             features={["AMM templates", "Risk dashboard", "Guided wizard", "Education tooltips"]}
             badge="Free"
             onClick={() => navigate("/beginner")}
-            delay={0.4}
+            delay={0}
           />
           <ModeCard
             title="Advanced Mode"
@@ -125,7 +231,7 @@ const Index = () => {
             features={["Invariant editor", "Monte Carlo", "Arbitrage engine", "Stability analysis"]}
             badge="Pro"
             onClick={() => navigate("/advanced")}
-            delay={0.5}
+            delay={0.1}
           />
         </div>
       </section>
@@ -145,7 +251,8 @@ const ModeCard = ({ title, description, features, badge, onClick, delay }: {
     className="surface-elevated rounded-xl p-6 cursor-pointer group hover:border-foreground/20 transition-all duration-300"
     onClick={onClick}
     initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
     transition={{ duration: 0.5, delay }}
     whileHover={{ y: -2 }}
   >
