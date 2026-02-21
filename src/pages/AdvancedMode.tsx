@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, FlaskConical, Code2, Cpu, Search, BarChart3, Shield } from "lucide-react";
+import { ArrowLeft, FlaskConical, Code2, Cpu, Search, BarChart3, Shield, Rocket } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
 import ArbitrageEngine from "@/components/advanced/ArbitrageEngine";
 import LiquidityAnalyzer from "@/components/advanced/LiquidityAnalyzer";
 import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
+import DeploymentExport from "@/components/advanced/DeploymentExport";
 
 const tabs = [
   { id: "invariant", label: "Invariant Editor", icon: Code2 },
@@ -15,6 +16,7 @@ const tabs = [
   { id: "arbitrage", label: "Arbitrage", icon: Search },
   { id: "liquidity", label: "Liquidity", icon: BarChart3 },
   { id: "stability", label: "Stability", icon: Shield },
+  { id: "deploy", label: "Deploy", icon: Rocket },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -67,6 +69,7 @@ const AdvancedMode = () => {
             {activeTab === "arbitrage" && <ArbitrageEngine />}
             {activeTab === "liquidity" && <LiquidityAnalyzer />}
             {activeTab === "stability" && <StabilityAnalysis />}
+            {activeTab === "deploy" && <DeploymentExport />}
           </motion.div>
         </AnimatePresence>
       </main>
