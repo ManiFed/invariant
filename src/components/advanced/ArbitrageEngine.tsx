@@ -1,9 +1,11 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, Zap } from "lucide-react";
+import { Search } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { useChartColors } from "@/hooks/use-chart-theme";
 
 const ArbitrageEngine = () => {
+  const colors = useChartColors();
   const [externalVolatility, setExternalVolatility] = useState(60);
   const [latencyMs, setLatencyMs] = useState(200);
   const [gasCost, setGasCost] = useState(15);
@@ -34,12 +36,13 @@ const ArbitrageEngine = () => {
   const totalFees = arbData.reduce((s, d) => s + d.feeCapture, 0);
   const captureRate = totalArbVolume > 0 ? ((totalFees / totalArbVolume) * 100).toFixed(2) : "0";
 
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+
   return (
     <div className="space-y-6">
-      {/* Controls */}
       <div className="surface-elevated rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Search className="w-4 h-4 text-chart-purple" />
+          <Search className="w-4 h-4 text-foreground" />
           <h3 className="text-sm font-semibold text-foreground">Arbitrage Parameters</h3>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -50,7 +53,6 @@ const ArbitrageEngine = () => {
         </div>
       </div>
 
-      {/* Metrics */}
       <motion.div className="grid grid-cols-2 md:grid-cols-4 gap-3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <StatCard label="Total Arb Volume" value={`$${(totalArbVolume / 1000).toFixed(0)}k`} />
         <StatCard label="Toxic Flow" value={`$${(totalToxicFlow / 1000).toFixed(0)}k`} accent />
@@ -58,20 +60,19 @@ const ArbitrageEngine = () => {
         <StatCard label="Capture Rate" value={`${captureRate}%`} />
       </motion.div>
 
-      {/* Charts */}
       <div className="grid md:grid-cols-2 gap-4">
         <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-          <h4 className="text-xs font-semibold text-foreground mb-1">Arbitrage Volume vs. Toxic Flow</h4>
-          <p className="text-[10px] text-muted-foreground mb-3">24h simulation (30-min intervals)</p>
+          <h4 className="text-xs font-semibold text-foreground mb-1">Arb Volume vs. Toxic Flow</h4>
+          <p className="text-[10px] text-muted-foreground mb-3">24h simulation</p>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={arbData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(225, 15%, 16%)" />
-                <XAxis dataKey="hour" tick={{ fontSize: 8, fill: "hsl(215, 15%, 50%)" }} interval={5} />
-                <YAxis tick={{ fontSize: 9, fill: "hsl(215, 15%, 50%)" }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ background: "hsl(225, 20%, 9%)", border: "1px solid hsl(225, 15%, 16%)", borderRadius: 8, fontSize: 10 }} />
-                <Bar dataKey="arbVolume" name="Arb Volume" fill="hsl(260, 60%, 60%)" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="toxicFlow" name="Toxic Flow" fill="hsl(0, 72%, 55%)" radius={[2, 2, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                <XAxis dataKey="hour" tick={{ fontSize: 8, fill: colors.tick }} interval={5} />
+                <YAxis tick={{ fontSize: 9, fill: colors.tick }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Bar dataKey="arbVolume" name="Arb Volume" fill={colors.line} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="toxicFlow" name="Toxic Flow" fill={colors.red} radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -79,21 +80,21 @@ const ArbitrageEngine = () => {
 
         <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           <h4 className="text-xs font-semibold text-foreground mb-1">Price Divergence</h4>
-          <p className="text-[10px] text-muted-foreground mb-3">Pool vs. external price spread</p>
+          <p className="text-[10px] text-muted-foreground mb-3">Pool vs. external price</p>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={arbData}>
                 <defs>
                   <linearGradient id="divGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(185, 80%, 55%)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="hsl(185, 80%, 55%)" stopOpacity={0} />
+                    <stop offset="0%" stopColor={colors.green} stopOpacity={0.2} />
+                    <stop offset="100%" stopColor={colors.green} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(225, 15%, 16%)" />
-                <XAxis dataKey="hour" tick={{ fontSize: 8, fill: "hsl(215, 15%, 50%)" }} interval={5} />
-                <YAxis tick={{ fontSize: 9, fill: "hsl(215, 15%, 50%)" }} tickFormatter={v => `${v}%`} />
-                <Tooltip contentStyle={{ background: "hsl(225, 20%, 9%)", border: "1px solid hsl(225, 15%, 16%)", borderRadius: 8, fontSize: 10 }} />
-                <Area type="monotone" dataKey="priceDivergence" stroke="hsl(185, 80%, 55%)" fill="url(#divGrad)" strokeWidth={2} />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                <XAxis dataKey="hour" tick={{ fontSize: 8, fill: colors.tick }} interval={5} />
+                <YAxis tick={{ fontSize: 9, fill: colors.tick }} tickFormatter={v => `${v}%`} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Area type="monotone" dataKey="priceDivergence" stroke={colors.green} fill="url(#divGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -109,7 +110,7 @@ const Param = ({ label, value, onChange, min, max, step = 1 }: { label: string; 
       <label className="text-[10px] text-muted-foreground">{label}</label>
       <span className="text-[10px] font-mono text-foreground">{value.toLocaleString()}</span>
     </div>
-    <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} className="w-full accent-chart-purple h-1" />
+    <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} className="w-full accent-foreground h-1" />
   </div>
 );
 
