@@ -27,15 +27,6 @@ const Index = () => {
 
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-8 pt-24 pb-20">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-border text-muted-foreground text-xs font-medium mb-8">
-            AMM MECHANISM DESIGN PLATFORM
-          </div>
-        </motion.div>
 
         <motion.h1
           className="text-5xl sm:text-7xl font-bold tracking-tight leading-[1.05] mb-6 text-foreground"
