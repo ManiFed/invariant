@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, CheckCircle2, XCircle, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight } from "lucide-react";
+import { ChevronRight, ChevronLeft, CheckCircle2, XCircle, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown } from "lucide-react";
 import { COURSE_MODULES, type CourseStep } from "@/lib/course-content";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 
@@ -13,6 +14,8 @@ interface Props {
   onCompleteModule: () => void;
   onSkipCourse: () => void;
   totalModules: number;
+  completedModules: number;
+  onNavigateModule: (idx: number) => void;
 }
 
 function MiniCalculator() {
@@ -372,7 +375,7 @@ function LessonVisual({ visual }: { visual?: string }) {
   return visuals[visual] || null;
 }
 
-export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules }: Props) {
+export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule }: Props) {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const [showFollowUp, setShowFollowUp] = useState(false);
@@ -426,31 +429,50 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
   const isQuiz = step.type === "quiz";
   const hasFollowUp = isQuiz && step.followUpQuiz;
   const answeredCorrectly = isQuiz && answerRevealed && selectedAnswer === step.correctIndex;
-  const canProceed = step.type === "lesson" || (answerRevealed && (!hasFollowUp || !answeredCorrectly || showFollowUp && followUpRevealed));
+  const canProceed = step.type === "lesson" || answerRevealed;
 
   return (
     <div className="flex flex-col h-full">
-      {/* Progress header */}
+      {/* Progress header with module nav */}
       <div className="p-3 border-b border-border space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-wider">
-            Module {currentModule + 1}/{totalModules}
-          </span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors">
+                <span className="uppercase tracking-wider">Module {currentModule + 1}/{totalModules}</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="start" className="w-56 p-1.5">
+              <div className="flex flex-col gap-0.5">
+                {COURSE_MODULES.map((m, i) => {
+                  const isComplete = i < completedModules;
+                  const isCurrent = i === currentModule;
+                  const canClick = isComplete || isCurrent;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => canClick && onNavigateModule(i)}
+                      disabled={!canClick}
+                      className={`flex items-center gap-1.5 text-left text-[10px] px-2 py-1.5 rounded-md transition-all ${
+                        isCurrent ? "bg-primary text-primary-foreground font-medium"
+                        : isComplete ? "text-success hover:bg-secondary"
+                        : "text-muted-foreground/40 cursor-not-allowed"
+                      }`}
+                    >
+                      {isComplete ? <Check className="w-3 h-3 shrink-0" /> : isCurrent ? <Circle className="w-3 h-3 shrink-0 fill-current" /> : <Lock className="w-2.5 h-2.5 shrink-0" />}
+                      <span>{m.emoji} {m.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
           <button onClick={onSkipCourse} className="text-[9px] font-mono text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
             <SkipForward className="w-3 h-3" /> Skip
           </button>
         </div>
         <Progress value={overallProgress} className="h-1" />
-        <div className="flex gap-0.5">
-          {COURSE_MODULES.map((_, i) => (
-            <div
-              key={i}
-              className={`h-0.5 flex-1 rounded-full transition-colors ${
-                i < currentModule ? "bg-success" : i === currentModule ? "bg-primary" : "bg-secondary"
-              }`}
-            />
-          ))}
-        </div>
       </div>
 
       {/* Module title */}

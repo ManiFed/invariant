@@ -178,7 +178,7 @@ export default function TeachingLab() {
   };
 
   // Determine what to show based on progress
-  const showControls = courseComplete || revealedSections.has("controls");
+  const showControls = courseComplete || revealedSections.has("controls") || (courseActive && courseModule >= 3);
   const showCurve = courseComplete || revealedSections.has("curve");
   const showReserves = courseComplete || revealedSections.has("reserves");
   const showMetrics = courseComplete || revealedSections.has("metrics");
@@ -231,10 +231,6 @@ export default function TeachingLab() {
             onReset={handleReset}
             isRunning={isRunning}
             onToggleRun={() => setIsRunning(r => !r)}
-            courseActive={courseActive}
-            courseModule={courseModule}
-            completedModules={completedModules}
-            onNavigateModule={handleNavigateModule}
           />
         </div>
 
@@ -266,6 +262,8 @@ export default function TeachingLab() {
               onCompleteModule={handleCompleteModule}
               onSkipCourse={handleSkipCourse}
               totalModules={COURSE_MODULES.length}
+              completedModules={completedModules}
+              onNavigateModule={handleNavigateModule}
             />
           ) : (
             <LabLearning

@@ -1,9 +1,9 @@
+import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { HelpCircle, Check, Lock, Circle } from "lucide-react";
-import { COURSE_MODULES } from "@/lib/course-content";
+import { HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
 import AIChatPanel from "./AIChatPanel";
 
 export type LessonTab = "slippage" | "il" | "arbitrage" | "fees" | "volatility" | "concentrated";
@@ -43,10 +43,6 @@ interface Props {
   onReset: () => void;
   isRunning: boolean;
   onToggleRun: () => void;
-  courseActive: boolean;
-  courseModule: number;
-  completedModules: number;
-  onNavigateModule: (idx: number) => void;
 }
 
 function HelpButton({ id }: { id: string }) {
@@ -85,77 +81,32 @@ function SliderRow({ label, value, min, max, step, onChange, format, helpId }: {
   );
 }
 
-const MODULE_TAB_MAP: Record<string, LessonTab> = {
-  intro: "slippage",
-  reserves: "slippage",
-  price: "slippage",
-  trading: "slippage",
-  il: "il",
-  arbitrage: "arbitrage",
-  fees: "fees",
-};
-
 export default function LabControls({
   tab, onTabChange, controls, onChange, onExecuteTrade, onReset,
-  isRunning, onToggleRun, courseActive, courseModule, completedModules, onNavigateModule,
+  isRunning, onToggleRun,
 }: Props) {
-  const courseComplete = completedModules >= COURSE_MODULES.length;
+  const [chatOpen, setChatOpen] = useState(false);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Course Navigator */}
-      <div className="p-3 border-b border-border">
-        <h2 className="text-[10px] font-mono font-semibold text-muted-foreground mb-2 tracking-wider uppercase">Course Modules</h2>
-        <div className="flex flex-col gap-0.5">
-          {COURSE_MODULES.map((m, i) => {
-            const isComplete = i < completedModules;
-            const isCurrent = courseActive && i === courseModule;
-            const isLocked = !isComplete && !isCurrent;
-            const canClick = isComplete || (courseComplete && true);
-
-            return (
-              <button
-                key={m.id}
-                onClick={() => {
-                  if (canClick) {
-                    onNavigateModule(i);
-                    const mappedTab = MODULE_TAB_MAP[m.id];
-                    if (mappedTab) onTabChange(mappedTab);
-                  }
-                }}
-                disabled={isLocked && !courseComplete}
-                className={`flex items-center gap-1.5 text-left text-[10px] px-2 py-1.5 rounded-md transition-all ${
-                  isCurrent
-                    ? "bg-primary text-primary-foreground font-medium"
-                    : isComplete
-                    ? "text-success hover:bg-secondary cursor-pointer"
-                    : isLocked && !courseComplete
-                    ? "text-muted-foreground/40 cursor-not-allowed"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer"
-                }`}
-              >
-                {isComplete ? (
-                  <Check className="w-3 h-3 shrink-0" />
-                ) : isCurrent ? (
-                  <Circle className="w-3 h-3 shrink-0 fill-current" />
-                ) : (
-                  <Lock className="w-2.5 h-2.5 shrink-0" />
-                )}
-                <span className="mr-1">{m.emoji}</span>
-                <span className="truncate">{m.title}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* AI Chat Assistant */}
-      <div className="flex-1 min-h-0 border-b border-border">
-        <AIChatPanel />
+      {/* AI Chat Assistant - Collapsible */}
+      <div className="border-b border-border">
+        <button
+          onClick={() => setChatOpen(!chatOpen)}
+          className="w-full px-3 py-2 flex items-center justify-between text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider hover:bg-secondary/50 transition-colors"
+        >
+          <span>AI Assistant</span>
+          {chatOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
+        {chatOpen && (
+          <div className="h-48 border-t border-border">
+            <AIChatPanel />
+          </div>
+        )}
       </div>
 
       {/* Controls */}
-      <div className="p-3 space-y-2.5 overflow-y-auto">
+      <div className="p-3 space-y-2.5 overflow-y-auto flex-1">
         <h2 className="text-[10px] font-mono font-semibold text-muted-foreground tracking-wider uppercase">Controls</h2>
 
         <SliderRow label="Reserve X" value={controls.reserveX} min={100} max={10000} step={100}
