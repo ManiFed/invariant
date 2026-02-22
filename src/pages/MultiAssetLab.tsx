@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Boxes } from "lucide-react";
@@ -14,14 +14,13 @@ import { MultiAssetPanel, Asset, ASSET_COLORS, defaultAssets } from "@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
-  { id: "assets", label: "Multi-Asset", icon: Boxes, desc: "Configure assets, weights, and visualize", step: 1 },
-  { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your AMM curve formula", step: 2 },
-  { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution across the curve", step: 3 },
-  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Stress-test with simulated price paths", step: 4 },
-  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Model toxic flow and MEV extraction", step: 5 },
-  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Compare depth, efficiency, slippage", step: 6 },
-  { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 7 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 8 },
+  { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your multi-asset AMM curve", step: 1 },
+  { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution across the curve", step: 2 },
+  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Stress-test with simulated price paths", step: 3 },
+  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Model toxic flow and MEV extraction", step: 4 },
+  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Compare depth, efficiency, slippage", step: 5 },
+  { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 6 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 7 },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -61,7 +60,7 @@ function loadInvariant(): SavedInvariant | null {
 
 const MultiAssetLab = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabId>("assets");
+  const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
   const [savedInvariant, setSavedInvariant] = useState<SavedInvariant | null>(loadInvariant);
   const [showImport, setShowImport] = useState(false);
@@ -114,11 +113,10 @@ const MultiAssetLab = () => {
   const hasInvariant = savedInvariant !== null;
 
   const handleTabClick = (id: TabId) => {
-    if (id !== "assets" && id !== "invariant" && !hasInvariant) return;
+    if (id !== "invariant" && !hasInvariant) return;
     setActiveTab(id);
   };
 
-  // Multi-asset expression for header display
   const multiAssetExpr = assets.map(a => `${a.symbol}^${a.weight}`).join(" · ") + " = k";
 
   return (
@@ -174,7 +172,7 @@ const MultiAssetLab = () => {
             {tabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
-              const isLocked = tab.id !== "assets" && tab.id !== "invariant" && !hasInvariant;
+              const isLocked = tab.id !== "invariant" && !hasInvariant;
               return (
                 <button key={tab.id} onClick={() => handleTabClick(tab.id)} disabled={isLocked}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${isActive ? "bg-foreground/5 text-foreground border-r-2 border-foreground" : isLocked ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"}`}
@@ -208,14 +206,21 @@ const MultiAssetLab = () => {
           {!hasInvariant && activeTab === "invariant" && (
             <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/20 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-              <p className="text-xs text-foreground"><strong>Step 2:</strong> Design your invariant below, then click <strong>"Set as Active Invariant"</strong> to unlock the other tools.</p>
+              <p className="text-xs text-foreground"><strong>Step 1:</strong> Configure your assets and design your invariant below, then click <strong>"Set as Active Invariant"</strong> to unlock the other tools.</p>
             </motion.div>
           )}
 
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-              {activeTab === "assets" && <MultiAssetPanel assets={assets} onChange={setAssets} onAdd={addAsset} onRemove={removeAsset} onApplyWeights={applyWeights} />}
-              {activeTab === "invariant" && <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />}
+              {activeTab === "invariant" && (
+                <div className="space-y-6">
+                  {/* Multi-asset panel integrated above invariant editor */}
+                  <MultiAssetPanel assets={assets} onChange={setAssets} onAdd={addAsset} onRemove={removeAsset} onApplyWeights={applyWeights} />
+                  <div className="border-t border-border pt-6">
+                    <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />
+                  </div>
+                </div>
+              )}
               {activeTab === "fees" && <FeeStructureEditor />}
               {activeTab === "montecarlo" && <MonteCarloEngine />}
               {activeTab === "arbitrage" && <ArbitrageEngine />}
