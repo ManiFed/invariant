@@ -59,6 +59,24 @@ const BeginnerMode = () => {
   const [guideStep, setGuideStep] = useState(0);
   const [showGuide, setShowGuide] = useState(true);
 
+  // Plain-english scenario & risk controls
+  const [riskLevel, setRiskLevel] = useState<"conservative" | "moderate" | "aggressive">("moderate");
+
+  const riskDescriptions = {
+    conservative: { label: "Conservative", emoji: "🛡️", desc: "You prefer safety over returns. Tight ranges, lower volatility exposure.", volLabel: "Calm markets", feeLabel: "Standard (0.30%)" },
+    moderate: { label: "Moderate", emoji: "⚖️", desc: "You're comfortable with some risk for better returns.", volLabel: "Normal markets", feeLabel: "Balanced (0.30%)" },
+    aggressive: { label: "Aggressive", emoji: "🔥", desc: "You chase maximum returns and can handle big swings.", volLabel: "Wild markets", feeLabel: "High volume (0.05%)" },
+  };
+
+  // Auto-map risk level to parameters
+  useEffect(() => {
+    switch (riskLevel) {
+      case "conservative": setVolatility("Low"); setFeeTier("0.30%"); break;
+      case "moderate": setVolatility("Medium"); setFeeTier("0.30%"); break;
+      case "aggressive": setVolatility("High"); setFeeTier("0.05%"); break;
+    }
+  }, [riskLevel]);
+
   const volMultiplier = volatility === "Low" ? 0.5 : volatility === "Medium" ? 1 : 2;
   const feeRate = parseFloat(feeTier) / 100;
 
@@ -166,7 +184,7 @@ const BeginnerMode = () => {
         </button>
       </div>
 
-      {/* Guided Tour Overlay */}
+      {/* Guided Tour Overlay — collapsible */}
       <AnimatePresence>
         {showGuide && currentGuide && (
           <motion.div
@@ -183,9 +201,14 @@ const BeginnerMode = () => {
                 <h3 className="text-sm font-semibold text-foreground mb-1">{currentGuide.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">{currentGuide.desc}</p>
               </div>
-              <button onClick={() => setShowGuide(false)} className="text-muted-foreground hover:text-foreground text-xs shrink-0">
-                ✕ Skip tour
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => setShowGuide(false)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded-md hover:bg-secondary transition-colors">
+                  Hide
+                </button>
+                <button onClick={() => setShowGuide(false)} className="text-muted-foreground hover:text-foreground text-xs">
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
               <div className="flex gap-1">
@@ -213,6 +236,15 @@ const BeginnerMode = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Collapsed guide bar when hidden */}
+      {!showGuide && (
+        <div className="mx-6 mt-3 mb-1">
+          <button onClick={() => setShowGuide(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors">
+            <HelpCircle className="w-3 h-3" /> Show Guide
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row h-[calc(100vh-105px)]">
         {/* Sidebar — always visible */}
@@ -275,33 +307,63 @@ const BeginnerMode = () => {
               <ParamInput label="Total Liquidity" value={liquidity} onChange={setLiquidity} prefix="$" hint="Capital to deposit" />
             </div>
 
+            {/* Plain-English Risk Profile Selector */}
             <div className="mt-4">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Expected Volatility</label>
-              <div className="flex gap-2">
-                {volatilityLevels.map(v => (
-                  <motion.button key={v} onClick={() => setVolatility(v)}
-                    whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                    className={`flex-1 py-2 rounded-md text-xs font-medium transition-all ${
-                      volatility === v ? "bg-foreground/5 text-foreground border border-foreground/20" : "bg-secondary text-secondary-foreground border border-transparent"
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Your Risk Style</label>
+              <p className="text-[10px] text-muted-foreground mb-2">Choose how you'd approach providing liquidity. This automatically sets volatility and fee tier.</p>
+              <div className="space-y-1.5">
+                {(["conservative", "moderate", "aggressive"] as const).map(r => (
+                  <motion.button key={r} onClick={() => setRiskLevel(r)}
+                    whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${
+                      riskLevel === r ? "border-foreground/30 bg-foreground/5" : "border-border bg-card hover:border-foreground/10"
                     }`}>
-                    {v === "Low" ? "🌊" : v === "Medium" ? "🌪️" : "🔥"} {v}
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{riskDescriptions[r].emoji}</span>
+                      <div className="flex-1">
+                        <span className="text-xs font-medium text-foreground">{riskDescriptions[r].label}</span>
+                        <p className="text-[10px] text-muted-foreground">{riskDescriptions[r].desc}</p>
+                      </div>
+                    </div>
+                    {riskLevel === r && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-2 pt-2 border-t border-border/50 flex gap-3">
+                        <span className="text-[9px] text-muted-foreground">🌊 {riskDescriptions[r].volLabel}</span>
+                        <span className="text-[9px] text-muted-foreground">💰 {riskDescriptions[r].feeLabel}</span>
+                      </motion.div>
+                    )}
                   </motion.button>
                 ))}
               </div>
             </div>
 
-            <div className="mt-4">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Fee Tier</label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {feeTiers.map(f => (
-                  <motion.button key={f} onClick={() => setFeeTier(f)}
-                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                    className={`py-2 rounded-md text-xs font-mono transition-all ${
-                      feeTier === f ? "bg-foreground/5 text-foreground border border-foreground/20" : "bg-secondary text-secondary-foreground border border-transparent"
-                    }`}>{f}</motion.button>
-                ))}
+            {/* Advanced overrides (collapsed) */}
+            <details className="mt-3">
+              <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">Advanced: Override volatility & fee tier manually</summary>
+              <div className="mt-2 space-y-2 pl-2 border-l-2 border-border">
+                <div>
+                  <label className="text-[10px] text-muted-foreground block mb-1">Volatility</label>
+                  <div className="flex gap-1.5">
+                    {volatilityLevels.map(v => (
+                      <button key={v} onClick={() => setVolatility(v)}
+                        className={`flex-1 py-1.5 rounded-md text-[10px] font-medium transition-all ${
+                          volatility === v ? "bg-foreground/5 text-foreground border border-foreground/20" : "bg-secondary text-secondary-foreground border border-transparent"
+                        }`}>{v === "Low" ? "🌊" : v === "Medium" ? "🌪️" : "🔥"} {v}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block mb-1">Fee Tier</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {feeTiers.map(f => (
+                      <button key={f} onClick={() => setFeeTier(f)}
+                        className={`py-1.5 rounded-md text-[9px] font-mono transition-all ${
+                          feeTier === f ? "bg-foreground/5 text-foreground border border-foreground/20" : "bg-secondary text-secondary-foreground border border-transparent"
+                        }`}>{f}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            </details>
 
             {/* Pool Reserve Preview */}
             <div className="mt-4">
@@ -445,15 +507,15 @@ const BeginnerMode = () => {
             </div>
           </GuidedSection>
 
-          {/* Scenario Simulator */}
+          {/* Plain-English Scenario Simulator */}
           <GuidedSection
             number="6"
-            title="Scenario Simulator"
-            desc="Watch how LP positions perform in different market conditions over 90 days."
+            title="What If...? Scenario Simulator"
+            desc="Pick a real-world scenario in plain English and see what happens to your liquidity."
             highlight={showGuide && currentGuide?.target === "scenario"}
             inline
           >
-            <ScenarioSimulator
+            <PlainEnglishScenarios
               selectedTemplate={selectedTemplate}
               liquidity={liquidity}
               feeRate={feeRate}
@@ -699,18 +761,20 @@ const SwapStat = ({ label, value, level }: { label: string; value: string; level
   );
 };
 
-/* ─── Scenario Simulator ─── */
+/* ─── Plain-English Scenario Simulator ─── */
 
-type ScenarioId = "trending" | "mean_revert" | "chop" | "crash";
+type ScenarioId = "trending" | "mean_revert" | "chop" | "crash" | "new_listing" | "stablecoin";
 
-const scenariosList: { id: ScenarioId; label: string; emoji: string; desc: string }[] = [
-  { id: "trending", label: "Trending Up", emoji: "📈", desc: "Steady 40% annual drift upward" },
-  { id: "mean_revert", label: "Mean-Reverting", emoji: "🔄", desc: "Oscillates ±15% around starting price" },
-  { id: "chop", label: "High Vol Chop", emoji: "⚡", desc: "High volatility, no trend — the IL killer" },
-  { id: "crash", label: "One-Sided Crash", emoji: "💥", desc: "Token A drops 70% over 90 days" },
+const scenariosList: { id: ScenarioId; label: string; emoji: string; desc: string; plainDesc: string }[] = [
+  { id: "trending", label: "Bull Run", emoji: "📈", desc: "Token A steadily rises 40% over 90 days", plainDesc: "\"The market is pumping and my token keeps going up.\"" },
+  { id: "mean_revert", label: "Sideways Churn", emoji: "🔄", desc: "Price bounces around but ends near where it started", plainDesc: "\"Nothing exciting happens — the price just wiggles around.\"" },
+  { id: "chop", label: "Rollercoaster", emoji: "🎢", desc: "Violent swings up and down with no clear direction", plainDesc: "\"Crypto Twitter is panicking every other day.\"" },
+  { id: "crash", label: "Rug Pull / Crash", emoji: "💥", desc: "Token A drops 70% over 90 days", plainDesc: "\"The worst case: your token dumps hard and doesn't recover.\"" },
+  { id: "new_listing", label: "New Token Hype", emoji: "🚀", desc: "Spikes 3x then slowly bleeds back down", plainDesc: "\"A new memecoin goes viral, then fades.\"" },
+  { id: "stablecoin", label: "Stablecoin Pair", emoji: "🏦", desc: "Both tokens stay within 1% of each other", plainDesc: "\"Like USDC/USDT — boring but profitable with fees.\"" },
 ];
 
-const generateScenarioData = (scenario: ScenarioId, template: Template, liq: number, fRate: number, _volMult: number, days: number) => {
+const generateScenarioData = (scenario: ScenarioId, template: Template, liq: number, fRate: number, _volMult: number, days: number): { day: number; price: number; lpValue: number; holdValue: number; fees: number; il: number }[] => {
   const data: { day: number; price: number; lpValue: number; holdValue: number; fees: number; il: number }[] = [];
   const startPrice = 100;
   let price = startPrice;
@@ -723,6 +787,8 @@ const generateScenarioData = (scenario: ScenarioId, template: Template, liq: num
       case "mean_revert": price = startPrice * (1 + Math.sin(d * 0.08) * 0.15 + Math.cos(d * 0.03) * 0.05); break;
       case "chop": price = startPrice * (1 + Math.sin(d * 0.3) * 0.2 + Math.cos(d * 0.7) * 0.1); break;
       case "crash": price = startPrice * (1 - 0.7 * t * t + Math.sin(d * 0.1) * 0.03); break;
+      case "new_listing": price = startPrice * (1 + 2 * Math.exp(-3 * t) * Math.sin(d * 0.2) + 2 * Math.exp(-2 * t)); break;
+      case "stablecoin": price = startPrice * (1 + Math.sin(d * 0.5) * 0.005 + Math.cos(d * 0.3) * 0.003); break;
     }
     price = Math.max(price, 1);
 
@@ -754,7 +820,7 @@ const generateScenarioData = (scenario: ScenarioId, template: Template, liq: num
   return data;
 };
 
-const ScenarioSimulator = ({ selectedTemplate, liquidity: liq, feeRate: fRate, volMultiplier: vMult, colors }: {
+const PlainEnglishScenarios = ({ selectedTemplate, liquidity: liq, feeRate: fRate, volMultiplier: vMult, colors }: {
   selectedTemplate: Template; liquidity: number; feeRate: number; volMultiplier: number; colors: ReturnType<typeof useChartColors>;
 }) => {
   const [activeScenario, setActiveScenario] = useState<ScenarioId>("trending");
@@ -786,7 +852,7 @@ const ScenarioSimulator = ({ selectedTemplate, liquidity: liq, feeRate: fRate, v
 
   return (
     <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
         {scenariosList.map(s => (
           <motion.button key={s.id} onClick={() => setActiveScenario(s.id)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             className={`p-2.5 rounded-lg border text-left transition-all ${activeScenario === s.id ? "border-foreground/30 bg-foreground/5" : "border-border bg-card hover:border-foreground/10"}`}>
@@ -794,7 +860,8 @@ const ScenarioSimulator = ({ selectedTemplate, liquidity: liq, feeRate: fRate, v
               <span className="text-sm">{s.emoji}</span>
               <span className="text-[11px] font-medium text-foreground">{s.label}</span>
             </div>
-            <p className="text-[9px] text-muted-foreground leading-snug">{s.desc}</p>
+            <p className="text-[9px] text-muted-foreground leading-snug italic">{s.plainDesc}</p>
+            <p className="text-[8px] text-muted-foreground/70 mt-0.5">{s.desc}</p>
           </motion.button>
         ))}
       </div>

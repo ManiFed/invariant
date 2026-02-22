@@ -452,7 +452,58 @@ const InvariantEditor = () => {
         <ChartPanel title="Convexity" subtitle="d²y/dx² (curvature)" helpId="convexity" data={convexityData} dataKey="convexity" color={colors.red} colors={colors} />
       </div>
 
-      <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+      {/* Optimizer: find optimal expression for a goal */}
+      <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-4 h-4 text-foreground" />
+          <h3 className="text-sm font-semibold text-foreground">Expression Optimizer</h3>
+          <HelpBtn id="invariantCurve" />
+        </div>
+        <p className="text-[10px] text-muted-foreground mb-3">Choose what to optimize for, and we'll suggest the best invariant parameters.</p>
+        <ExpressionOptimizer 
+          onApply={(wA, wB, k) => { setWeightA(wA); setWeightB(wB); setKValue(k); setSelectedPreset(4); setExpression(`x^${wA.toFixed(2)} * y^${wB.toFixed(2)} = k`); }} 
+        />
+      </motion.div>
+
+      {/* Reverse Engineer: drag sliders to modify expression */}
+      <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+        <div className="flex items-center gap-2 mb-4">
+          <Code2 className="w-4 h-4 text-foreground" />
+          <h3 className="text-sm font-semibold text-foreground">Reverse Engineer</h3>
+        </div>
+        <p className="text-[10px] text-muted-foreground mb-3">Drag sliders to shape the curve visually — the expression updates automatically.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">Curvature (flatness near center)</label>
+            <input type="range" min="0.1" max="2" step="0.05" value={weightA}
+              onChange={e => { 
+                const wA = Number(e.target.value); 
+                const wB = Math.max(0.1, 1 - wA);
+                setWeightA(wA); setWeightB(wB); setSelectedPreset(4); 
+                setExpression(`x^${wA.toFixed(2)} * y^${wB.toFixed(2)} = k`); 
+              }}
+              className="w-full accent-foreground" />
+            <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
+              <span>Flat (stable swap)</span><span>Steep (volatile)</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground block mb-1">Liquidity Depth</label>
+            <input type="range" min="1000" max="1000000" step="1000" value={kValue}
+              onChange={e => setKValue(Number(e.target.value))}
+              className="w-full accent-foreground" />
+            <div className="flex justify-between text-[9px] text-muted-foreground mt-0.5">
+              <span>Shallow</span><span>Deep</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 p-2 rounded-lg bg-secondary border border-border">
+          <span className="text-[10px] text-muted-foreground">Current expression: </span>
+          <span className="text-[10px] font-mono text-foreground">{expression}</span>
+        </div>
+      </motion.div>
+
+      <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}>
         <div className="flex items-center gap-2 mb-4">
           <Zap className="w-4 h-4 text-foreground" />
           <h3 className="text-sm font-semibold text-foreground">Auto-derived Properties</h3>
@@ -495,5 +546,48 @@ const DerivedProp = ({ label, value }: { label: string; value: string }) => (
     <p className="text-sm font-semibold font-mono-data text-foreground">{value}</p>
   </div>
 );
+
+/* ─── Expression Optimizer ─── */
+
+function ExpressionOptimizer({ onApply }: { onApply: (wA: number, wB: number, k: number) => void }) {
+  const [goal, setGoal] = useState<"min_slippage" | "min_il" | "max_fees" | "balanced">("balanced");
+
+  const optimized = useMemo(() => {
+    switch (goal) {
+      case "min_slippage": return { wA: 0.5, wB: 0.5, k: 500000, desc: "Equal weights with deep liquidity minimize slippage. x^0.5 * y^0.5 = k with high k." };
+      case "min_il": return { wA: 0.8, wB: 0.2, k: 100000, desc: "80/20 weighted pool reduces IL for token X. Majority weight on the volatile asset." };
+      case "max_fees": return { wA: 0.5, wB: 0.5, k: 50000, desc: "Standard constant product with moderate depth maximizes fee capture from arbitrage." };
+      case "balanced": return { wA: 0.6, wB: 0.4, k: 200000, desc: "60/40 weighting balances IL protection with fee capture efficiency." };
+    }
+  }, [goal]);
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {([
+          { id: "min_slippage" as const, label: "Min Slippage", emoji: "🎯" },
+          { id: "min_il" as const, label: "Min IL", emoji: "🛡️" },
+          { id: "max_fees" as const, label: "Max Fees", emoji: "💰" },
+          { id: "balanced" as const, label: "Balanced", emoji: "⚖️" },
+        ]).map(g => (
+          <button key={g.id} onClick={() => setGoal(g.id)}
+            className={`p-2 rounded-lg border text-left text-[10px] transition-all ${goal === g.id ? "border-foreground/30 bg-foreground/5" : "border-border bg-card hover:border-foreground/10"}`}>
+            <span>{g.emoji} {g.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="p-3 rounded-lg bg-secondary border border-border">
+        <p className="text-[10px] text-muted-foreground leading-relaxed mb-2">{optimized.desc}</p>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-mono text-foreground">w₁={optimized.wA} w₂={optimized.wB} k={optimized.k.toLocaleString()}</span>
+          <button onClick={() => onApply(optimized.wA, optimized.wB, optimized.k)}
+            className="px-2 py-1 rounded-md bg-primary text-primary-foreground text-[10px] font-medium hover:opacity-90 transition-opacity">
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default InvariantEditor;

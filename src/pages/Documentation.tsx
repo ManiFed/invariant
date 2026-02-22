@@ -5,6 +5,33 @@ import ThemeToggle from "@/components/ThemeToggle";
 
 const sections = [
   {
+    id: "about",
+    title: "About Invariant Studio",
+    content: `**Invariant Studio** is an open educational platform for designing, simulating, and stress-testing automated market maker (AMM) mechanisms.
+
+**Who is it for?**
+
+- **Students & Researchers** — Learn AMM mechanics through interactive simulations with guided courses
+- **DeFi Developers** — Prototype and test custom invariant functions before deploying to mainnet
+- **Liquidity Providers** — Understand impermanent loss, fee dynamics, and capital efficiency before committing capital
+- **Protocol Designers** — Explore novel bonding curve shapes with real-time risk analytics
+
+**What can you do?**
+
+- **Beginner Mode**: Step-by-step guided pool design with plain-English scenarios and risk profiles
+- **Teaching Lab**: A 7-module interactive course covering AMM fundamentals from reserves to concentrated liquidity
+- **Advanced Mode**: Symbolic invariant editor, Monte Carlo simulations (up to 50K paths), arbitrage flow modeling, stability analysis, and deployment export
+- **AI Assistant**: Ask questions about any AMM concept and get instant explanations
+
+**Technology**
+
+Invariant Studio runs entirely in-browser — no backend dependency for simulations. All computations (GBM price paths, IL calculations, curve evaluation) are performed client-side for instant feedback and reproducibility. The AI assistant connects to a cloud function for natural language Q&A.
+
+**Philosophy**
+
+We believe the best way to learn finance is to break things in a sandbox. Every chart is interactive, every parameter is adjustable, and every formula is visible. There are no black boxes.`,
+  },
+  {
     id: "overview",
     title: "1. Overview",
     content: `Invariant Studio is a dual-mode platform for designing, simulating, and stress-testing automated market maker (AMM) mechanisms. The platform provides both a guided Beginner Mode for intuitive experimentation and an Advanced Mode for formal invariant engineering.
