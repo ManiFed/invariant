@@ -189,13 +189,21 @@ const gasEstimates: Record<CurveType, { deploy: number; swap: number; addLiq: nu
   weighted: { deploy: 1_600_000, swap: 115_000, addLiq: 150_000, removeLiq: 125_000 },
 };
 
-const DeploymentExport = () => {
+interface Asset {
+  id: string;
+  symbol: string;
+  reserve: number;
+  weight: number;
+  color: string;
+}
+
+const DeploymentExport = ({ assets }: { assets?: Asset[] }) => {
   const colors = useChartColors();
   const [curve, setCurve] = useState<CurveType>("constant_product");
   const [fee, setFee] = useState(0.3);
   const [adminFee, setAdminFee] = useState(10);
-  const [tokens, setTokens] = useState(2);
-  const [contractName, setContractName] = useState("MyAMM");
+  const [tokens, setTokens] = useState(assets?.length ?? 2);
+  const [contractName, setContractName] = useState(assets && assets.length > 2 ? "MultiAssetAMM" : "MyAMM");
   const [gasPrice, setGasPrice] = useState(30);
   const [ethPrice, setEthPrice] = useState(3500);
   const [copied, setCopied] = useState(false);

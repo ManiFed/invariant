@@ -5,6 +5,14 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
+interface Asset {
+  id: string;
+  symbol: string;
+  reserve: number;
+  weight: number;
+  color: string;
+}
+
 const NUM_POINTS = 20;
 
 function HelpBtn({ label, desc }: { label: string; desc: string }) {
@@ -31,7 +39,7 @@ const PRESETS = [
   { label: "Descending", desc: "Fees decrease with price", gen: () => Array.from({ length: NUM_POINTS }, (_, i) => Math.round(85 - (i / NUM_POINTS) * 80)) },
 ];
 
-export default function FeeStructureEditor() {
+export default function FeeStructureEditor({ assets }: { assets?: Asset[] }) {
   const colors = useChartColors();
   const [fees, setFees] = useState<number[]>(() => PRESETS[0].gen());
   const [activePreset, setActivePreset] = useState(0);
@@ -84,6 +92,21 @@ export default function FeeStructureEditor() {
 
   return (
     <div className="space-y-6">
+      {/* Multi-asset context */}
+      {assets && assets.length > 0 && (
+        <div className="surface-elevated rounded-xl p-4">
+          <h4 className="text-[10px] font-bold text-foreground mb-2">Multi-Asset Fee Context</h4>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {assets.map((a, i) => assets.slice(i + 1).map(b => (
+              <div key={`${a.id}-${b.id}`} className="p-2 rounded-lg bg-secondary border border-border">
+                <p className="text-[9px] font-mono text-muted-foreground">{a.symbol}/{b.symbol}</p>
+                <p className="text-[10px] font-semibold text-foreground">{(Number(avgFee) * (a.weight + b.weight)).toFixed(0)} bps (weighted)</p>
+              </div>
+            )))}
+          </div>
+        </div>
+      )}
+
       {/* Presets */}
       <div className="surface-elevated rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
@@ -91,7 +114,9 @@ export default function FeeStructureEditor() {
           <h3 className="text-sm font-semibold text-foreground">Fee Structure</h3>
           <HelpBtn label="Custom Fee Distribution" desc="Define how swap fees vary across the price curve. Higher fees at volatile ranges protect LPs, while lower fees at the center attract more volume." />
         </div>
-        <p className="text-[10px] text-muted-foreground mb-3">Choose a preset or drag the sliders below to create a custom fee distribution.</p>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          {assets && assets.length > 2 ? `Fee structure applied across all ${assets.length} asset pairs.` : "Choose a preset or drag the sliders below to create a custom fee distribution."}
+        </p>
 
         <div className="flex gap-2 mb-4 flex-wrap">
           {PRESETS.map((p, i) => (

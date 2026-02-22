@@ -38,7 +38,15 @@ function HelpBtn({ id }: { id: string }) {
   );
 }
 
-const StabilityAnalysis = () => {
+interface Asset {
+  id: string;
+  symbol: string;
+  reserve: number;
+  weight: number;
+  color: string;
+}
+
+const StabilityAnalysis = ({ assets }: { assets?: Asset[] }) => {
   const colors = useChartColors();
   const [invariant, setInvariant] = useState<InvariantType>("cp");
   const [feeRate, setFeeRate] = useState(0.3);
@@ -48,15 +56,21 @@ const StabilityAnalysis = () => {
   const effectiveInvariant = invariant === "custom" ? "wt" : invariant; // custom treated as weighted variant for analysis
 
   const checks = useMemo(() => {
+    const numAssets = assets?.length ?? 2;
+    const isMultiAsset = numAssets > 2;
     const base: { id: string; label: string; status: "pass" | "warn" | "fail"; detail: string; helpId: string }[] = [
-      { id: "insolvency", label: "Insolvency Edge Cases", helpId: "insolvency", status: effectiveInvariant === "cl" ? "warn" : "pass", detail: effectiveInvariant === "cl" ? "Concentrated positions can reach zero liquidity if price exits range" : "Pool maintains solvency across all tested price ranges" },
-      { id: "path_dep", label: "Path Dependence", helpId: "pathDep", status: feeRate > 0.5 ? "warn" : "pass", detail: feeRate > 0.5 ? "High fee tiers introduce measurable path dependence in LP returns" : "Path dependence is negligible at current fee tier" },
+      { id: "insolvency", label: "Insolvency Edge Cases", helpId: "insolvency", status: effectiveInvariant === "cl" ? "warn" : isMultiAsset && numAssets > 3 ? "warn" : "pass", detail: effectiveInvariant === "cl" ? "Concentrated positions can reach zero liquidity if price exits range" : isMultiAsset ? `Multi-asset pool (${numAssets} tokens) has higher dimensional edge cases to monitor` : "Pool maintains solvency across all tested price ranges" },
+      { id: "path_dep", label: "Path Dependence", helpId: "pathDep", status: feeRate > 0.5 || isMultiAsset ? "warn" : "pass", detail: isMultiAsset ? `Path dependence increases with ${numAssets} assets — trade ordering across pairs matters` : feeRate > 0.5 ? "High fee tiers introduce measurable path dependence in LP returns" : "Path dependence is negligible at current fee tier" },
       { id: "fee_distortion", label: "Fee Distortion", helpId: "feeDistortion", status: feeRate > 0.8 ? "fail" : feeRate > 0.3 ? "warn" : "pass", detail: feeRate > 0.8 ? "Fee distortion exceeds safe thresholds" : "Fee distortion within acceptable bounds" },
       { id: "inventory", label: "Inventory Runaway", helpId: "inventory", status: effectiveInvariant === "wt" ? "pass" : volatility > 120 ? "fail" : volatility > 60 ? "warn" : "pass", detail: volatility > 120 ? "High volatility creates inventory imbalance beyond rebalance capacity" : "Inventory drift is manageable" },
       { id: "reflexivity", label: "Reflexivity Loops", helpId: "reflexivity", status: effectiveInvariant === "cl" && volatility > 100 ? "fail" : effectiveInvariant === "cl" ? "warn" : "pass", detail: effectiveInvariant === "cl" && volatility > 100 ? "Concentrated positions + high vol create reflexive cascades" : "No significant reflexivity detected" },
     ];
+    if (isMultiAsset) {
+      base.push({ id: "weight_balance", label: "Weight Balance Risk", helpId: "invariantType", status: assets!.some(a => a.weight > 0.6) ? "warn" : "pass", detail: assets!.some(a => a.weight > 0.6) ? `Dominant weight (${assets!.find(a => a.weight > 0.6)?.symbol} at ${(assets!.find(a => a.weight > 0.6)!.weight * 100).toFixed(0)}%) creates concentration risk` : "Weights are reasonably distributed across assets" });
+      base.push({ id: "pair_correlation", label: "Cross-Pair Correlation", helpId: "invariantType", status: numAssets > 4 ? "warn" : "pass", detail: numAssets > 4 ? `${numAssets * (numAssets - 1) / 2} pairs create complex correlation dynamics — monitor closely` : "Pair correlations are manageable" });
+    }
     return base;
-  }, [effectiveInvariant, feeRate, volatility]);
+  }, [effectiveInvariant, feeRate, volatility, assets]);
 
   const stressData = useMemo(() => {
     const data = [];

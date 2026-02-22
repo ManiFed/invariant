@@ -3,24 +3,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Boxes } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
-import InvariantEditor from "@/components/advanced/InvariantEditor";
+import MultiAssetInvariantEditor from "@/components/labs/MultiAssetInvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
 import ArbitrageEngine from "@/components/advanced/ArbitrageEngine";
 import LiquidityAnalyzer from "@/components/advanced/LiquidityAnalyzer";
 import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import DeploymentExport from "@/components/advanced/DeploymentExport";
 import FeeStructureEditor from "@/components/advanced/FeeStructureEditor";
-import { MultiAssetPanel, Asset, ASSET_COLORS, defaultAssets } from "@/components/labs/MultiAssetComponents";
+import { Asset, ASSET_COLORS, defaultAssets } from "@/components/labs/MultiAssetComponents";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
   { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your multi-asset AMM curve", step: 1 },
-  { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution across the curve", step: 2 },
-  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Stress-test with simulated price paths", step: 3 },
-  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Model toxic flow and MEV extraction", step: 4 },
-  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Compare depth, efficiency, slippage", step: 5 },
-  { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 6 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 7 },
+  { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution per asset pair", step: 2 },
+  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Multi-asset correlated simulations", step: 3 },
+  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Cross-pair toxic flow & MEV", step: 4 },
+  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Multi-asset depth & efficiency", step: 5 },
+  { id: "stability", label: "Stability", icon: Shield, desc: "Multi-asset edge case diagnostics", step: 6 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export multi-token Solidity contract", step: 7 },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -65,8 +65,6 @@ const MultiAssetLab = () => {
   const [savedInvariant, setSavedInvariant] = useState<SavedInvariant | null>(loadInvariant);
   const [showImport, setShowImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Multi-asset state
   const [assets, setAssets] = useState<Asset[]>(defaultAssets);
 
   const handleSaveInvariant = useCallback((inv: SavedInvariant) => {
@@ -133,10 +131,13 @@ const MultiAssetLab = () => {
             <Upload className="w-3 h-3" /> Import AMM
           </button>
           <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
-          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border">
+          <button
+            onClick={() => setActiveTab("invariant")}
+            className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors cursor-pointer"
+          >
             <span className="text-[9px] text-muted-foreground">Active:</span>
             <span className="text-[10px] font-mono text-foreground truncate max-w-48">{savedInvariant ? savedInvariant.expression : multiAssetExpr}</span>
-          </div>
+          </button>
           <ThemeToggle />
         </div>
       </header>
@@ -213,20 +214,18 @@ const MultiAssetLab = () => {
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               {activeTab === "invariant" && (
-                <div className="space-y-6">
-                  {/* Multi-asset panel integrated above invariant editor */}
-                  <MultiAssetPanel assets={assets} onChange={setAssets} onAdd={addAsset} onRemove={removeAsset} onApplyWeights={applyWeights} />
-                  <div className="border-t border-border pt-6">
-                    <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />
-                  </div>
-                </div>
+                <MultiAssetInvariantEditor
+                  assets={assets} onAssetsChange={setAssets} onAddAsset={addAsset}
+                  onRemoveAsset={removeAsset} onApplyWeights={applyWeights}
+                  onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant}
+                />
               )}
-              {activeTab === "fees" && <FeeStructureEditor />}
-              {activeTab === "montecarlo" && <MonteCarloEngine />}
-              {activeTab === "arbitrage" && <ArbitrageEngine />}
-              {activeTab === "liquidity" && <LiquidityAnalyzer />}
-              {activeTab === "stability" && <StabilityAnalysis />}
-              {activeTab === "deploy" && <DeploymentExport />}
+              {activeTab === "fees" && <FeeStructureEditor assets={assets} />}
+              {activeTab === "montecarlo" && <MonteCarloEngine assets={assets} />}
+              {activeTab === "arbitrage" && <ArbitrageEngine assets={assets} />}
+              {activeTab === "liquidity" && <LiquidityAnalyzer assets={assets} />}
+              {activeTab === "stability" && <StabilityAnalysis assets={assets} />}
+              {activeTab === "deploy" && <DeploymentExport assets={assets} />}
             </motion.div>
           </AnimatePresence>
         </main>

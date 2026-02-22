@@ -33,7 +33,15 @@ function HelpBtn({ id }: { id: string }) {
   );
 }
 
-const ArbitrageEngine = () => {
+interface Asset {
+  id: string;
+  symbol: string;
+  reserve: number;
+  weight: number;
+  color: string;
+}
+
+const ArbitrageEngine = ({ assets }: { assets?: Asset[] }) => {
   const colors = useChartColors();
   const [externalVolatility, setExternalVolatility] = useState(60);
   const [latencyMs, setLatencyMs] = useState(200);
@@ -69,6 +77,22 @@ const ArbitrageEngine = () => {
 
   return (
     <div className="space-y-6">
+      {/* Multi-asset context */}
+      {assets && assets.length > 0 && (
+        <div className="surface-elevated rounded-xl p-4">
+          <h4 className="text-[10px] font-bold text-foreground mb-2">Cross-Pair Arbitrage Analysis</h4>
+          <p className="text-[9px] text-muted-foreground mb-2">Modeling arbitrage across {assets.length * (assets.length - 1) / 2} trading pairs in the multi-asset pool.</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+            {assets.map((a, i) => assets.slice(i + 1).map(b => (
+              <div key={`${a.id}-${b.id}`} className="flex items-center gap-1.5 px-2 py-1 rounded bg-secondary border border-border text-[9px] font-mono">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color }} />
+                <span className="text-foreground">{a.symbol}/{b.symbol}</span>
+              </div>
+            )))}
+          </div>
+        </div>
+      )}
+
       <div className="surface-elevated rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <Search className="w-4 h-4 text-foreground" />
