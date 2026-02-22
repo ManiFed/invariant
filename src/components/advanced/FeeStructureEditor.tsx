@@ -69,13 +69,19 @@ export default function FeeStructureEditor({ assets, onSaveFees, savedFees, onSa
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
   const [pairFees, setPairFees] = useState<Record<string, number[]>>(savedPairFees || {});
 
+  // Auto-select first pair for multi-asset (no global option)
+  useEffect(() => {
+    if (assets && assets.length > 2 && pairs.length > 0 && !selectedPair) {
+      setSelectedPair(pairs[0].key);
+    }
+  }, [assets, pairs, selectedPair]);
+
   // When pair selection changes, load that pair's fees
   useEffect(() => {
     if (selectedPair && pairFees[selectedPair]) {
       setFees(pairFees[selectedPair]);
       setActivePreset(-1);
     } else if (selectedPair) {
-      // Initialize with current fees
       setPairFees(prev => ({ ...prev, [selectedPair]: [...fees] }));
     }
   }, [selectedPair]);
@@ -343,6 +349,7 @@ export default function FeeStructureEditor({ assets, onSaveFees, savedFees, onSa
             </div>
           </div>
         )}
+      </div>
 
       {/* Fee Distribution Graph */}
       <div className="grid md:grid-cols-2 gap-4">

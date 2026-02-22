@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Boxes } from "lucide-react";
+import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Boxes, ChevronUp, ChevronDown } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import MultiAssetInvariantEditor from "@/components/labs/MultiAssetInvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
@@ -137,6 +137,13 @@ const MultiAssetLab = () => {
     setActiveTab(id);
   };
 
+  const currentTabIndex = tabs.findIndex(t => t.id === activeTab);
+  const canGoPrev = currentTabIndex > 0;
+  const canGoNext = currentTabIndex < tabs.length - 1 && (currentTabIndex === 0 ? hasInvariant : true);
+
+  const goPrev = () => { if (canGoPrev) setActiveTab(tabs[currentTabIndex - 1].id); };
+  const goNext = () => { if (canGoNext) setActiveTab(tabs[currentTabIndex + 1].id); };
+
   const multiAssetExpr = assets.map(a => `${a.symbol}^${a.weight}`).join(" · ") + " = k";
 
   return (
@@ -222,6 +229,17 @@ const MultiAssetLab = () => {
               <div className="flex items-center justify-center"><AlertTriangle className="w-3 h-3 text-warning" /></div>
             </div>
           )}
+          {/* Prev/Next navigation */}
+          <div className="border-t border-border p-2 flex flex-col gap-1">
+            <button onClick={goPrev} disabled={!canGoPrev}
+              className={`w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium transition-colors ${canGoPrev ? "bg-secondary text-foreground hover:bg-accent border border-border" : "text-muted-foreground/30 cursor-not-allowed"}`}>
+              <ChevronUp className="w-3 h-3" /> {hovered && "Previous"}
+            </button>
+            <button onClick={goNext} disabled={!canGoNext}
+              className={`w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium transition-colors ${canGoNext ? "bg-secondary text-foreground hover:bg-accent border border-border" : "text-muted-foreground/30 cursor-not-allowed"}`}>
+              <ChevronDown className="w-3 h-3" /> {hovered && "Next"}
+            </button>
+          </div>
         </aside>
 
         {/* Main Content */}
