@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot, ReferenceArea, ComposedChart } from "recharts";
 import { PoolState, TradeResult, HistoryPoint, generateCurveData, poolPrice } from "@/lib/amm-engine";
 import type { LessonTab } from "./LabControls";
@@ -15,6 +15,21 @@ interface Props {
   showPriceChart?: boolean;
 }
 
+// Animated curve line component
+function AnimatedCurveLine({ dataKey, stroke, strokeWidth }: { dataKey: string; stroke: string; strokeWidth: number }) {
+  return (
+    <Line
+      dataKey={dataKey}
+      type="monotone"
+      dot={false}
+      strokeWidth={strokeWidth}
+      stroke={stroke}
+      animationDuration={800}
+      animationEasing="ease-in-out"
+    />
+  );
+}
+
 export default function LabSimulation({ pool, history, lastTrade, tab, rangeLower, rangeUpper, showCurve = true, showReserves = true, showPriceChart = true }: Props) {
   const curveData = useMemo(() => generateCurveData(pool.k, pool.x), [pool.k, pool.x]);
   const currentPrice = poolPrice(pool);
@@ -24,6 +39,26 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
   const xPct = (pool.x / totalReserves) * 100;
   const yPct = (pool.y / totalReserves) * 100;
 
+  // Animate reserve bars
+  const [animXPct, setAnimXPct] = useState(xPct);
+  const [animYPct, setAnimYPct] = useState(yPct);
+  const animFrame = useRef<number>();
+
+  useEffect(() => {
+    const start = { x: animXPct, y: animYPct };
+    const end = { x: xPct, y: yPct };
+    let progress = 0;
+    const step = () => {
+      progress = Math.min(progress + 0.08, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setAnimXPct(start.x + (end.x - start.x) * ease);
+      setAnimYPct(start.y + (end.y - start.y) * ease);
+      if (progress < 1) animFrame.current = requestAnimationFrame(step);
+    };
+    animFrame.current = requestAnimationFrame(step);
+    return () => { if (animFrame.current) cancelAnimationFrame(animFrame.current); };
+  }, [xPct, yPct]);
+
   return (
     <div className="flex flex-col h-full gap-2 p-2 overflow-y-auto">
       {/* 1. Price Curve */}
@@ -32,7 +67,7 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider">Constant Product Curve</h3>
             {lastTrade && (
-              <span className="text-[10px] font-mono text-destructive">
+              <span className="text-[10px] font-mono text-destructive animate-pulse">
                 Slippage: {lastTrade.slippagePct.toFixed(2)}%
               </span>
             )}
@@ -42,8 +77,10 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="x" type="number" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} label={{ value: "Reserve X", position: "bottom", fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
               <YAxis type="number" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} label={{ value: "Reserve Y", angle: -90, position: "insideLeft", fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
-              <Line dataKey="y" type="monotone" dot={false} strokeWidth={2} stroke="hsl(var(--chart-1))" />
-              <ReferenceDot x={pool.x} y={pool.y} r={6} fill="hsl(var(--chart-2))" stroke="hsl(var(--background))" strokeWidth={2} />
+              <AnimatedCurveLine dataKey="y" stroke="hsl(var(--chart-1))" strokeWidth={2} />
+              <ReferenceDot x={pool.x} y={pool.y} r={6} fill="hsl(var(--chart-2))" stroke="hsl(var(--background))" strokeWidth={2}>
+                {/* Pulsing dot animation via CSS */}
+              </ReferenceDot>
               {lastTrade && (
                 <ReferenceDot
                   x={lastTrade.direction === "buyY" ? pool.x - (lastTrade.input - lastTrade.feesPaid) : pool.x + lastTrade.output}
@@ -79,7 +116,7 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
                 <span className="font-mono text-foreground">{pool.x.toFixed(2)}</span>
               </div>
               <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${xPct}%`, background: "hsl(var(--chart-1))" }} />
+                <div className="h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${animXPct}%`, background: "hsl(var(--chart-1))" }} />
               </div>
             </div>
             <div>
@@ -88,7 +125,7 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
                 <span className="font-mono text-foreground">{pool.y.toFixed(2)}</span>
               </div>
               <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${yPct}%`, background: "hsl(var(--chart-2))" }} />
+                <div className="h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${animYPct}%`, background: "hsl(var(--chart-2))" }} />
               </div>
             </div>
             <div className="flex items-center justify-between text-[10px]">
@@ -113,7 +150,7 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider">External vs Pool Price</h3>
             {recentHistory.some(h => h.arbEvent) && (
-              <span className="text-[10px] font-mono text-warning">ARB ⚡</span>
+              <span className="text-[10px] font-mono text-warning animate-pulse">ARB ⚡</span>
             )}
           </div>
           <ResponsiveContainer width="100%" height="85%">
@@ -121,8 +158,8 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="step" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
               <YAxis tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} domain={["auto", "auto"]} />
-              <Line dataKey="poolPrice" dot={false} strokeWidth={2} stroke="hsl(var(--chart-1))" name="Pool" />
-              <Line dataKey="externalPrice" dot={false} strokeWidth={1.5} strokeDasharray="4 2" stroke="hsl(var(--chart-2))" name="External" />
+              <Line dataKey="poolPrice" dot={false} strokeWidth={2} stroke="hsl(var(--chart-1))" name="Pool" animationDuration={600} />
+              <Line dataKey="externalPrice" dot={false} strokeWidth={1.5} strokeDasharray="4 2" stroke="hsl(var(--chart-2))" name="External" animationDuration={600} />
               {tab === "concentrated" && (
                 <ReferenceArea y1={rangeLower * (history[0]?.externalPrice || 1)} y2={rangeUpper * (history[0]?.externalPrice || 1)} fill="hsl(var(--chart-2))" fillOpacity={0.08} />
               )}
