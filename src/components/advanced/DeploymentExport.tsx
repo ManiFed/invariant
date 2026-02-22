@@ -345,30 +345,6 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
 
   return (
     <div className="space-y-4">
-      {/* Saved config context */}
-      {(savedInvariant || savedFees) && (
-        <div className="surface-elevated rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Info className="w-3.5 h-3.5 text-muted-foreground" />
-            <h4 className="text-[10px] font-bold text-foreground">Using Saved Configuration</h4>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {savedInvariant && (
-              <div className="px-2 py-1 rounded-md bg-secondary border border-border">
-                <span className="text-[9px] text-muted-foreground">Invariant: </span>
-                <span className="text-[9px] font-mono text-foreground">{savedInvariant.expression}</span>
-              </div>
-            )}
-            {savedFees && (
-              <div className="px-2 py-1 rounded-md bg-secondary border border-border">
-                <span className="text-[9px] text-muted-foreground">Fee: </span>
-                <span className="text-[9px] font-mono text-foreground">{(savedFees.reduce((a,b) => a+b, 0) / savedFees.length).toFixed(0)} bps avg ({savedFees.length} pts)</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Config */}
       <div className="grid md:grid-cols-2 gap-4">
         <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
@@ -392,6 +368,15 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
                 <label className="text-[10px] text-muted-foreground">Curve Type</label>
                 <DeployHelpBtn id="curveType" />
               </div>
+              {savedInvariant && (
+                <div className="mb-2 px-2 py-1.5 rounded-md bg-secondary border border-border">
+                  <span className="text-[9px] text-muted-foreground">Active invariant: </span>
+                  <span className="text-[9px] font-mono text-foreground">{savedInvariant.expression}</span>
+                  {savedFees && (
+                    <span className="text-[9px] text-muted-foreground ml-2">| Fee: {(savedFees.reduce((a,b) => a+b, 0) / savedFees.length).toFixed(0)} bps avg</span>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-1.5">
                 {curveOptions.map(c => (
                   <button key={c.id} onClick={() => setCurve(c.id)}
