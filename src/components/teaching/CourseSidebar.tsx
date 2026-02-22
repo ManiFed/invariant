@@ -505,7 +505,7 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                         <p className="text-[11px] font-medium text-foreground">{step.question}</p>
                       </div>
                       <p className="text-[10px] text-muted-foreground">
-                        Think about this, then continue when ready. Use the 🤖 AI button above if you'd like help!
+                        Think about this, then continue when ready.
                       </p>
                       {step.calculatorNeeded && <MiniCalculator />}
                     </div>
