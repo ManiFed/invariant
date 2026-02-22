@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Clock } from "lucide-react";
+import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Clock, ChevronUp, ChevronDown, GitCompare } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
@@ -10,17 +10,19 @@ import LiquidityAnalyzer from "@/components/advanced/LiquidityAnalyzer";
 import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import DeploymentExport from "@/components/advanced/DeploymentExport";
 import FeeStructureEditor from "@/components/advanced/FeeStructureEditor";
-import { TimeVariancePanel } from "@/components/labs/TimeVarianceComponents";
+import AMMComparison from "@/components/advanced/AMMComparison";
+import { TimeVariancePanel, type TimeVarianceConfig, type Keyframe } from "@/components/labs/TimeVarianceComponents";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
   { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your time-variant AMM curve", step: 1 },
-  { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution across the curve", step: 2 },
-  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Stress-test with simulated price paths", step: 3 },
-  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Model toxic flow and MEV extraction", step: 4 },
-  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Compare depth, efficiency, slippage", step: 5 },
-  { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 6 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 7 },
+  { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Time-variant fee distribution", step: 2 },
+  { id: "compare", label: "Compare", icon: GitCompare, desc: "Import an AMM to compare against", step: 3 },
+  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Time-aware stress testing", step: 4 },
+  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Time-variant toxic flow analysis", step: 5 },
+  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Time-variant depth & efficiency", step: 6 },
+  { id: "stability", label: "Stability", icon: Shield, desc: "Time-variant stability checks", step: 7 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export time-variant AMM config", step: 8 },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -53,9 +55,33 @@ const LIBRARY_AMMS: LibraryAMM[] = [
 ];
 
 const SESSION_KEY = "timevariance_invariant";
+const FEE_SESSION_KEY = "timevariance_fees";
+const TV_CONFIG_KEY = "timevariance_config";
 
 function loadInvariant(): SavedInvariant | null {
   try { const raw = sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+
+function loadFees(): number[] | null {
+  try { const raw = sessionStorage.getItem(FEE_SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+
+function loadTVConfig(): TimeVarianceConfig {
+  try {
+    const raw = sessionStorage.getItem(TV_CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {
+    mode: "keyframe",
+    keyframes: [
+      { id: "1", t: 0, weightA: 0.5, weightB: 0.5, feeRate: 0.003, amplification: 10, expression: "x * y = k" },
+      { id: "2", t: 50, weightA: 0.7, weightB: 0.3, feeRate: 0.005, amplification: 50, expression: "x^0.7 · y^0.3 = k" },
+      { id: "3", t: 100, weightA: 0.5, weightB: 0.5, feeRate: 0.003, amplification: 10, expression: "x * y = k" },
+    ],
+    functionExpr: "wA(t) = 0.5 + 0.2*sin(t*π/100)\nwB(t) = 1 - wA(t)\nfee(t) = 0.003 + 0.002*t/100",
+    feeMode: "keyframe",
+    feeFunctionExpr: "fee(t) = 30 + 20*sin(t*π/50)",
+  };
 }
 
 const TimeVarianceLab = () => {
@@ -63,12 +89,24 @@ const TimeVarianceLab = () => {
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
   const [savedInvariant, setSavedInvariant] = useState<SavedInvariant | null>(loadInvariant);
+  const [savedFees, setSavedFees] = useState<number[] | null>(loadFees);
   const [showImport, setShowImport] = useState(false);
+  const [tvConfig, setTVConfig] = useState<TimeVarianceConfig>(loadTVConfig);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveInvariant = useCallback((inv: SavedInvariant) => {
     setSavedInvariant(inv);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(inv));
+  }, []);
+
+  const handleSaveFees = useCallback((fees: number[]) => {
+    setSavedFees(fees);
+    sessionStorage.setItem(FEE_SESSION_KEY, JSON.stringify(fees));
+  }, []);
+
+  const handleTVConfigChange = useCallback((config: TimeVarianceConfig) => {
+    setTVConfig(config);
+    sessionStorage.setItem(TV_CONFIG_KEY, JSON.stringify(config));
   }, []);
 
   const importFromLibrary = (amm: LibraryAMM) => {
@@ -86,6 +124,7 @@ const TimeVarianceLab = () => {
       try {
         const json = JSON.parse(ev.target?.result as string);
         const inv: SavedInvariant = { expression: json.formula || json.expression || "x * y = k", presetId: "custom", weightA: json.params?.wA ?? json.weightA ?? 0.5, weightB: json.params?.wB ?? json.weightB ?? 0.5, kValue: json.params?.k ?? json.kValue ?? 10000, amplification: json.params?.amp ?? json.amplification ?? 10, rangeLower: json.rangeLower ?? 0.5, rangeUpper: json.rangeUpper ?? 2.0 };
+        if (json.fees) handleSaveFees(json.fees);
         handleSaveInvariant(inv);
         setShowImport(false);
         setActiveTab("invariant");
@@ -102,6 +141,45 @@ const TimeVarianceLab = () => {
     setActiveTab(id);
   };
 
+  const currentTabIndex = tabs.findIndex(t => t.id === activeTab);
+  const canGoPrev = currentTabIndex > 0;
+  const canGoNext = currentTabIndex < tabs.length - 1 && (currentTabIndex === 0 ? hasInvariant : true);
+  const goPrev = () => { if (canGoPrev) setActiveTab(tabs[currentTabIndex - 1].id); };
+  const goNext = () => { if (canGoNext) setActiveTab(tabs[currentTabIndex + 1].id); };
+
+  // Time-variance context banner for analytical tabs
+  const tvContextBanner = useMemo(() => {
+    const kfCount = tvConfig.keyframes.length;
+    const expressions = [...new Set(tvConfig.keyframes.map(kf => kf.expression))];
+    return (
+      <div className="surface-elevated rounded-xl p-4 mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Clock className="w-3.5 h-3.5 text-chart-2" />
+          <h4 className="text-[10px] font-bold text-foreground">Time-Variance Active</h4>
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-chart-2/10 text-chart-2">{tvConfig.mode === "keyframe" ? `${kfCount} keyframes` : "function mode"}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {tvConfig.mode === "keyframe" ? expressions.map((expr, i) => (
+            <div key={i} className="px-2 py-1 rounded-md bg-secondary border border-border">
+              <span className="text-[9px] font-mono text-foreground">{expr}</span>
+            </div>
+          )) : (
+            <div className="px-2 py-1 rounded-md bg-secondary border border-border">
+              <span className="text-[9px] font-mono text-foreground">{tvConfig.functionExpr.split("\n")[0]}</span>
+            </div>
+          )}
+          {savedFees && (
+            <div className="px-2 py-1 rounded-md bg-secondary border border-border">
+              <span className="text-[9px] text-muted-foreground">Fee: </span>
+              <span className="text-[9px] font-mono text-foreground">{(savedFees.reduce((a,b)=>a+b,0)/savedFees.length).toFixed(0)} bps avg</span>
+            </div>
+          )}
+        </div>
+        <p className="text-[8px] text-muted-foreground mt-2">Analysis below accounts for time-varying parameters. Results represent aggregate behavior across the full time range.</p>
+      </div>
+    );
+  }, [tvConfig, savedFees]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
@@ -117,10 +195,10 @@ const TimeVarianceLab = () => {
           </button>
           <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
           {savedInvariant && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border">
+            <button onClick={() => setActiveTab("invariant")} className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors cursor-pointer">
               <span className="text-[9px] text-muted-foreground">Active:</span>
               <span className="text-[10px] font-mono text-foreground">{savedInvariant.expression}</span>
-            </div>
+            </button>
           )}
           <ThemeToggle />
         </div>
@@ -184,6 +262,17 @@ const TimeVarianceLab = () => {
               <div className="flex items-center justify-center"><AlertTriangle className="w-3 h-3 text-warning" /></div>
             </div>
           )}
+          {/* Prev/Next navigation */}
+          <div className="border-t border-border p-2 flex flex-col gap-1">
+            <button onClick={goPrev} disabled={!canGoPrev}
+              className={`w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium transition-colors ${canGoPrev ? "bg-secondary text-foreground hover:bg-accent border border-border" : "text-muted-foreground/30 cursor-not-allowed"}`}>
+              <ChevronUp className="w-3 h-3" /> {hovered && "Previous"}
+            </button>
+            <button onClick={goNext} disabled={!canGoNext}
+              className={`w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium transition-colors ${canGoNext ? "bg-secondary text-foreground hover:bg-accent border border-border" : "text-muted-foreground/30 cursor-not-allowed"}`}>
+              <ChevronDown className="w-3 h-3" /> {hovered && "Next"}
+            </button>
+          </div>
         </aside>
 
         {/* Main Content */}
@@ -199,19 +288,80 @@ const TimeVarianceLab = () => {
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               {activeTab === "invariant" && (
                 <div className="space-y-6">
-                  {/* Time-variance panel integrated above invariant editor */}
-                  <TimeVariancePanel />
+                  <TimeVariancePanel config={tvConfig} onConfigChange={handleTVConfigChange} />
                   <div className="border-t border-border pt-6">
                     <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />
                   </div>
                 </div>
               )}
-              {activeTab === "fees" && <FeeStructureEditor />}
-              {activeTab === "montecarlo" && <MonteCarloEngine />}
-              {activeTab === "arbitrage" && <ArbitrageEngine />}
-              {activeTab === "liquidity" && <LiquidityAnalyzer />}
-              {activeTab === "stability" && <StabilityAnalysis />}
-              {activeTab === "deploy" && <DeploymentExport />}
+              {activeTab === "fees" && (
+                <div className="space-y-4">
+                  {/* Time-variant fee mode selector */}
+                  <div className="surface-elevated rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-chart-2" />
+                        <h4 className="text-[10px] font-bold text-foreground">Time-Variant Fee Mode</h4>
+                      </div>
+                      <div className="flex rounded-md border border-border overflow-hidden">
+                        <button onClick={() => handleTVConfigChange({ ...tvConfig, feeMode: "keyframe" })}
+                          className={`px-2.5 py-1 text-[9px] font-medium transition-all ${tvConfig.feeMode === "keyframe" ? "bg-foreground/10 text-foreground" : "text-muted-foreground"}`}>
+                          Keyframes
+                        </button>
+                        <button onClick={() => handleTVConfigChange({ ...tvConfig, feeMode: "function" })}
+                          className={`px-2.5 py-1 text-[9px] font-medium transition-all ${tvConfig.feeMode === "function" ? "bg-foreground/10 text-foreground" : "text-muted-foreground"}`}>
+                          Function
+                        </button>
+                      </div>
+                    </div>
+                    {tvConfig.feeMode === "function" ? (
+                      <div>
+                        <label className="text-[9px] text-muted-foreground">Fee function f(t) — output in basis points</label>
+                        <textarea
+                          value={tvConfig.feeFunctionExpr}
+                          onChange={e => handleTVConfigChange({ ...tvConfig, feeFunctionExpr: e.target.value })}
+                          className="w-full mt-1 bg-background border border-border rounded-md px-3 py-2 text-[10px] font-mono text-foreground outline-none resize-none h-16"
+                          placeholder="fee(t) = 30 + 20*sin(t*π/50)"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-[9px] text-muted-foreground">Fee structure below applies to the currently selected keyframe. Switch keyframes in the Invariant Editor tab to set per-keyframe fees.</p>
+                    )}
+                  </div>
+                  <FeeStructureEditor onSaveFees={handleSaveFees} savedFees={savedFees} />
+                </div>
+              )}
+              {activeTab === "compare" && <AMMComparison savedInvariant={savedInvariant} />}
+              {activeTab === "montecarlo" && (
+                <div>
+                  {tvContextBanner}
+                  <MonteCarloEngine savedInvariant={savedInvariant} savedFees={savedFees} />
+                </div>
+              )}
+              {activeTab === "arbitrage" && (
+                <div>
+                  {tvContextBanner}
+                  <ArbitrageEngine savedInvariant={savedInvariant} savedFees={savedFees} />
+                </div>
+              )}
+              {activeTab === "liquidity" && (
+                <div>
+                  {tvContextBanner}
+                  <LiquidityAnalyzer savedInvariant={savedInvariant} />
+                </div>
+              )}
+              {activeTab === "stability" && (
+                <div>
+                  {tvContextBanner}
+                  <StabilityAnalysis savedInvariant={savedInvariant} savedFees={savedFees} />
+                </div>
+              )}
+              {activeTab === "deploy" && (
+                <div>
+                  {tvContextBanner}
+                  <DeploymentExport savedInvariant={savedInvariant} savedFees={savedFees} />
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </main>
