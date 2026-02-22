@@ -521,10 +521,13 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
                   <GraduationCap className="w-3 h-3 text-primary" />
-                  <h3 className="text-[11px] font-semibold text-foreground">Quiz</h3>
+                  <h3 className="text-[11px] font-semibold text-foreground">Ask the AI Assistant</h3>
                   <span className="text-[9px] font-mono text-muted-foreground ml-auto">{currentStep + 1}/{mod.steps.length}</span>
                 </div>
-                <p className="text-[11px] font-medium text-foreground mb-2">{step.question}</p>
+                <div className="mb-2 p-2.5 rounded-lg bg-secondary border border-border">
+                  <p className="text-[11px] font-medium text-foreground mb-1">{step.question}</p>
+                  <p className="text-[10px] text-muted-foreground">Think about this question, then ask the AI assistant for help or try to answer it yourself.</p>
+                </div>
                 <div className="space-y-1.5">
                   {step.options.map((opt, i) => (
                     <button

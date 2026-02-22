@@ -72,36 +72,40 @@ export default function LabSimulation({ pool, history, lastTrade, tab, rangeLowe
               </span>
             )}
           </div>
-          <ResponsiveContainer width="100%" height="85%">
-            <ComposedChart data={curveData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="x" type="number" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} label={{ value: "Reserve X", position: "bottom", fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis type="number" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} label={{ value: "Reserve Y", angle: -90, position: "insideLeft", fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
-              <AnimatedCurveLine dataKey="y" stroke="hsl(var(--chart-1))" strokeWidth={2} />
-              <ReferenceDot x={pool.x} y={pool.y} r={6} fill="hsl(var(--chart-2))" stroke="hsl(var(--background))" strokeWidth={2}>
-                {/* Pulsing dot animation via CSS */}
-              </ReferenceDot>
-              {lastTrade && (
-                <ReferenceDot
-                  x={lastTrade.direction === "buyY" ? pool.x - (lastTrade.input - lastTrade.feesPaid) : pool.x + lastTrade.output}
-                  y={lastTrade.direction === "buyY" ? pool.y + lastTrade.output : pool.y - (lastTrade.input - lastTrade.feesPaid)}
-                  r={4} fill="hsl(var(--chart-3))" stroke="hsl(var(--background))" strokeWidth={1}
-                />
-              )}
-              <Tooltip content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
-                const d = payload[0].payload;
-                const price = d.y / d.x;
-                return (
-                  <div className="bg-popover border border-border rounded-md px-2 py-1 text-[10px] font-mono shadow-lg">
-                    <div>X: {d.x.toFixed(2)}</div>
-                    <div>Y: {d.y.toFixed(2)}</div>
-                    <div>Price: {price.toFixed(4)}</div>
-                  </div>
-                );
-              }} />
-            </ComposedChart>
-          </ResponsiveContainer>
+          {curveData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="85%">
+              <ComposedChart data={curveData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="x" type="number" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} label={{ value: "Reserve X", position: "bottom", fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis type="number" domain={['auto', 'auto']} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} label={{ value: "Reserve Y", angle: -90, position: "insideLeft", fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                <Line dataKey="y" type="monotone" dot={false} strokeWidth={2} stroke="hsl(var(--chart-1))" isAnimationActive={false} />
+                <ReferenceDot x={pool.x} y={pool.y} r={6} fill="hsl(var(--chart-2))" stroke="hsl(var(--background))" strokeWidth={2} />
+                {lastTrade && (
+                  <ReferenceDot
+                    x={lastTrade.direction === "buyY" ? pool.x - (lastTrade.input - lastTrade.feesPaid) : pool.x + lastTrade.output}
+                    y={lastTrade.direction === "buyY" ? pool.y + lastTrade.output : pool.y - (lastTrade.input - lastTrade.feesPaid)}
+                    r={4} fill="hsl(var(--chart-3))" stroke="hsl(var(--background))" strokeWidth={1}
+                  />
+                )}
+                <Tooltip content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  const price = d.y / d.x;
+                  return (
+                    <div className="bg-popover border border-border rounded-md px-2 py-1 text-[10px] font-mono shadow-lg">
+                      <div>X: {d.x.toFixed(2)}</div>
+                      <div>Y: {d.y.toFixed(2)}</div>
+                      <div>Price: {price.toFixed(4)}</div>
+                    </div>
+                  );
+                }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[85%] flex items-center justify-center text-[10px] text-muted-foreground">
+              No curve data available
+            </div>
+          )}
         </div>
       )}
 
