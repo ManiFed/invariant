@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
@@ -10,6 +10,7 @@ import LiquidityAnalyzer from "@/components/advanced/LiquidityAnalyzer";
 import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import DeploymentExport from "@/components/advanced/DeploymentExport";
 import FeeStructureEditor from "@/components/advanced/FeeStructureEditor";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
   { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your AMM curve formula", step: 1 },
@@ -36,6 +37,22 @@ interface SavedInvariant {
 
 const SESSION_KEY = "advanced_invariant";
 
+interface LibraryAMM {
+  id: string;
+  name: string;
+  formula: string;
+  params: { wA: number; wB: number; k: number; amp?: number };
+}
+
+const LIBRARY_AMMS: LibraryAMM[] = [
+  { id: "uniswap-v2", name: "Uniswap V2", formula: "x * y = k", params: { wA: 0.5, wB: 0.5, k: 10000 } },
+  { id: "curve-stableswap", name: "Curve StableSwap", formula: "An²Σxᵢ + D = ADn² + D^(n+1)/(n²Πxᵢ)", params: { wA: 0.5, wB: 0.5, k: 10000, amp: 100 } },
+  { id: "balancer-weighted", name: "Balancer Weighted Pool", formula: "x^w₁ · y^w₂ = k", params: { wA: 0.8, wB: 0.2, k: 10000 } },
+  { id: "uniswap-v3", name: "Uniswap V3 Concentrated", formula: "(√x − √pₐ)(√y − √p_b) = L²", params: { wA: 0.5, wB: 0.5, k: 10000 } },
+  { id: "solidly-ve33", name: "Solidly ve(3,3)", formula: "x³y + xy³ = k", params: { wA: 0.5, wB: 0.5, k: 10000 } },
+  { id: "power-perp", name: "Power Perpetual Curve", formula: "x^0.3 · y^0.7 = k", params: { wA: 0.3, wB: 0.7, k: 10000 } },
+];
+
 function loadInvariant(): SavedInvariant | null {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
@@ -48,11 +65,57 @@ const AdvancedMode = () => {
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
   const [savedInvariant, setSavedInvariant] = useState<SavedInvariant | null>(loadInvariant);
+  const [showImport, setShowImport] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveInvariant = useCallback((inv: SavedInvariant) => {
     setSavedInvariant(inv);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(inv));
   }, []);
+
+  const importFromLibrary = (amm: LibraryAMM) => {
+    const inv: SavedInvariant = {
+      expression: amm.formula,
+      presetId: "custom",
+      weightA: amm.params.wA,
+      weightB: amm.params.wB,
+      kValue: amm.params.k,
+      amplification: amm.params.amp || 10,
+      rangeLower: 0.5,
+      rangeUpper: 2.0,
+    };
+    handleSaveInvariant(inv);
+    setShowImport(false);
+    setActiveTab("invariant");
+  };
+
+  const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target?.result as string);
+        const inv: SavedInvariant = {
+          expression: json.formula || json.expression || "x * y = k",
+          presetId: "custom",
+          weightA: json.params?.wA ?? json.weightA ?? 0.5,
+          weightB: json.params?.wB ?? json.weightB ?? 0.5,
+          kValue: json.params?.k ?? json.kValue ?? 10000,
+          amplification: json.params?.amp ?? json.amplification ?? 10,
+          rangeLower: json.rangeLower ?? 0.5,
+          rangeUpper: json.rangeUpper ?? 2.0,
+        };
+        handleSaveInvariant(inv);
+        setShowImport(false);
+        setActiveTab("invariant");
+      } catch {
+        alert("Invalid JSON file.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
   const hasInvariant = savedInvariant !== null;
 
@@ -73,7 +136,13 @@ const AdvancedMode = () => {
           <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-border text-muted-foreground">PRO</span>
         </div>
         <div className="flex items-center gap-3">
-          {/* Active invariant badge */}
+          <button
+            onClick={() => setShowImport(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border"
+          >
+            <Upload className="w-3 h-3" /> Import AMM
+          </button>
+          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
           {savedInvariant && (
             <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border">
               <span className="text-[9px] text-muted-foreground">Active:</span>
@@ -83,6 +152,45 @@ const AdvancedMode = () => {
           <ThemeToggle />
         </div>
       </header>
+
+      {/* Import Dialog */}
+      <Dialog open={showImport} onOpenChange={setShowImport}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold">Import AMM</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                <BookOpen className="w-3 h-3" /> From Library
+              </h4>
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                {LIBRARY_AMMS.map(amm => (
+                  <button
+                    key={amm.id}
+                    onClick={() => importFromLibrary(amm)}
+                    className="text-left p-2 rounded-lg bg-secondary border border-border hover:border-foreground/20 transition-all"
+                  >
+                    <p className="text-[10px] font-semibold text-foreground">{amm.name}</p>
+                    <p className="text-[9px] font-mono text-muted-foreground truncate">{amm.formula}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                <Upload className="w-3 h-3" /> Upload JSON
+              </h4>
+              <button
+                onClick={() => { fileInputRef.current?.click(); }}
+                className="w-full p-3 rounded-lg border-2 border-dashed border-border hover:border-foreground/30 text-center text-xs text-muted-foreground hover:text-foreground transition-all"
+              >
+                Click to upload a .json AMM config
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-1 min-h-0">
         {/* Sidebar Navigation — collapsed, expand on hover, fixed */}

@@ -376,6 +376,11 @@ function LessonVisual({ visual }: { visual?: string }) {
 
 export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule }: Props) {
   const [showAI, setShowAI] = useState(false);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [answered, setAnswered] = useState(false);
+  const [followUpActive, setFollowUpActive] = useState(false);
+  const [followUpAnswer, setFollowUpAnswer] = useState<number | null>(null);
+  const [followUpAnswered, setFollowUpAnswered] = useState(false);
 
   const mod = COURSE_MODULES[currentModule];
   if (!mod) return null;
@@ -388,6 +393,11 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
   const canGoBack = currentStep > 0 || currentModule > 0;
 
   const handleNext = () => {
+    setSelectedAnswer(null);
+    setAnswered(false);
+    setFollowUpActive(false);
+    setFollowUpAnswer(null);
+    setFollowUpAnswered(false);
     if (isLastStep) {
       onCompleteModule();
     } else {
@@ -396,7 +406,24 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
   };
 
   const handleBack = () => {
+    setSelectedAnswer(null);
+    setAnswered(false);
+    setFollowUpActive(false);
+    setFollowUpAnswer(null);
+    setFollowUpAnswered(false);
     onGoBack();
+  };
+
+  const handleQuizAnswer = (idx: number) => {
+    if (answered) return;
+    setSelectedAnswer(idx);
+    setAnswered(true);
+  };
+
+  const handleFollowUpAnswer = (idx: number) => {
+    if (followUpAnswered) return;
+    setFollowUpAnswer(idx);
+    setFollowUpAnswered(true);
   };
 
   return (
@@ -453,7 +480,7 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
 
       {showAI ? (
         <div className="flex-1 min-h-0">
-          <AIChatPanel />
+          <AIChatPanel context={`the Teaching Lab course, Module ${currentModule + 1}: "${mod.title}" — ${mod.subtitle}. Step ${currentStep + 1}: "${step.type === "lesson" ? step.title : "Knowledge Check"}`} />
         </div>
       ) : (
         <>
@@ -504,9 +531,91 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                       <div className="p-2.5 rounded-lg bg-secondary border border-border">
                         <p className="text-[11px] font-medium text-foreground">{step.question}</p>
                       </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        Think about this, then continue when ready.
-                      </p>
+                      <div className="space-y-1">
+                        {step.options.map((opt, i) => {
+                          const isCorrect = i === step.correctIndex;
+                          const isSelected = selectedAnswer === i;
+                          let optClass = "bg-background border-border text-foreground hover:bg-secondary cursor-pointer";
+                          if (answered) {
+                            if (isCorrect) optClass = "bg-success/10 border-success/30 text-success";
+                            else if (isSelected && !isCorrect) optClass = "bg-destructive/10 border-destructive/30 text-destructive";
+                            else optClass = "bg-background border-border text-muted-foreground opacity-50";
+                          }
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => handleQuizAnswer(i)}
+                              disabled={answered}
+                              className={`w-full text-left text-[10px] px-2.5 py-2 rounded-lg border transition-all ${optClass}`}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {answered && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`p-2 rounded-lg text-[10px] leading-relaxed ${
+                            selectedAnswer === step.correctIndex
+                              ? "bg-success/10 border border-success/20 text-foreground"
+                              : "bg-destructive/10 border border-destructive/20 text-foreground"
+                          }`}
+                        >
+                          {selectedAnswer === step.correctIndex ? step.explanation : step.wrongExplanation}
+                        </motion.div>
+                      )}
+                      {answered && step.followUpQuiz && !followUpActive && (
+                        <button
+                          onClick={() => setFollowUpActive(true)}
+                          className="text-[9px] text-primary hover:underline font-medium"
+                        >
+                          Follow-up question →
+                        </button>
+                      )}
+                      {followUpActive && step.followUpQuiz && (
+                        <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="space-y-2 mt-2 pt-2 border-t border-border">
+                          <div className="p-2 rounded-lg bg-secondary border border-border">
+                            <p className="text-[10px] font-medium text-foreground">{step.followUpQuiz.question}</p>
+                          </div>
+                          <div className="space-y-1">
+                            {step.followUpQuiz.options.map((opt, i) => {
+                              const isCorrect = i === step.followUpQuiz!.correctIndex;
+                              const isSelected = followUpAnswer === i;
+                              let optClass = "bg-background border-border text-foreground hover:bg-secondary cursor-pointer";
+                              if (followUpAnswered) {
+                                if (isCorrect) optClass = "bg-success/10 border-success/30 text-success";
+                                else if (isSelected && !isCorrect) optClass = "bg-destructive/10 border-destructive/30 text-destructive";
+                                else optClass = "bg-background border-border text-muted-foreground opacity-50";
+                              }
+                              return (
+                                <button
+                                  key={i}
+                                  onClick={() => handleFollowUpAnswer(i)}
+                                  disabled={followUpAnswered}
+                                  className={`w-full text-left text-[10px] px-2.5 py-1.5 rounded-lg border transition-all ${optClass}`}
+                                >
+                                  {opt}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {followUpAnswered && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className={`p-2 rounded-lg text-[10px] leading-relaxed ${
+                                followUpAnswer === step.followUpQuiz.correctIndex
+                                  ? "bg-success/10 border border-success/20 text-foreground"
+                                  : "bg-destructive/10 border border-destructive/20 text-foreground"
+                              }`}
+                            >
+                              {followUpAnswer === step.followUpQuiz.correctIndex ? step.followUpQuiz.explanation : step.followUpQuiz.wrongExplanation}
+                            </motion.div>
+                          )}
+                        </motion.div>
+                      )}
                       {step.calculatorNeeded && <MiniCalculator />}
                     </div>
                   )}
