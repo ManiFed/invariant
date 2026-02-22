@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Clock, ChevronUp, ChevronDown, GitCompare } from "lucide-react";
+import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Clock, ChevronUp, ChevronDown, GitCompare, Layers, Maximize2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
@@ -78,7 +78,7 @@ function loadTVConfig(): TimeVarianceConfig {
       { id: "2", t: 50, weightA: 0.7, weightB: 0.3, feeRate: 0.005, amplification: 50, expression: "x^0.7 · y^0.3 = k" },
       { id: "3", t: 100, weightA: 0.5, weightB: 0.5, feeRate: 0.003, amplification: 10, expression: "x * y = k" },
     ],
-    functionExpr: "wA(t) = 0.5 + 0.2*sin(t*π/100)\nwB(t) = 1 - wA(t)\nfee(t) = 0.003 + 0.002*t/100",
+    functionExpr: "wA(t) = 0.5 + 0.2*sin(t*π/100)\nwB(t) = 1 - wA(t)",
     feeMode: "keyframe",
     feeFunctionExpr: "fee(t) = 30 + 20*sin(t*π/50)",
   };
@@ -92,22 +92,67 @@ const TimeVarianceLab = () => {
   const [savedFees, setSavedFees] = useState<number[] | null>(loadFees);
   const [showImport, setShowImport] = useState(false);
   const [tvConfig, setTVConfig] = useState<TimeVarianceConfig>(loadTVConfig);
+  const [showFullEditor, setShowFullEditor] = useState(false);
+  const [editingKeyframeId, setEditingKeyframeId] = useState<string | undefined>(undefined);
+  const [selectedFeeKeyframe, setSelectedFeeKeyframe] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveInvariant = useCallback((inv: SavedInvariant) => {
     setSavedInvariant(inv);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(inv));
-  }, []);
+    // If editing a specific keyframe, update its expression
+    if (editingKeyframeId) {
+      const updatedKfs = tvConfig.keyframes.map(kf =>
+        kf.id === editingKeyframeId
+          ? { ...kf, expression: inv.expression, weightA: inv.weightA, weightB: inv.weightB, amplification: inv.amplification }
+          : kf
+      );
+      const newConfig = { ...tvConfig, keyframes: updatedKfs };
+      setTVConfig(newConfig);
+      sessionStorage.setItem(TV_CONFIG_KEY, JSON.stringify(newConfig));
+    }
+    setShowFullEditor(false);
+    setEditingKeyframeId(undefined);
+  }, [editingKeyframeId, tvConfig]);
 
   const handleSaveFees = useCallback((fees: number[]) => {
     setSavedFees(fees);
     sessionStorage.setItem(FEE_SESSION_KEY, JSON.stringify(fees));
-  }, []);
+    // If editing fees for a specific keyframe, save to that keyframe
+    if (selectedFeeKeyframe) {
+      const updatedKfs = tvConfig.keyframes.map(kf =>
+        kf.id === selectedFeeKeyframe ? { ...kf, fees } : kf
+      );
+      const newConfig = { ...tvConfig, keyframes: updatedKfs };
+      setTVConfig(newConfig);
+      sessionStorage.setItem(TV_CONFIG_KEY, JSON.stringify(newConfig));
+    }
+  }, [selectedFeeKeyframe, tvConfig]);
 
   const handleTVConfigChange = useCallback((config: TimeVarianceConfig) => {
     setTVConfig(config);
     sessionStorage.setItem(TV_CONFIG_KEY, JSON.stringify(config));
   }, []);
+
+  const openFullEditor = useCallback((keyframeId?: string) => {
+    setEditingKeyframeId(keyframeId);
+    if (keyframeId) {
+      const kf = tvConfig.keyframes.find(k => k.id === keyframeId);
+      if (kf) {
+        setSavedInvariant({
+          expression: kf.expression,
+          presetId: "custom",
+          weightA: kf.weightA,
+          weightB: kf.weightB,
+          kValue: 10000,
+          amplification: kf.amplification,
+          rangeLower: 0.5,
+          rangeUpper: 2.0,
+        });
+      }
+    }
+    setShowFullEditor(true);
+  }, [tvConfig.keyframes]);
 
   const importFromLibrary = (amm: LibraryAMM) => {
     const inv: SavedInvariant = { expression: amm.formula, presetId: "custom", weightA: amm.params.wA, weightB: amm.params.wB, kValue: amm.params.k, amplification: amm.params.amp || 10, rangeLower: 0.5, rangeUpper: 2.0 };
@@ -180,6 +225,11 @@ const TimeVarianceLab = () => {
     );
   }, [tvConfig, savedFees]);
 
+  // Get the currently selected fee keyframe's saved fees for the fee editor
+  const activeFeeKeyframe = selectedFeeKeyframe
+    ? tvConfig.keyframes.find(kf => kf.id === selectedFeeKeyframe)
+    : tvConfig.keyframes[0];
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
@@ -228,6 +278,21 @@ const TimeVarianceLab = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Full Expression Editor Dialog */}
+      <Dialog open={showFullEditor} onOpenChange={(open) => { if (!open) { setShowFullEditor(false); setEditingKeyframeId(undefined); } }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold">
+              {editingKeyframeId
+                ? `Edit Expression — Keyframe ${tvConfig.keyframes.findIndex(k => k.id === editingKeyframeId) + 1}`
+                : "Invariant Expression Editor"
+              }
+            </DialogTitle>
+          </DialogHeader>
+          <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
         <aside className={`border-r border-border shrink-0 transition-all duration-200 flex flex-col sticky top-0 h-screen ${hovered ? "w-56" : "w-14"}`} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
@@ -262,7 +327,6 @@ const TimeVarianceLab = () => {
               <div className="flex items-center justify-center"><AlertTriangle className="w-3 h-3 text-warning" /></div>
             </div>
           )}
-          {/* Prev/Next navigation */}
           <div className="border-t border-border p-2 flex flex-col gap-1">
             <button onClick={goPrev} disabled={!canGoPrev}
               className={`w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[10px] font-medium transition-colors ${canGoPrev ? "bg-secondary text-foreground hover:bg-accent border border-border" : "text-muted-foreground/30 cursor-not-allowed"}`}>
@@ -280,37 +344,32 @@ const TimeVarianceLab = () => {
           {!hasInvariant && activeTab === "invariant" && (
             <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/20 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-              <p className="text-xs text-foreground"><strong>Step 1:</strong> Configure time-variance parameters and design your invariant below, then click <strong>"Set as Active Invariant"</strong> to unlock the other tools.</p>
+              <p className="text-xs text-foreground"><strong>Step 1:</strong> Configure time-variance parameters below. Click the expand button on any keyframe to open the full expression editor, then click <strong>"Set as Active Invariant"</strong> to unlock the other tools.</p>
             </motion.div>
           )}
 
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               {activeTab === "invariant" && (
-                <div className="space-y-6">
-                  <TimeVariancePanel config={tvConfig} onConfigChange={handleTVConfigChange} />
-                  <div className="border-t border-border pt-6">
-                    <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />
-                  </div>
-                </div>
+                <TimeVariancePanel config={tvConfig} onConfigChange={handleTVConfigChange} onOpenFullEditor={openFullEditor} />
               )}
               {activeTab === "fees" && (
                 <div className="space-y-4">
                   {/* Time-variant fee mode selector */}
                   <div className="surface-elevated rounded-xl p-4">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Clock className="w-3.5 h-3.5 text-chart-2" />
                         <h4 className="text-[10px] font-bold text-foreground">Time-Variant Fee Mode</h4>
                       </div>
                       <div className="flex rounded-md border border-border overflow-hidden">
                         <button onClick={() => handleTVConfigChange({ ...tvConfig, feeMode: "keyframe" })}
-                          className={`px-2.5 py-1 text-[9px] font-medium transition-all ${tvConfig.feeMode === "keyframe" ? "bg-foreground/10 text-foreground" : "text-muted-foreground"}`}>
-                          Keyframes
+                          className={`flex items-center gap-1 px-2.5 py-1 text-[9px] font-medium transition-all ${tvConfig.feeMode === "keyframe" ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                          <Layers className="w-3 h-3" /> Keyframes
                         </button>
                         <button onClick={() => handleTVConfigChange({ ...tvConfig, feeMode: "function" })}
-                          className={`px-2.5 py-1 text-[9px] font-medium transition-all ${tvConfig.feeMode === "function" ? "bg-foreground/10 text-foreground" : "text-muted-foreground"}`}>
-                          Function
+                          className={`flex items-center gap-1 px-2.5 py-1 text-[9px] font-medium transition-all ${tvConfig.feeMode === "function" ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                          <Code2 className="w-3 h-3" /> Function
                         </button>
                       </div>
                     </div>
@@ -325,10 +384,38 @@ const TimeVarianceLab = () => {
                         />
                       </div>
                     ) : (
-                      <p className="text-[9px] text-muted-foreground">Fee structure below applies to the currently selected keyframe. Switch keyframes in the Invariant Editor tab to set per-keyframe fees.</p>
+                      <div className="space-y-2">
+                        <p className="text-[9px] text-muted-foreground">Select a keyframe to edit its fee structure:</p>
+                        <div className="flex gap-1.5 flex-wrap">
+                          {tvConfig.keyframes.map((kf, i) => (
+                            <button
+                              key={kf.id}
+                              onClick={() => {
+                                setSelectedFeeKeyframe(kf.id);
+                                if (kf.fees) setSavedFees(kf.fees);
+                              }}
+                              className={`px-3 py-1.5 rounded-md text-[10px] font-medium transition-all border ${
+                                (selectedFeeKeyframe || tvConfig.keyframes[0]?.id) === kf.id
+                                  ? "bg-foreground/5 text-foreground border-foreground/20"
+                                  : "bg-secondary text-muted-foreground border-border hover:text-foreground"
+                              }`}
+                            >
+                              <span className="font-mono">t={kf.t}</span>
+                              <span className="ml-1.5 text-[8px] text-muted-foreground">KF {i + 1}</span>
+                              {kf.fees && <span className="ml-1 text-[8px] text-chart-2">✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                        {activeFeeKeyframe && (
+                          <div className="px-2 py-1.5 rounded-md bg-secondary border border-border">
+                            <span className="text-[8px] text-muted-foreground">Editing fees for: </span>
+                            <span className="text-[9px] font-mono text-foreground">{activeFeeKeyframe.expression} at t={activeFeeKeyframe.t}</span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <FeeStructureEditor onSaveFees={handleSaveFees} savedFees={savedFees} />
+                  <FeeStructureEditor onSaveFees={handleSaveFees} savedFees={activeFeeKeyframe?.fees || savedFees} />
                 </div>
               )}
               {activeTab === "compare" && <AMMComparison savedInvariant={savedInvariant} />}

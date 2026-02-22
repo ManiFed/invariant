@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Play, Pause, SkipBack, SkipForward, Plus, Trash2, Code2, Layers } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Plus, Trash2, Code2, Layers, Maximize2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
@@ -55,7 +55,6 @@ export function interpolateParams(keyframes: Keyframe[], t: number): { weightA: 
     if (t >= sorted[i].t && t <= sorted[i + 1].t) { left = sorted[i]; right = sorted[i + 1]; break; }
   }
   const progress = right.t === left.t ? 0 : (t - left.t) / (right.t - left.t);
-  // Use the nearest keyframe's expression
   const expression = progress < 0.5 ? left.expression : right.expression;
   return {
     weightA: lerp(left.weightA, right.weightA, progress),
@@ -113,10 +112,11 @@ export function PlaybackControls({ time, isPlaying, speed, onTimeChange, onToggl
 }
 
 /* ─── Timeline Editor with Keyframe/Function Mode ─── */
-export function TimelineEditor({ keyframes, onChange, currentTime, mode, onModeChange, functionExpr, onFunctionExprChange }: {
+export function TimelineEditor({ keyframes, onChange, currentTime, mode, onModeChange, functionExpr, onFunctionExprChange, onOpenFullEditor }: {
   keyframes: Keyframe[]; onChange: (kfs: Keyframe[]) => void; currentTime: number;
   mode: TimeVarianceMode; onModeChange: (m: TimeVarianceMode) => void;
   functionExpr: string; onFunctionExprChange: (expr: string) => void;
+  onOpenFullEditor: (keyframeId?: string) => void;
 }) {
   const [selectedKeyframe, setSelectedKeyframe] = useState<string | null>(null);
 
@@ -170,9 +170,15 @@ export function TimelineEditor({ keyframes, onChange, currentTime, mode, onModeC
               value={functionExpr}
               onChange={e => onFunctionExprChange(e.target.value)}
               className="w-full bg-background border border-border rounded-md px-3 py-2 text-[10px] font-mono text-foreground outline-none resize-none h-20"
-              placeholder="e.g. wA(t) = 0.5 + 0.2*sin(t*π/100)&#10;wB(t) = 1 - wA(t)&#10;fee(t) = 0.003 + 0.002*t/100"
+              placeholder="e.g. wA(t) = 0.5 + 0.2*sin(t*π/100)&#10;wB(t) = 1 - wA(t)&#10;amp(t) = 10 + 40*t/100"
             />
-            <p className="text-[8px] text-muted-foreground">Define how weights, fees, and amplification change as a function of time t (0–100). The expression will be evaluated continuously.</p>
+            <p className="text-[8px] text-muted-foreground">Define how weights and amplification change as a function of time t (0–100).</p>
+            <button
+              onClick={() => onOpenFullEditor(undefined)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-secondary border border-border text-[10px] font-medium text-foreground hover:bg-accent transition-colors"
+            >
+              <Maximize2 className="w-3 h-3" /> Open Full Expression Editor
+            </button>
           </div>
         </div>
       ) : (
@@ -204,18 +210,22 @@ export function TimelineEditor({ keyframes, onChange, currentTime, mode, onModeC
                   <button onClick={() => setSelectedKeyframe(selectedKeyframe === kf.id ? null : kf.id)} className="text-[9px] font-mono text-chart-2 font-bold cursor-pointer hover:text-foreground">
                     Keyframe {i + 1} — t={kf.t}
                   </button>
-                  {keyframes.length > 1 && <button onClick={() => removeKeyframe(kf.id)} className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3 h-3" /></button>}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onOpenFullEditor(kf.id)}
+                      className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                      title="Open full expression editor"
+                    >
+                      <Maximize2 className="w-3 h-3" />
+                    </button>
+                    {keyframes.length > 1 && <button onClick={() => removeKeyframe(kf.id)} className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3 h-3" /></button>}
+                  </div>
                 </div>
 
-                {/* Expression editor — always visible */}
-                <div>
-                  <label className="text-[8px] text-muted-foreground">Invariant Expression</label>
-                  <input
-                    value={kf.expression}
-                    onChange={e => updateKeyframe(kf.id, "expression", e.target.value)}
-                    className="w-full px-2 py-1 text-[10px] font-mono bg-secondary rounded border border-border text-foreground"
-                    placeholder="x^wA · y^wB = k"
-                  />
+                {/* Expression preview */}
+                <div className="px-2 py-1.5 rounded-md bg-secondary border border-border">
+                  <span className="text-[8px] text-muted-foreground">Expression: </span>
+                  <span className="text-[10px] font-mono text-foreground">{kf.expression}</span>
                 </div>
 
                 {/* Expanded details */}
@@ -224,7 +234,6 @@ export function TimelineEditor({ keyframes, onChange, currentTime, mode, onModeC
                     <div><label className="text-[8px] text-muted-foreground">Time (0–100)</label><input type="number" min={0} max={100} value={kf.t} onChange={e => updateKeyframe(kf.id, "t", Number(e.target.value))} className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-secondary rounded border border-border text-foreground" /></div>
                     <div><label className="text-[8px] text-muted-foreground">Weight A</label><input type="number" step={0.05} min={0.01} max={0.99} value={kf.weightA} onChange={e => updateKeyframe(kf.id, "weightA", Number(e.target.value))} className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-secondary rounded border border-border text-foreground" /></div>
                     <div><label className="text-[8px] text-muted-foreground">Weight B</label><input type="number" step={0.05} min={0.01} max={0.99} value={kf.weightB} onChange={e => updateKeyframe(kf.id, "weightB", Number(e.target.value))} className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-secondary rounded border border-border text-foreground" /></div>
-                    <div><label className="text-[8px] text-muted-foreground">Fee Rate</label><input type="number" step={0.001} min={0} max={0.1} value={kf.feeRate} onChange={e => updateKeyframe(kf.id, "feeRate", Number(e.target.value))} className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-secondary rounded border border-border text-foreground" /></div>
                     <div className="col-span-2"><label className="text-[8px] text-muted-foreground">Amplification</label><input type="number" step={1} min={1} max={1000} value={kf.amplification} onChange={e => updateKeyframe(kf.id, "amplification", Number(e.target.value))} className="w-full px-1.5 py-0.5 text-[9px] font-mono bg-secondary rounded border border-border text-foreground" /></div>
                   </div>
                 )}
@@ -238,9 +247,10 @@ export function TimelineEditor({ keyframes, onChange, currentTime, mode, onModeC
 }
 
 /* ─── Time-Variance Visualization Panel ─── */
-export function TimeVariancePanel({ config, onConfigChange }: {
+export function TimeVariancePanel({ config, onConfigChange, onOpenFullEditor }: {
   config: TimeVarianceConfig;
   onConfigChange: (config: TimeVarianceConfig) => void;
+  onOpenFullEditor: (keyframeId?: string) => void;
 }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -282,6 +292,7 @@ export function TimeVariancePanel({ config, onConfigChange }: {
             onModeChange={m => onConfigChange({ ...config, mode: m })}
             functionExpr={config.functionExpr}
             onFunctionExprChange={expr => onConfigChange({ ...config, functionExpr: expr })}
+            onOpenFullEditor={onOpenFullEditor}
           />
         </div>
         <div className="space-y-4">
