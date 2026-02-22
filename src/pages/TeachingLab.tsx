@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Monitor } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LabControls, { type LessonTab, type Controls } from "@/components/teaching/LabControls";
 import LabSimulation from "@/components/teaching/LabSimulation";
@@ -8,9 +8,11 @@ import LabLearning from "@/components/teaching/LabLearning";
 import CourseSidebar from "@/components/teaching/CourseSidebar";
 import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function TeachingLab() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   // Course state
   const [courseActive, setCourseActive] = useState(true);
@@ -143,7 +145,6 @@ export default function TeachingLab() {
       const prevMod = courseModule - 1;
       setCourseModule(prevMod);
       setCourseStep(COURSE_MODULES[prevMod].steps.length - 1);
-      // Update tab to match the module we're going back to
       const mappedTab = MODULE_TAB_MAP[COURSE_MODULES[prevMod].id] as LessonTab;
       if (mappedTab) setTab(mappedTab);
     }
@@ -176,6 +177,53 @@ export default function TeachingLab() {
       }
     }
   };
+
+  // Mobile: show course only, then desktop-required message
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
+          </div>
+          <ThemeToggle />
+        </header>
+
+        {courseActive && !courseComplete ? (
+          <div className="flex-1 min-h-0">
+            <CourseSidebar
+              currentModule={courseModule}
+              currentStep={courseStep}
+              onAdvanceStep={handleAdvanceStep}
+              onGoBack={handleGoBack}
+              onCompleteModule={handleCompleteModule}
+              onSkipCourse={handleSkipCourse}
+              totalModules={COURSE_MODULES.length}
+              completedModules={completedModules}
+              onNavigateModule={handleNavigateModule}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-4">
+            <Monitor className="w-12 h-12 text-muted-foreground" />
+            <h2 className="text-lg font-bold text-foreground">Desktop Required</h2>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              The interactive AMM simulation lab requires a desktop browser for the full experience with controls, charts, and real-time visualization.
+            </p>
+            <button
+              onClick={() => navigate("/")}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Back to Home
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Determine what to show based on progress
   const showControls = courseComplete || revealedSections.has("controls") || (courseActive && courseModule >= 3);

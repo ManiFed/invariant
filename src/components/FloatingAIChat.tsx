@@ -1,10 +1,15 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X } from "lucide-react";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
 
 export default function FloatingAIChat() {
   const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  // Hide on teaching lab — AI is embedded in sidebar there
+  if (location.pathname === "/learn") return null;
 
   return (
     <>

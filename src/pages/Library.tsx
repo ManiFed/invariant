@@ -51,7 +51,7 @@ const Library = () => {
   const [communityAMMs, setCommunityAMMs] = useState<AMMEntry[]>([]);
   const [selectedAMM, setSelectedAMM] = useState<AMMEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"famous" | "featured" | "community">("famous");
+  const [activeFilter, setActiveFilter] = useState<"all" | "famous" | "featured" | "community">("all");
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -75,7 +75,7 @@ const Library = () => {
           },
         };
         setCommunityAMMs(prev => [...prev, entry]);
-        setActiveTab("community");
+        setActiveFilter("community");
       } catch {
         alert("Invalid JSON file. Please upload a valid AMM configuration.");
       }
@@ -86,10 +86,11 @@ const Library = () => {
 
   const allAMMs = useMemo(() => {
     const all = [...FAMOUS_AMMS, ...FEATURED_AMMS, ...communityAMMs];
-    if (!searchQuery.trim()) return all.filter(a => a.category === activeTab);
+    const filtered = activeFilter === "all" ? all : all.filter(a => a.category === activeFilter);
+    if (!searchQuery.trim()) return filtered;
     const q = searchQuery.toLowerCase();
-    return all.filter(a => a.name.toLowerCase().includes(q) || a.formula.toLowerCase().includes(q) || a.description.toLowerCase().includes(q));
-  }, [activeTab, communityAMMs, searchQuery]);
+    return filtered.filter(a => a.name.toLowerCase().includes(q) || a.formula.toLowerCase().includes(q) || a.description.toLowerCase().includes(q));
+  }, [activeFilter, communityAMMs, searchQuery]);
 
   const handleDownload = (amm: AMMEntry) => {
     const json = JSON.stringify({ name: amm.name, description: amm.description, formula: amm.formula, author: amm.author, params: amm.params }, null, 2);
@@ -130,16 +131,17 @@ const Library = () => {
           </div>
           <div className="flex gap-1">
             {([
+              { id: "all" as const, label: "All", icon: Star },
               { id: "famous" as const, label: "Famous", icon: Star },
               { id: "featured" as const, label: "Featured", icon: Award },
               { id: "community" as const, label: "Community", icon: Users },
-            ]).map(tab => (
-              <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSearchQuery(""); }}
+            ]).map(t => (
+              <button key={t.id} onClick={() => { setActiveFilter(t.id); setSearchQuery(""); }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  activeTab === tab.id && !searchQuery ? "bg-foreground/5 text-foreground border border-foreground/20" : "text-muted-foreground hover:text-foreground border border-transparent"
+                  activeFilter === t.id && !searchQuery ? "bg-foreground/5 text-foreground border border-foreground/20" : "text-muted-foreground hover:text-foreground border border-transparent"
                 }`}>
-                <tab.icon className="w-3 h-3" /> {tab.label}
-                {tab.id === "community" && communityAMMs.length > 0 && (
+                {t.id !== "all" && <t.icon className="w-3 h-3" />} {t.label}
+                {t.id === "community" && communityAMMs.length > 0 && (
                   <span className="text-[9px] font-mono bg-primary/10 text-primary px-1 rounded">{communityAMMs.length}</span>
                 )}
               </button>
@@ -151,9 +153,9 @@ const Library = () => {
         {allAMMs.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-sm text-muted-foreground mb-2">
-              {activeTab === "community" ? "No community AMMs yet." : "No results found."}
+              {activeFilter === "community" ? "No community AMMs yet." : "No results found."}
             </p>
-            {activeTab === "community" && (
+            {activeFilter === "community" && (
               <button onClick={() => fileInputRef.current?.click()}
                 className="text-xs text-primary hover:underline">Upload your first AMM →</button>
             )}
