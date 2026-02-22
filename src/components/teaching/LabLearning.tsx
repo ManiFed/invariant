@@ -16,15 +16,15 @@ interface Props {
   rangeUpper: number;
 }
 
-function MetricRow({ label, value, highlight, positive }: { label: string; value: string; highlight?: boolean; positive?: boolean | null }) {
+function MetricRow({ label, value, highlight, positive }: {label: string;value: string;highlight?: boolean;positive?: boolean | null;}) {
   return (
     <div className={`flex items-center justify-between text-[11px] py-0.5 ${highlight ? "font-semibold" : ""}`}>
       <span className="text-muted-foreground">{label}</span>
       <span className={`font-mono ${positive === true ? "text-success" : positive === false ? "text-destructive" : "text-foreground"}`}>
         {value}
       </span>
-    </div>
-  );
+    </div>);
+
 }
 
 export default function LabLearning({ pool, history, lastTrade, tab, initialX, initialY, initialPrice, rangeLower, rangeUpper }: Props) {
@@ -66,7 +66,7 @@ export default function LabLearning({ pool, history, lastTrade, tab, initialX, i
     arbitrage: ["Current Price", "Pool Price", "External Price"],
     fees: ["Fee Revenue", "Net LP Return"],
     volatility: ["Impermanent Loss", "Fee Revenue", "Net LP Return"],
-    concentrated: ["Capital Efficiency", "In Range"],
+    concentrated: ["Capital Efficiency", "In Range"]
   };
   const hl = highlights[tab] || [];
 
@@ -82,27 +82,27 @@ export default function LabLearning({ pool, history, lastTrade, tab, initialX, i
           <MetricRow label="HODL Value" value={hodlVal.toFixed(2)} highlight={hl.includes("HODL Value")} />
           <MetricRow label="Impermanent Loss" value={`${il.toFixed(2)}%`} highlight={hl.includes("Impermanent Loss")} positive={il >= 0 ? true : false} />
           <MetricRow label="Fee Revenue" value={pool.totalFees.toFixed(2)} highlight={hl.includes("Fee Revenue")} positive={pool.totalFees > 0 ? true : null} />
-          <MetricRow label="Net LP Return" value={`${((lpVal + pool.totalFees - hodlVal) / hodlVal * 100).toFixed(2)}%`} highlight={hl.includes("Net LP Return")} positive={(lpVal + pool.totalFees - hodlVal) >= 0 ? true : false} />
+          <MetricRow label="Net LP Return" value={`${((lpVal + pool.totalFees - hodlVal) / hodlVal * 100).toFixed(2)}%`} highlight={hl.includes("Net LP Return")} positive={lpVal + pool.totalFees - hodlVal >= 0 ? true : false} />
           <MetricRow label="Trade Cost" value={lastTrade ? lastTrade.feesPaid.toFixed(2) : "—"} highlight={hl.includes("Trade Cost")} />
-          {tab === "concentrated" && (
-            <>
+          {tab === "concentrated" &&
+          <>
               <MetricRow label="In Range" value={inRange ? "Yes ✓" : "No ✗"} highlight positive={inRange ? true : false} />
               <MetricRow label="Capital Efficiency" value={`${capEff.toFixed(1)}x`} highlight={hl.includes("Capital Efficiency")} />
             </>
-          )}
+          }
         </div>
       </div>
 
       {/* Explanation */}
-      <div className="p-3 border-b border-border shrink-0">
-        <h2 className="text-[10px] font-mono font-semibold text-muted-foreground mb-2 tracking-wider uppercase">Explanation</h2>
-        <p className="text-xs text-foreground leading-relaxed">{explanation}</p>
-      </div>
+      
+
+
+
 
       {/* AI Assistant */}
       <div className="flex-1 min-h-0">
         <AIChatPanel />
       </div>
-    </div>
-  );
+    </div>);
+
 }
