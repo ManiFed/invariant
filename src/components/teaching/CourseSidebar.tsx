@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, CheckCircle2, XCircle, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronLeft, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown } from "lucide-react";
 import { COURSE_MODULES, type CourseStep } from "@/lib/course-content";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
+import AIChatPanel from "@/components/teaching/AIChatPanel";
 
 interface Props {
   currentModule: number;
@@ -165,10 +166,8 @@ function LessonVisual({ visual }: { visual?: string }) {
       <div className="py-3 flex items-center justify-center">
         <svg viewBox="0 0 180 120" className="w-full max-w-[200px]" fill="none">
           <path d="M 15 105 Q 35 70 50 52 Q 65 40 85 33 Q 110 26 140 22 Q 160 19 170 17" stroke="hsl(var(--chart-1))" strokeWidth="2" fill="none" />
-          {/* Flat region highlight */}
           <rect x="60" y="20" width="60" height="25" fill="hsl(var(--chart-2))" opacity="0.08" rx="3" />
           <text x="72" y="32" fontSize="6" fill="hsl(var(--chart-2))">Flat = low impact</text>
-          {/* Steep region highlight */}
           <rect x="10" y="60" width="35" height="50" fill="hsl(var(--chart-3))" opacity="0.08" rx="3" />
           <text x="12" y="72" fontSize="6" fill="hsl(var(--chart-3))">Steep = high impact</text>
         </svg>
@@ -376,11 +375,7 @@ function LessonVisual({ visual }: { visual?: string }) {
 }
 
 export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule }: Props) {
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [answerRevealed, setAnswerRevealed] = useState(false);
-  const [showFollowUp, setShowFollowUp] = useState(false);
-  const [followUpAnswer, setFollowUpAnswer] = useState<number | null>(null);
-  const [followUpRevealed, setFollowUpRevealed] = useState(false);
+  const [showAI, setShowAI] = useState(false);
 
   const mod = COURSE_MODULES[currentModule];
   if (!mod) return null;
@@ -393,11 +388,6 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
   const canGoBack = currentStep > 0 || currentModule > 0;
 
   const handleNext = () => {
-    setSelectedAnswer(null);
-    setAnswerRevealed(false);
-    setShowFollowUp(false);
-    setFollowUpAnswer(null);
-    setFollowUpRevealed(false);
     if (isLastStep) {
       onCompleteModule();
     } else {
@@ -406,30 +396,8 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
   };
 
   const handleBack = () => {
-    setSelectedAnswer(null);
-    setAnswerRevealed(false);
-    setShowFollowUp(false);
-    setFollowUpAnswer(null);
-    setFollowUpRevealed(false);
     onGoBack();
   };
-
-  const handleAnswer = (idx: number) => {
-    if (answerRevealed) return;
-    setSelectedAnswer(idx);
-    setAnswerRevealed(true);
-  };
-
-  const handleFollowUpAnswer = (idx: number) => {
-    if (followUpRevealed) return;
-    setFollowUpAnswer(idx);
-    setFollowUpRevealed(true);
-  };
-
-  const isQuiz = step.type === "quiz";
-  const hasFollowUp = isQuiz && step.followUpQuiz;
-  const answeredCorrectly = isQuiz && answerRevealed && selectedAnswer === step.correctIndex;
-  const canProceed = step.type === "lesson" || answerRevealed;
 
   return (
     <div className="flex flex-col h-full">
@@ -468,192 +436,111 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
               </div>
             </PopoverContent>
           </Popover>
-          <button onClick={onSkipCourse} className="text-[9px] font-mono text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-            <SkipForward className="w-3 h-3" /> Skip
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAI(!showAI)}
+              className={`text-[9px] font-mono transition-colors flex items-center gap-1 ${showAI ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              🤖 AI
+            </button>
+            <button onClick={onSkipCourse} className="text-[9px] font-mono text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              <SkipForward className="w-3 h-3" /> Skip
+            </button>
+          </div>
         </div>
         <Progress value={overallProgress} className="h-1" />
       </div>
 
-      {/* Module title */}
-      <div className="px-3 pt-3 pb-2">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-sm">{mod.emoji}</span>
-          <h2 className="text-xs font-bold text-foreground">{mod.title}</h2>
+      {showAI ? (
+        <div className="flex-1 min-h-0">
+          <AIChatPanel />
         </div>
-        <p className="text-[10px] text-muted-foreground">{mod.subtitle}</p>
-      </div>
+      ) : (
+        <>
+          {/* Module title */}
+          <div className="px-3 pt-3 pb-2">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-sm">{mod.emoji}</span>
+              <h2 className="text-xs font-bold text-foreground">{mod.title}</h2>
+            </div>
+            <p className="text-[10px] text-muted-foreground">{mod.subtitle}</p>
+          </div>
 
-      {/* Step content — scrollable */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`${currentModule}-${currentStep}-${showFollowUp}`}
-            initial={{ opacity: 0, x: 15 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -15 }}
-            transition={{ duration: 0.2 }}
-          >
-            {step.type === "lesson" ? (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <BookOpen className="w-3 h-3 text-muted-foreground" />
-                  <h3 className="text-[11px] font-semibold text-foreground">{step.title}</h3>
-                  <span className="text-[9px] font-mono text-muted-foreground ml-auto">{currentStep + 1}/{mod.steps.length}</span>
-                </div>
-                <div className="space-y-2">
-                  {step.content.map((para, i) => (
-                    <motion.p
-                      key={i}
-                      className="text-[11px] text-foreground/80 leading-relaxed"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.08 }}
-                    >
-                      {para}
-                    </motion.p>
-                  ))}
-                </div>
-                <LessonVisual visual={step.visual} />
-                {step.interactive === "il-slider" && <ILSlider />}
-              </div>
-            ) : !showFollowUp ? (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <GraduationCap className="w-3 h-3 text-primary" />
-                  <h3 className="text-[11px] font-semibold text-foreground">Ask the AI Assistant</h3>
-                  <span className="text-[9px] font-mono text-muted-foreground ml-auto">{currentStep + 1}/{mod.steps.length}</span>
-                </div>
-                <div className="mb-2 p-2.5 rounded-lg bg-secondary border border-border">
-                  <p className="text-[11px] font-medium text-foreground mb-1">{step.question}</p>
-                  <p className="text-[10px] text-muted-foreground">Think about this question, then ask the AI assistant for help or try to answer it yourself.</p>
-                </div>
-                <div className="space-y-1.5">
-                  {step.options.map((opt, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleAnswer(i)}
-                      disabled={answerRevealed}
-                      className={`w-full text-left text-[11px] px-2.5 py-2 rounded-lg border transition-all ${
-                        answerRevealed && i === step.correctIndex
-                          ? "border-success bg-success/10 text-success"
-                          : answerRevealed && i === selectedAnswer && i !== step.correctIndex
-                          ? "border-destructive bg-destructive/10 text-destructive"
-                          : selectedAnswer === i
-                          ? "border-primary bg-primary/5 text-foreground"
-                          : "border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        {answerRevealed && i === step.correctIndex && <CheckCircle2 className="w-3 h-3 shrink-0" />}
-                        {answerRevealed && i === selectedAnswer && i !== step.correctIndex && <XCircle className="w-3 h-3 shrink-0" />}
-                        {opt}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                {answerRevealed && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-2 p-2.5 rounded-lg bg-secondary text-[10px] text-muted-foreground leading-relaxed"
-                  >
-                    {selectedAnswer === step.correctIndex
-                      ? `✓ Correct! ${step.explanation}`
-                      : `✗ Not quite. ${step.wrongExplanation}`}
-                  </motion.div>
-                )}
-                {step.calculatorNeeded && <MiniCalculator />}
-                {answerRevealed && answeredCorrectly && hasFollowUp && (
-                  <motion.button
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                    onClick={() => setShowFollowUp(true)}
-                    className="mt-2 text-[10px] font-medium text-primary hover:underline flex items-center gap-1"
-                  >
-                    Bonus question (harder) <ChevronRight className="w-3 h-3" />
-                  </motion.button>
-                )}
-              </div>
-            ) : step.followUpQuiz ? (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <GraduationCap className="w-3 h-3 text-warning" />
-                  <h3 className="text-[11px] font-semibold text-warning">Bonus Quiz</h3>
-                </div>
-                <p className="text-[11px] font-medium text-foreground mb-2">{step.followUpQuiz.question}</p>
-                <div className="space-y-1.5">
-                  {step.followUpQuiz.options.map((opt, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleFollowUpAnswer(i)}
-                      disabled={followUpRevealed}
-                      className={`w-full text-left text-[11px] px-2.5 py-2 rounded-lg border transition-all ${
-                        followUpRevealed && i === step.followUpQuiz!.correctIndex
-                          ? "border-success bg-success/10 text-success"
-                          : followUpRevealed && i === followUpAnswer && i !== step.followUpQuiz!.correctIndex
-                          ? "border-destructive bg-destructive/10 text-destructive"
-                          : followUpAnswer === i
-                          ? "border-primary bg-primary/5 text-foreground"
-                          : "border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        {followUpRevealed && i === step.followUpQuiz!.correctIndex && <CheckCircle2 className="w-3 h-3 shrink-0" />}
-                        {followUpRevealed && i === followUpAnswer && i !== step.followUpQuiz!.correctIndex && <XCircle className="w-3 h-3 shrink-0" />}
-                        {opt}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                {followUpRevealed && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-2 p-2.5 rounded-lg bg-secondary text-[10px] text-muted-foreground leading-relaxed"
-                  >
-                    {followUpAnswer === step.followUpQuiz.correctIndex
-                      ? `✓ Excellent! ${step.followUpQuiz.explanation}`
-                      : `✗ ${step.followUpQuiz.wrongExplanation}`}
-                  </motion.div>
-                )}
-                {step.calculatorNeeded && <MiniCalculator />}
-              </div>
-            ) : null}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+          {/* Step content — scrollable */}
+          <div className="flex-1 overflow-y-auto px-3 pb-3">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${currentModule}-${currentStep}`}
+                initial={{ opacity: 0, x: 15 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -15 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <BookOpen className="w-3 h-3 text-muted-foreground" />
+                    <h3 className="text-[11px] font-semibold text-foreground">{step.type === "lesson" ? step.title : "Knowledge Check"}</h3>
+                    <span className="text-[9px] font-mono text-muted-foreground ml-auto">{currentStep + 1}/{mod.steps.length}</span>
+                  </div>
 
-      {/* Footer nav */}
-      <div className="px-3 py-2 border-t border-border flex items-center justify-between gap-2">
-        <button
-          onClick={handleBack}
-          disabled={!canGoBack}
-          className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
-            canGoBack ? "text-foreground hover:bg-secondary" : "text-muted-foreground/30 cursor-not-allowed"
-          }`}
-        >
-          <ChevronLeft className="w-3 h-3" /> Back
-        </button>
-        <button
-          onClick={handleNext}
-          disabled={!canProceed}
-          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
-            canProceed
-              ? "bg-primary text-primary-foreground hover:opacity-90"
-              : "bg-secondary text-muted-foreground cursor-not-allowed"
-          }`}
-        >
-          {isLastStep && isLastModule ? (
-            <>Open Dashboard <GraduationCap className="w-3 h-3" /></>
-          ) : isLastStep ? (
-            <>Next Module <ChevronRight className="w-3 h-3" /></>
-          ) : (
-            <>Continue <ChevronRight className="w-3 h-3" /></>
-          )}
-        </button>
-      </div>
+                  {step.type === "lesson" ? (
+                    <div className="space-y-2">
+                      {step.content.map((para, i) => (
+                        <motion.p
+                          key={i}
+                          className="text-[11px] text-foreground/80 leading-relaxed"
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.08 }}
+                        >
+                          {para}
+                        </motion.p>
+                      ))}
+                      <LessonVisual visual={step.visual} />
+                      {step.interactive === "il-slider" && <ILSlider />}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="p-2.5 rounded-lg bg-secondary border border-border">
+                        <p className="text-[11px] font-medium text-foreground">{step.question}</p>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Think about this, then continue when ready. Use the 🤖 AI button above if you'd like help!
+                      </p>
+                      {step.calculatorNeeded && <MiniCalculator />}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Footer nav */}
+          <div className="px-3 py-2 border-t border-border flex items-center justify-between gap-2">
+            <button
+              onClick={handleBack}
+              disabled={!canGoBack}
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+                canGoBack ? "text-foreground hover:bg-secondary" : "text-muted-foreground/30 cursor-not-allowed"
+              }`}
+            >
+              <ChevronLeft className="w-3 h-3" /> Back
+            </button>
+            <button
+              onClick={handleNext}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all"
+            >
+              {isLastStep && isLastModule ? (
+                <>Open Dashboard <GraduationCap className="w-3 h-3" /></>
+              ) : isLastStep ? (
+                <>Next Module <ChevronRight className="w-3 h-3" /></>
+              ) : (
+                <>Continue <ChevronRight className="w-3 h-3" /></>
+              )}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
