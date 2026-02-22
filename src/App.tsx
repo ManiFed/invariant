@@ -9,6 +9,9 @@ import AdvancedMode from "./pages/AdvancedMode";
 import TeachingLab from "./pages/TeachingLab";
 import Documentation from "./pages/Documentation";
 import Library from "./pages/Library";
+import Labs from "./pages/Labs";
+import MultiAssetLab from "./pages/MultiAssetLab";
+import TimeVarianceLab from "./pages/TimeVarianceLab";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
 
@@ -27,6 +30,9 @@ const App = () => (
           <Route path="/learn" element={<TeachingLab />} />
           <Route path="/docs" element={<Documentation />} />
           <Route path="/library" element={<Library />} />
+          <Route path="/labs" element={<Labs />} />
+          <Route path="/labs/multi-asset" element={<MultiAssetLab />} />
+          <Route path="/labs/time-variance" element={<TimeVarianceLab />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <FloatingAIChat />
