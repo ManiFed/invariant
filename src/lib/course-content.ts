@@ -413,6 +413,85 @@ export const COURSE_MODULES: CourseModule[] = [
     ],
   },
   {
+    id: "usecases",
+    title: "Real-World Applications",
+    subtitle: "Where AMMs are used in practice",
+    emoji: "🌍",
+    reveals: [],
+    steps: [
+      {
+        type: "lesson",
+        title: "AMMs in the Wild",
+        content: [
+          "AMMs aren't just theoretical — they power billions of dollars in daily trading volume across DeFi.",
+          "The biggest use cases include: token swaps (Uniswap, SushiSwap), stablecoin trading (Curve Finance), yield farming, and decentralized portfolio management (Balancer).",
+          "Let's explore the major real-world applications and why different AMM designs are suited for different purposes.",
+        ],
+      },
+      {
+        type: "lesson",
+        title: "Stablecoin Exchanges",
+        content: [
+          "Curve Finance pioneered AMMs optimized for stablecoin pairs (USDC/USDT/DAI).",
+          "Because stablecoins trade near 1:1, Curve uses a StableSwap invariant that concentrates liquidity around that peg — giving 10-100x less slippage than a constant product AMM.",
+          "This design is also used for other correlated pairs like wETH/stETH (liquid staking derivatives) and synthetic assets.",
+        ],
+      },
+      {
+        type: "quiz",
+        question: "Why is Curve's StableSwap better than Uniswap V2 for stablecoin pairs?",
+        options: ["It has lower fees", "It concentrates liquidity near the 1:1 peg, reducing slippage", "It doesn't have impermanent loss"],
+        correctIndex: 1,
+        explanation: "The StableSwap invariant is specifically designed to be very flat near the 1:1 ratio, dramatically reducing slippage for pegged assets compared to a generic constant product curve.",
+        wrongExplanation: "Think about the curve shape: Curve's formula creates a nearly flat line around the 1:1 price, meaning trades barely move the price. A constant product curve is equally curved everywhere.",
+      },
+      {
+        type: "lesson",
+        title: "Portfolio Management & Index Funds",
+        content: [
+          "Balancer uses weighted pools (like 80/20 or custom multi-asset pools) to create self-rebalancing portfolios.",
+          "Instead of paying someone to rebalance your portfolio, the AMM does it automatically — and you earn trading fees in the process.",
+          "This is used for DeFi index funds, treasury management by DAOs, and liquidity bootstrapping pools (LBPs) for fair token launches.",
+        ],
+      },
+      {
+        type: "lesson",
+        title: "Concentrated Liquidity & Professional Market Making",
+        content: [
+          "Uniswap V3's concentrated liquidity lets LPs act more like professional market makers, choosing specific price ranges.",
+          "This is heavily used by sophisticated DeFi protocols, MEV searchers, and automated vault strategies (like Arrakis, Gamma).",
+          "The tradeoff: much higher capital efficiency (up to 4000x), but requires active management to stay in range.",
+        ],
+      },
+      {
+        type: "quiz",
+        question: "Which use case benefits MOST from concentrated liquidity?",
+        options: ["Long-term passive holding", "Active market making within a specific price range", "Cross-chain bridging"],
+        correctIndex: 1,
+        explanation: "Concentrated liquidity is ideal for active market makers who can monitor and adjust their ranges. It provides massive capital efficiency but requires active management.",
+        wrongExplanation: "Concentrated liquidity requires picking a price range. If the price moves out of your range, you earn nothing. This benefits active managers, not passive holders.",
+      },
+      {
+        type: "lesson",
+        title: "Emerging Applications",
+        content: [
+          "AMMs are expanding into new frontiers: perpetual futures (GMX, dYdX), options (Lyra, Panoptic), real-world assets (RWA tokenization), and prediction markets.",
+          "Time-variant AMMs that change their parameters over time are being explored for LBP-style token launches and dynamic fee structures.",
+          "Multi-asset pools enable complex financial instruments like index funds, synthetic baskets, and cross-margining systems.",
+          "The AMM design space is still young — new invariants and mechanisms are being invented constantly.",
+        ],
+      },
+      {
+        type: "quiz",
+        question: "What makes AMMs powerful beyond just token swaps?",
+        options: ["They only work for crypto tokens", "They can implement any financial primitive that depends on reserve ratios", "They replace all traditional finance"],
+        correctIndex: 1,
+        explanation: "AMMs are a general-purpose financial primitive. Any system where prices should adjust based on supply and demand of reserves can use an AMM variant — from options to prediction markets.",
+        wrongExplanation: "AMMs are versatile mathematical tools. The invariant curve concept applies to any system where you want automatic price discovery based on reserves — far beyond just swapping tokens.",
+      },
+    ],
+  },
+  {
     id: "fees",
     title: "Fees & Putting It Together",
     subtitle: "How LPs earn revenue and the final picture",
@@ -467,7 +546,7 @@ export const COURSE_MODULES: CourseModule[] = [
         type: "lesson",
         title: "🎓 You've Completed the Course!",
         content: [
-          "You now understand the core mechanics of AMMs: reserves, pricing, slippage, impermanent loss, arbitrage, and fees.",
+          "You now understand the core mechanics of AMMs: reserves, pricing, slippage, impermanent loss, arbitrage, fees, and real-world applications.",
           "The full dashboard is now unlocked. You can freely experiment with all controls, run simulations, and test your knowledge with quizzes.",
           "Try increasing trade size to see nonlinear slippage. Run the auto-simulator to watch IL accumulate. Toggle arbitrage on and off. The best way to learn is to experiment!",
         ],
@@ -493,5 +572,6 @@ export const MODULE_TAB_MAP: Record<string, string> = {
   trading: "slippage",
   il: "il",
   arbitrage: "arbitrage",
+  usecases: "fees",
   fees: "fees",
 };

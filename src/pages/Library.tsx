@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Upload, Star, Users, Award, X, Download, Search } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { LineChart, Line, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useChartColors } from "@/hooks/use-chart-theme";
 
@@ -31,14 +31,57 @@ const FEATURED_AMMS: AMMEntry[] = [
   { id: "cubic-mean", name: "Cubic Mean AMM", description: "Uses cubic relationship for ultra-flat trading near center with steep edges.", formula: "x³ + y³ = k", category: "featured", author: "Experimental", params: { wA: 0.5, wB: 0.5, k: 10000 } },
 ];
 
-function evalCurveForCard(params: AMMEntry["params"]): { x: number; y: number }[] {
+function evalCurveForCard(amm: AMMEntry): { x: number; y: number }[] {
   const data: { x: number; y: number }[] = [];
-  const { wA, wB, k } = params;
+  const { wA, wB, k, amp } = amm.params;
+
   for (let i = 1; i <= 40; i++) {
     const x = i * 5;
     try {
-      const y = Math.pow(k / Math.pow(x, wA), 1 / wB);
-      if (y > 0 && y < k * 10 && isFinite(y)) data.push({ x, y: parseFloat(y.toFixed(2)) });
+      let y: number;
+      
+      // Handle different curve types based on formula patterns
+      if (amm.id === "curve-stableswap") {
+        // StableSwap: hybrid constant sum + constant product
+        const A = amp || 100;
+        y = (k - x) * A / (A + 1) + k / (A * x + k / A);
+        y = Math.max(0.1, y);
+      } else if (amm.id === "solidly-ve33") {
+        // x³y + xy³ = k → solve for y numerically
+        // Approximate: for equal weights near balance
+        const target = k * 100; // scale up
+        // Newton's method: f(y) = x³y + xy³ - target = 0
+        y = Math.sqrt(target / x); // initial guess
+        for (let iter = 0; iter < 10; iter++) {
+          const f = x * x * x * y + x * y * y * y - target;
+          const fp = x * x * x + 3 * x * y * y;
+          if (Math.abs(fp) < 1e-10) break;
+          y = y - f / fp;
+          if (y <= 0) { y = 0.1; break; }
+        }
+      } else if (amm.id === "cubic-mean") {
+        // x³ + y³ = k
+        const rem = k * 1000 - x * x * x;
+        y = rem > 0 ? Math.pow(rem, 1 / 3) : 0;
+      } else if (amm.id === "uniswap-v3") {
+        // Concentrated: (√x - √pₐ)(√y - √pᵦ) = L²
+        const sqrtPa = Math.sqrt(50);
+        const L2 = k / 10;
+        const sqrtX = Math.sqrt(x);
+        if (sqrtX <= sqrtPa) continue;
+        const sqrtY = L2 / (sqrtX - sqrtPa) + Math.sqrt(200);
+        y = sqrtY * sqrtY;
+      } else if (amm.id === "cpmm-sqrt") {
+        // √(x·y) = √k → x·y = k
+        y = k / x;
+      } else {
+        // General weighted: x^wA · y^wB = k
+        y = Math.pow(k / Math.pow(x, wA), 1 / wB);
+      }
+
+      if (y > 0 && y < k * 100 && isFinite(y) && !isNaN(y)) {
+        data.push({ x, y: parseFloat(y.toFixed(2)) });
+      }
     } catch { /* skip */ }
   }
   return data;
@@ -195,7 +238,9 @@ const Library = () => {
 
                 <div className="h-48 mb-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={evalCurveForCard(selectedAMM.params)}>
+                    <LineChart data={evalCurveForCard(selectedAMM)} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                      <XAxis dataKey="x" tick={{ fontSize: 9, fill: colors.tick }} />
+                      <YAxis tick={{ fontSize: 9, fill: colors.tick }} />
                       <Line type="monotone" dataKey="y" stroke={colors.line} strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -238,14 +283,14 @@ const Library = () => {
 };
 
 const AMM_Card = ({ amm, colors, index, onClick }: { amm: AMMEntry; colors: ReturnType<typeof useChartColors>; index: number; onClick: () => void }) => {
-  const curveData = useMemo(() => evalCurveForCard(amm.params), [amm.params]);
+  const curveData = useMemo(() => evalCurveForCard(amm), [amm]);
   const categoryColors = { famous: "text-warning", featured: "text-primary", community: "text-success" };
   const categoryIcons = { famous: Star, featured: Award, community: Users };
   const Icon = categoryIcons[amm.category];
 
   return (
     <motion.div
-      className="surface-elevated rounded-xl p-4 cursor-pointer group hover:border-foreground/20 transition-all"
+      className="rounded-xl p-4 cursor-pointer group hover:border-foreground/20 transition-all bg-card border border-border"
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
@@ -257,11 +302,17 @@ const AMM_Card = ({ amm, colors, index, onClick }: { amm: AMMEntry; colors: Retu
         <Icon className={`w-3.5 h-3.5 ${categoryColors[amm.category]}`} />
       </div>
       <div className="h-24 mb-2 -mx-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={curveData}>
-            <Line type="monotone" dataKey="y" stroke={colors.line} strokeWidth={1.5} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
+        {curveData.length > 1 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={curveData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+              <Line type="monotone" dataKey="y" stroke={colors.line} strokeWidth={1.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground">
+            Complex curve — click to view
+          </div>
+        )}
       </div>
       <p className="text-[10px] font-mono text-muted-foreground mb-1.5">{amm.formula}</p>
       <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2">{amm.description}</p>
