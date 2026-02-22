@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback } from "react";
-import { motion } from "framer-motion";
-import { Code2, Play, Zap, HelpCircle } from "lucide-react";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Code2, Play, Zap, HelpCircle, AlertTriangle, CheckCircle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -43,17 +43,72 @@ function HelpBtn({ id }: { id: string }) {
   );
 }
 
-const MATH_SYMBOLS = [
-  { label: "×", insert: " * " },
-  { label: "÷", insert: " / " },
-  { label: "^", insert: "^" },
-  { label: "√", insert: "sqrt(" },
-  { label: "(", insert: "(" },
-  { label: ")", insert: ")" },
-  { label: "x", insert: "x" },
-  { label: "y", insert: "y" },
-  { label: "k", insert: "k" },
+const MATH_KEYBOARD = [
+  { label: "x", insert: "x", group: "var" },
+  { label: "y", insert: "y", group: "var" },
+  { label: "k", insert: "k", group: "var" },
+  { label: "π", insert: "π", group: "const" },
+  { label: "e", insert: "e", group: "const" },
+  { label: "+", insert: " + ", group: "op" },
+  { label: "−", insert: " - ", group: "op" },
+  { label: "×", insert: " * ", group: "op" },
+  { label: "÷", insert: " / ", group: "op" },
+  { label: "^", insert: "^", group: "op" },
+  { label: "=", insert: " = ", group: "op" },
+  { label: "(", insert: "(", group: "bracket" },
+  { label: ")", insert: ")", group: "bracket" },
+  { label: "√", insert: "sqrt(", group: "func" },
+  { label: "ln", insert: "ln(", group: "func" },
+  { label: "log", insert: "log(", group: "func" },
+  { label: "abs", insert: "abs(", group: "func" },
+  { label: "min", insert: "min(", group: "func" },
+  { label: "max", insert: "max(", group: "func" },
+  { label: "α", insert: "α", group: "greek" },
+  { label: "β", insert: "β", group: "greek" },
+  { label: "γ", insert: "γ", group: "greek" },
 ];
+
+// Validate and parse custom expression
+function validateExpression(expr: string): { valid: boolean; error: string | null; parsed: string } {
+  if (!expr.trim()) return { valid: false, error: "Expression is empty", parsed: "" };
+  
+  // Check for required variables
+  if (!expr.includes("x") && !expr.includes("y")) {
+    return { valid: false, error: "Expression must contain at least 'x' or 'y' reserve variables", parsed: "" };
+  }
+
+  // Check balanced parentheses
+  let depth = 0;
+  for (const ch of expr) {
+    if (ch === "(") depth++;
+    if (ch === ")") depth--;
+    if (depth < 0) return { valid: false, error: "Unexpected closing parenthesis ')' — check your bracket placement", parsed: "" };
+  }
+  if (depth > 0) return { valid: false, error: `Missing ${depth} closing parenthes${depth > 1 ? "es" : "is"} — add ')' to balance`, parsed: "" };
+
+  // Check for dangling operators
+  const trimmed = expr.trim();
+  if (/[+\-*/^]\s*$/.test(trimmed)) {
+    const lastOp = trimmed.match(/[+\-*/^]\s*$/)?.[0]?.trim();
+    return { valid: false, error: `Expression ends with '${lastOp}' — add a value or variable after it`, parsed: "" };
+  }
+  if (/^[*/^]/.test(trimmed)) {
+    return { valid: false, error: `Expression starts with an operator — add a value before '${trimmed[0]}'`, parsed: "" };
+  }
+
+  // Check for consecutive operators
+  if (/[+\-*/^]\s*[+*/^]/.test(trimmed)) {
+    return { valid: false, error: "Two operators next to each other — remove one or add a value between them", parsed: "" };
+  }
+
+  // Check for empty function calls
+  const emptyFunc = trimmed.match(/(sqrt|ln|log|abs|min|max)\(\s*\)/);
+  if (emptyFunc) {
+    return { valid: false, error: `${emptyFunc[1]}() is empty — put a value inside the parentheses`, parsed: "" };
+  }
+
+  return { valid: true, error: null, parsed: trimmed };
+}
 
 // Evaluate curve: given x, k, and parameters, compute y
 function evalCurve(preset: string, x: number, k: number, wA: number, wB: number, amp: number, rLow: number, rHigh: number, customFn: ((x: number, k: number) => number) | null): number | null {
@@ -61,14 +116,11 @@ function evalCurve(preset: string, x: number, k: number, wA: number, wB: number,
     switch (preset) {
       case "cp": return k / x;
       case "ss": {
-        // StableSwap simplified: A*(x+y) + xy = A*D + (D/2)^2
-        // Approximate: y ≈ (k - amp*x) / (1 + amp) for visualization
         const y = (k - amp * x) / (1 + amp * x / k);
         return y > 0 ? y : null;
       }
       case "wt": return Math.pow(k / Math.pow(x, wA), 1 / wB);
       case "cl": {
-        // Concentrated: (√x - √pₐ)(√y - √p_b) = L²
         const sqrtPa = Math.sqrt(rLow * 100);
         const sqrtPb = Math.sqrt(rHigh * 100);
         const sqrtX = Math.sqrt(x);
@@ -80,7 +132,7 @@ function evalCurve(preset: string, x: number, k: number, wA: number, wB: number,
       }
       case "custom":
         if (customFn) return customFn(x, k);
-        return k / x; // fallback to constant product
+        return k / x;
       default: return k / x;
     }
   } catch {
@@ -90,6 +142,7 @@ function evalCurve(preset: string, x: number, k: number, wA: number, wB: number,
 
 const InvariantEditor = () => {
   const colors = useChartColors();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [expression, setExpression] = useState("x * y = k");
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [weightA, setWeightA] = useState(0.5);
@@ -101,41 +154,79 @@ const InvariantEditor = () => {
 
   const presetId = presets[selectedPreset]?.id || "cp";
 
+  // Validate expression in real-time
+  const validation = useMemo(() => {
+    if (presetId !== "custom") return { valid: true, error: null, parsed: expression };
+    return validateExpression(expression);
+  }, [expression, presetId]);
+
   // Parse custom expression into a function
   const customFn = useMemo(() => {
-    if (presetId !== "custom") return null;
+    if (presetId !== "custom" || !validation.valid) return null;
     try {
-      // Parse expression: replace math operators
-      let expr = expression.replace(/=/g, "").replace(/k/g, "").trim();
-      // Try to solve for y: if expression is "x * y" → y = k / x
-      // If "x^a * y^b" → y = (k / x^a)^(1/b)
-      // Simple heuristic parsing
-      if (expression.includes("*") && expression.includes("y") && expression.includes("x")) {
-        // Try: x^a * y^b = k → y = (k / x^a)^(1/b)
-        const match = expression.match(/x\^?([\d.]*)\s*[·×*]\s*y\^?([\d.]*)/);
-        if (match) {
-          const a = parseFloat(match[1]) || 1;
-          const b = parseFloat(match[2]) || 1;
-          return (x: number, k: number) => Math.pow(k / Math.pow(x, a), 1 / b);
-        }
-        // Simple x * y = k
-        return (x: number, k: number) => k / x;
+      let expr = expression;
+      // Remove "= k" part
+      expr = expr.replace(/\s*=\s*k\s*$/i, "").trim();
+      
+      // x^a * y^b pattern
+      const weightMatch = expr.match(/x\^?([\d.]*)\s*[·×*]\s*y\^?([\d.]*)/);
+      if (weightMatch) {
+        const a = parseFloat(weightMatch[1]) || 1;
+        const b = parseFloat(weightMatch[2]) || 1;
+        return (x: number, k: number) => Math.pow(k / Math.pow(x, a), 1 / b);
       }
-      if (expression.includes("+")) {
-        // x + y = k → y = k - x
+
+      // sqrt(x * y) or √(x·y)
+      if (/sqrt\s*\(\s*x\s*[*·×]\s*y\s*\)/.test(expr) || /√\s*\(\s*x\s*[*·×]\s*y\s*\)/.test(expr)) {
+        return (x: number, k: number) => (k * k) / x;
+      }
+
+      // x + y pattern (constant sum)
+      if (/^x\s*\+\s*y$/.test(expr.trim())) {
         return (x: number, k: number) => k - x;
       }
-      // Fallback
-      return (x: number, k: number) => k / x;
+
+      // x^a + y^b pattern
+      const sumMatch = expr.match(/x\^([\d.]+)\s*\+\s*y\^([\d.]+)/);
+      if (sumMatch) {
+        const a = parseFloat(sumMatch[1]);
+        const b = parseFloat(sumMatch[2]);
+        return (x: number, k: number) => {
+          const rem = k - Math.pow(x, a);
+          return rem > 0 ? Math.pow(rem, 1 / b) : null;
+        };
+      }
+
+      // Fallback: treat as x * y
+      if (expr.includes("x") && expr.includes("y")) {
+        return (x: number, k: number) => k / x;
+      }
+      
+      return null;
     } catch {
       return null;
     }
-  }, [expression, presetId]);
+  }, [expression, presetId, validation.valid]);
 
-  const insertSymbol = useCallback((sym: string) => {
-    setExpression(prev => prev + sym);
-    setSelectedPreset(4); // custom
-  }, []);
+  const insertAtCursor = useCallback((sym: string) => {
+    const input = inputRef.current;
+    if (input) {
+      const start = input.selectionStart ?? expression.length;
+      const end = input.selectionEnd ?? expression.length;
+      const newExpr = expression.slice(0, start) + sym + expression.slice(end);
+      setExpression(newExpr);
+      setSelectedPreset(4);
+      // Restore cursor position after render
+      setTimeout(() => {
+        input.focus();
+        const newPos = start + sym.length;
+        input.setSelectionRange(newPos, newPos);
+      }, 0);
+    } else {
+      setExpression(prev => prev + sym);
+      setSelectedPreset(4);
+    }
+  }, [expression]);
 
   const curveData = useMemo(() => {
     const data = [];
@@ -182,24 +273,107 @@ const InvariantEditor = () => {
           ))}
         </div>
 
-        {/* Expression input with math keyboard */}
+        {/* Expression input with validation */}
         <div className="space-y-2">
           <div className="relative">
-            <input value={expression} onChange={e => { setExpression(e.target.value); setSelectedPreset(4); }}
-              className="w-full bg-muted border border-border rounded-lg px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-foreground/30 transition-colors"
-              placeholder="Enter invariant expression (e.g., x^w1 · y^w2 = k)" />
-            <button className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md bg-secondary text-foreground hover:bg-secondary/80 transition-colors">
-              <Play className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          {/* Math keyboard */}
-          <div className="flex gap-1 flex-wrap">
-            {MATH_SYMBOLS.map(s => (
-              <button key={s.label} onClick={() => insertSymbol(s.insert)}
-                className="w-8 h-8 rounded-md bg-secondary border border-border text-xs font-mono text-foreground hover:bg-accent transition-colors flex items-center justify-center">
-                {s.label}
+            <input ref={inputRef} value={expression}
+              onChange={e => { setExpression(e.target.value); setSelectedPreset(4); }}
+              onKeyDown={e => {
+                // Allow typing math characters naturally
+                if (e.key === "*" || e.key === "/" || e.key === "+" || e.key === "-" || e.key === "^" || e.key === "(" || e.key === ")") {
+                  // Let default behavior handle it
+                }
+              }}
+              className={`w-full bg-muted border rounded-lg px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors ${
+                presetId === "custom" && !validation.valid ? "border-destructive/50 focus:border-destructive" : "border-border focus:border-foreground/30"
+              }`}
+              placeholder="Enter invariant expression (e.g., x^0.6 * y^0.4 = k)"
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {presetId === "custom" && (
+                <span className="mr-1">
+                  {validation.valid ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-success" />
+                  ) : (
+                    <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                  )}
+                </span>
+              )}
+              <button onClick={() => { setSelectedPreset(4); }}
+                className="p-1.5 rounded-md bg-secondary text-foreground hover:bg-secondary/80 transition-colors">
+                <Play className="w-3.5 h-3.5" />
               </button>
-            ))}
+            </div>
+          </div>
+
+          {/* Syntax error message */}
+          <AnimatePresence>
+            {presetId === "custom" && validation.error && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-semibold text-destructive">Syntax Error</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{validation.error}</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Enhanced math keyboard */}
+          <div className="space-y-1.5">
+            <div className="flex gap-0.5 flex-wrap">
+              <span className="text-[8px] text-muted-foreground w-8 flex items-center">Vars</span>
+              {MATH_KEYBOARD.filter(s => s.group === "var" || s.group === "const").map(s => (
+                <button key={s.label} onClick={() => insertAtCursor(s.insert)}
+                  className="w-8 h-7 rounded-md bg-secondary border border-border text-[11px] font-mono text-foreground hover:bg-accent transition-colors flex items-center justify-center">
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-0.5 flex-wrap">
+              <span className="text-[8px] text-muted-foreground w-8 flex items-center">Ops</span>
+              {MATH_KEYBOARD.filter(s => s.group === "op" || s.group === "bracket").map(s => (
+                <button key={s.label} onClick={() => insertAtCursor(s.insert)}
+                  className="w-8 h-7 rounded-md bg-secondary border border-border text-[11px] font-mono text-foreground hover:bg-accent transition-colors flex items-center justify-center">
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-0.5 flex-wrap">
+              <span className="text-[8px] text-muted-foreground w-8 flex items-center">Funcs</span>
+              {MATH_KEYBOARD.filter(s => s.group === "func").map(s => (
+                <button key={s.label} onClick={() => insertAtCursor(s.insert)}
+                  className="px-2 h-7 rounded-md bg-secondary border border-border text-[10px] font-mono text-foreground hover:bg-accent transition-colors flex items-center justify-center">
+                  {s.label}
+                </button>
+              ))}
+              {MATH_KEYBOARD.filter(s => s.group === "greek").map(s => (
+                <button key={s.label} onClick={() => insertAtCursor(s.insert)}
+                  className="w-8 h-7 rounded-md bg-secondary border border-border text-[11px] font-mono text-foreground hover:bg-accent transition-colors flex items-center justify-center">
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            {/* Quick templates */}
+            <div className="flex gap-1 flex-wrap mt-1">
+              <span className="text-[8px] text-muted-foreground flex items-center mr-1">Templates:</span>
+              {[
+                { label: "x·y = k", val: "x * y = k" },
+                { label: "x^a·y^b", val: "x^0.5 * y^0.5 = k" },
+                { label: "√(x·y)", val: "sqrt(x * y) = k" },
+                { label: "x + y", val: "x + y = k" },
+                { label: "x³ + y³", val: "x^3 + y^3 = k" },
+              ].map(t => (
+                <button key={t.label} onClick={() => { setExpression(t.val); setSelectedPreset(4); }}
+                  className="px-2 py-0.5 rounded text-[9px] font-mono text-muted-foreground hover:text-foreground bg-muted border border-border hover:bg-accent transition-colors">
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -285,8 +459,8 @@ const InvariantEditor = () => {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <DerivedProp label="Spot Price at x=100" value={spotPriceData.length > 10 ? spotPriceData[10].spotPrice.toFixed(4) : "—"} />
-          <DerivedProp label="Liquidity Density" value={presetId === "cp" ? "Uniform" : presetId === "ss" ? "Concentrated" : presetId === "cl" ? "Range-bound" : "Weighted"} />
-          <DerivedProp label="Convexity Profile" value={presetId === "cp" ? "Hyperbolic" : presetId === "ss" ? "Flat" : presetId === "cl" ? "Bounded" : "Power"} />
+          <DerivedProp label="Liquidity Density" value={presetId === "cp" ? "Uniform" : presetId === "ss" ? "Concentrated" : presetId === "cl" ? "Range-bound" : presetId === "custom" ? "Custom" : "Weighted"} />
+          <DerivedProp label="Convexity Profile" value={presetId === "cp" ? "Hyperbolic" : presetId === "ss" ? "Flat" : presetId === "cl" ? "Bounded" : presetId === "custom" ? "Varies" : "Power"} />
           <DerivedProp label="Reserve Ratio" value={presetId === "cl" ? `${rangeLower.toFixed(2)}–${rangeUpper.toFixed(2)}` : `${(weightA * 100).toFixed(0)}/${(weightB * 100).toFixed(0)}`} />
         </div>
       </motion.div>

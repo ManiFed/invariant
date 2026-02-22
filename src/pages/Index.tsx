@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FlaskConical, FileText, GraduationCap, Zap, TrendingDown, ArrowRightLeft, DollarSign, BarChart3, Target } from "lucide-react";
+import { ArrowRight, Beaker, FlaskConical, FileText, GraduationCap, Heart } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -55,7 +55,6 @@ const Index = () => {
             onClick={() => navigate("/beginner")}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity"
           >
-            <Beaker className="w-4 h-4" />
             Beginner Mode
             <ArrowRight className="w-4 h-4" />
           </button>
@@ -63,14 +62,12 @@ const Index = () => {
             onClick={() => navigate("/advanced")}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-border text-foreground font-medium hover:bg-secondary transition-colors"
           >
-            <FlaskConical className="w-4 h-4" />
             Advanced Mode
           </button>
           <button
             onClick={() => navigate("/docs")}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-border text-muted-foreground font-medium hover:bg-secondary transition-colors"
           >
-            <FileText className="w-4 h-4" />
             Documentation
           </button>
         </motion.div>
@@ -90,9 +87,9 @@ const Index = () => {
           </p>
           <div className="grid sm:grid-cols-3 gap-4">
             {[
-              { icon: ArrowRightLeft, title: "Constant Product", desc: "The formula x × y = k ensures trades always have a price. As one reserve decreases, the other must increase." },
-              { icon: TrendingDown, title: "Price Discovery", desc: "Prices emerge from reserve ratios. Arbitrageurs keep pool prices aligned with external markets." },
-              { icon: DollarSign, title: "LP Revenue", desc: "Liquidity providers earn trading fees. Every swap pays a small fee that accrues to the pool." },
+              { title: "Constant Product", desc: "The formula x × y = k ensures trades always have a price. As one reserve decreases, the other must increase." },
+              { title: "Price Discovery", desc: "Prices emerge from reserve ratios. Arbitrageurs keep pool prices aligned with external markets." },
+              { title: "LP Revenue", desc: "Liquidity providers earn trading fees. Every swap pays a small fee that accrues to the pool." },
             ].map((item, i) => (
               <motion.div
                 key={item.title}
@@ -102,7 +99,6 @@ const Index = () => {
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: i * 0.1 }}
               >
-                <item.icon className="w-5 h-5 text-foreground mb-3" />
                 <h3 className="text-sm font-semibold text-foreground mb-1.5">{item.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
@@ -125,26 +121,23 @@ const Index = () => {
           </p>
           <div className="grid sm:grid-cols-2 gap-3">
             {[
-              { icon: Zap, title: "Slippage", desc: "Why larger trades cost more. The curve gets steeper as you move further, making each additional unit more expensive.", color: "text-warning" },
-              { icon: TrendingDown, title: "Impermanent Loss", desc: "How automatic rebalancing causes LPs to underperform vs simply holding. IL ≈ 5.7% when price doubles.", color: "text-destructive" },
-              { icon: ArrowRightLeft, title: "Arbitrage", desc: "Profit-seeking traders who keep AMM prices aligned with external markets — at the LP's expense.", color: "text-chart-1" },
-              { icon: DollarSign, title: "Fee Revenue", desc: "Trading fees compensate LPs for impermanent loss. The tradeoff: higher fees discourage volume.", color: "text-success" },
-              { icon: BarChart3, title: "Volatility Risk", desc: "Price volatility drives both fee income and IL. Whether LPs profit depends on the fee tier vs volatility ratio.", color: "text-chart-4" },
-              { icon: Target, title: "Concentrated Liquidity", desc: "Capital efficiency through range-bound positions. Higher fee yield within range, zero fees outside it.", color: "text-primary" },
+              { title: "Slippage", desc: "Why larger trades cost more. The curve gets steeper as you move further, making each additional unit more expensive." },
+              { title: "Impermanent Loss", desc: "How automatic rebalancing causes LPs to underperform vs simply holding. IL ≈ 5.7% when price doubles." },
+              { title: "Arbitrage", desc: "Profit-seeking traders who keep AMM prices aligned with external markets — at the LP's expense." },
+              { title: "Fee Revenue", desc: "Trading fees compensate LPs for impermanent loss. The tradeoff: higher fees discourage volume." },
+              { title: "Volatility Risk", desc: "Price volatility drives both fee income and IL. Whether LPs profit depends on the fee tier vs volatility ratio." },
+              { title: "Concentrated Liquidity", desc: "Capital efficiency through range-bound positions. Higher fee yield within range, zero fees outside it." },
             ].map((item, i) => (
               <motion.div
                 key={item.title}
-                className="flex gap-3 p-4 rounded-xl bg-card border border-border"
+                className="p-4 rounded-xl bg-card border border-border"
                 initial={{ opacity: 0, x: -10 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: i * 0.05 }}
               >
-                <item.icon className={`w-4 h-4 mt-0.5 shrink-0 ${item.color}`} />
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-0.5">{item.title}</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
-                </div>
+                <h3 className="text-sm font-semibold text-foreground mb-0.5">{item.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -215,7 +208,7 @@ const Index = () => {
       </section>
 
       {/* Mode Cards */}
-      <section className="max-w-4xl mx-auto px-8 pb-24">
+      <section className="max-w-4xl mx-auto px-8 pb-16">
         <div className="grid md:grid-cols-2 gap-6">
           <ModeCard
             title="Beginner Mode"
@@ -234,6 +227,31 @@ const Index = () => {
             delay={0.1}
           />
         </div>
+      </section>
+
+      {/* Support Banner */}
+      <section className="max-w-4xl mx-auto px-8 pb-24">
+        <motion.div
+          className="rounded-xl border border-border p-6 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          <h3 className="text-sm font-semibold text-foreground mb-2">Support Invariant Studio</h3>
+          <p className="text-xs text-muted-foreground mb-4 max-w-md mx-auto">
+            This project is free and open. If you find it useful for research, teaching, or building, consider supporting its development.
+          </p>
+          <a
+            href="https://buy.stripe.com/test_placeholder"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <Heart className="w-4 h-4" />
+            Support the Project
+          </a>
+        </motion.div>
       </section>
 
       {/* Footer */}
