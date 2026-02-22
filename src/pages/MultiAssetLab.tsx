@@ -53,9 +53,17 @@ const LIBRARY_AMMS: LibraryAMM[] = [
 ];
 
 const SESSION_KEY = "multiasset_invariant";
+const FEE_SESSION_KEY = "multiasset_fees";
+const PAIR_FEE_SESSION_KEY = "multiasset_pair_fees";
 
 function loadInvariant(): SavedInvariant | null {
   try { const raw = sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function loadFees(): number[] | null {
+  try { const raw = sessionStorage.getItem(FEE_SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function loadPairFees(): Record<string, number[]> | null {
+  try { const raw = sessionStorage.getItem(PAIR_FEE_SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 
 const MultiAssetLab = () => {
@@ -63,6 +71,8 @@ const MultiAssetLab = () => {
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
   const [savedInvariant, setSavedInvariant] = useState<SavedInvariant | null>(loadInvariant);
+  const [savedFees, setSavedFees] = useState<number[] | null>(loadFees);
+  const [savedPairFees, setSavedPairFees] = useState<Record<string, number[]> | null>(loadPairFees);
   const [showImport, setShowImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [assets, setAssets] = useState<Asset[]>(defaultAssets);
@@ -70,6 +80,16 @@ const MultiAssetLab = () => {
   const handleSaveInvariant = useCallback((inv: SavedInvariant) => {
     setSavedInvariant(inv);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(inv));
+  }, []);
+
+  const handleSaveFees = useCallback((fees: number[]) => {
+    setSavedFees(fees);
+    sessionStorage.setItem(FEE_SESSION_KEY, JSON.stringify(fees));
+  }, []);
+
+  const handleSavePairFees = useCallback((pairFees: Record<string, number[]>) => {
+    setSavedPairFees(pairFees);
+    sessionStorage.setItem(PAIR_FEE_SESSION_KEY, JSON.stringify(pairFees));
   }, []);
 
   const importFromLibrary = (amm: LibraryAMM) => {
@@ -87,6 +107,8 @@ const MultiAssetLab = () => {
       try {
         const json = JSON.parse(ev.target?.result as string);
         const inv: SavedInvariant = { expression: json.formula || json.expression || "x * y = k", presetId: "custom", weightA: json.params?.wA ?? json.weightA ?? 0.5, weightB: json.params?.wB ?? json.weightB ?? 0.5, kValue: json.params?.k ?? json.kValue ?? 10000, amplification: json.params?.amp ?? json.amplification ?? 10, rangeLower: json.rangeLower ?? 0.5, rangeUpper: json.rangeUpper ?? 2.0 };
+        if (json.fees) handleSaveFees(json.fees);
+        if (json.pairFees) handleSavePairFees(json.pairFees);
         handleSaveInvariant(inv);
         setShowImport(false);
         setActiveTab("invariant");
@@ -97,7 +119,7 @@ const MultiAssetLab = () => {
   };
 
   const addAsset = () => {
-    if (assets.length >= 5) return;
+    if (assets.length >= 8) return;
     const idx = assets.length;
     setAssets(prev => [...prev, { id: String(Date.now()), symbol: `TKN${idx + 1}`, reserve: 1000, weight: 0.1, color: ASSET_COLORS[idx % ASSET_COLORS.length] }]);
   };
@@ -220,12 +242,12 @@ const MultiAssetLab = () => {
                   onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant}
                 />
               )}
-              {activeTab === "fees" && <FeeStructureEditor assets={assets} />}
-              {activeTab === "montecarlo" && <MonteCarloEngine assets={assets} />}
-              {activeTab === "arbitrage" && <ArbitrageEngine assets={assets} />}
-              {activeTab === "liquidity" && <LiquidityAnalyzer assets={assets} />}
-              {activeTab === "stability" && <StabilityAnalysis assets={assets} />}
-              {activeTab === "deploy" && <DeploymentExport assets={assets} />}
+              {activeTab === "fees" && <FeeStructureEditor assets={assets} onSaveFees={handleSaveFees} savedFees={savedFees} onSavePairFees={handleSavePairFees} savedPairFees={savedPairFees} />}
+              {activeTab === "montecarlo" && <MonteCarloEngine assets={assets} savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "arbitrage" && <ArbitrageEngine assets={assets} savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "liquidity" && <LiquidityAnalyzer assets={assets} savedInvariant={savedInvariant} />}
+              {activeTab === "stability" && <StabilityAnalysis assets={assets} savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "deploy" && <DeploymentExport assets={assets} savedInvariant={savedInvariant} savedFees={savedFees} />}
             </motion.div>
           </AnimatePresence>
         </main>

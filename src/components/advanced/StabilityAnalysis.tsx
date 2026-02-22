@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Shield, AlertTriangle, CheckCircle, HelpCircle } from "lucide-react";
+import { Shield, AlertTriangle, CheckCircle, HelpCircle, Info } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -10,14 +10,14 @@ type InvariantType = "cp" | "ss" | "wt" | "cl" | "custom";
 const HELP: Record<string, { title: string; desc: string }> = {
   invariantType: { title: "Invariant Type", desc: "The AMM curve formula to test. Each has different risk characteristics under stress conditions." },
   feeRate: { title: "Fee Rate", desc: "Swap fee percentage. Higher fees can introduce path dependence and price distortion." },
-  volatility: { title: "Volatility", desc: "Annualized price volatility used in stress scenarios. Higher vol tests more extreme conditions." },
+  volatility: { title: "Volatility", desc: "Annualized price volatility used in stress scenarios." },
   insolvency: { title: "Insolvency Check", desc: "Tests whether the pool can maintain positive reserves in all tokens under extreme price movements." },
-  pathDep: { title: "Path Dependence", desc: "Checks if the final pool state depends on the order of trades, not just the final price. Ideally path-independent." },
+  pathDep: { title: "Path Dependence", desc: "Checks if the final pool state depends on the order of trades, not just the final price." },
   feeDistortion: { title: "Fee Distortion", desc: "Measures how much fees distort the invariant curve away from the theoretical ideal." },
   inventory: { title: "Inventory Runaway", desc: "Tests whether one-sided price moves cause unsustainable inventory concentration." },
   reflexivity: { title: "Reflexivity Loops", desc: "Checks for feedback loops where pool mechanics amplify external price movements." },
-  stressChart: { title: "Stress Response", desc: "Shows how the pool behaves under a range of extreme scenarios. Values above the threshold indicate potential instability." },
-  customExpr: { title: "Custom Invariant", desc: "Define your own invariant formula. Use 'x' and 'y' for reserves. The formula should equal a constant k." },
+  stressChart: { title: "Stress Response", desc: "Shows how the pool behaves under a range of extreme scenarios." },
+  customExpr: { title: "Custom Invariant", desc: "Define your own invariant formula. Use 'x' and 'y' for reserves." },
 };
 
 function HelpBtn({ id }: { id: string }) {
@@ -46,14 +46,45 @@ interface Asset {
   color: string;
 }
 
-const StabilityAnalysis = ({ assets }: { assets?: Asset[] }) => {
+interface SavedInvariant {
+  expression: string;
+  presetId: string;
+  weightA: number;
+  weightB: number;
+  kValue: number;
+  amplification: number;
+  rangeLower: number;
+  rangeUpper: number;
+}
+
+const StabilityAnalysis = ({ assets, savedInvariant, savedFees }: { assets?: Asset[]; savedInvariant?: SavedInvariant | null; savedFees?: number[] | null }) => {
   const colors = useChartColors();
   const [invariant, setInvariant] = useState<InvariantType>("cp");
   const [feeRate, setFeeRate] = useState(0.3);
   const [volatility, setVolatility] = useState(80);
   const [customExpr, setCustomExpr] = useState("x^0.6 * y^0.4");
 
-  const effectiveInvariant = invariant === "custom" ? "wt" : invariant; // custom treated as weighted variant for analysis
+  // Use saved invariant to set defaults
+  useEffect(() => {
+    if (savedInvariant) {
+      setCustomExpr(savedInvariant.expression);
+      if (savedInvariant.presetId === "cp") setInvariant("cp");
+      else if (savedInvariant.presetId === "ss") setInvariant("ss");
+      else if (savedInvariant.presetId === "wt") setInvariant("wt");
+      else if (savedInvariant.presetId === "cl") setInvariant("cl");
+      else setInvariant("custom");
+    }
+  }, [savedInvariant]);
+
+  // Use saved fees to set fee rate
+  useEffect(() => {
+    if (savedFees && savedFees.length > 0) {
+      const avgBps = savedFees.reduce((a, b) => a + b, 0) / savedFees.length;
+      setFeeRate(parseFloat((avgBps / 100).toFixed(2)));
+    }
+  }, [savedFees]);
+
+  const effectiveInvariant = invariant === "custom" ? "wt" : invariant;
 
   const checks = useMemo(() => {
     const numAssets = assets?.length ?? 2;
@@ -91,6 +122,30 @@ const StabilityAnalysis = ({ assets }: { assets?: Asset[] }) => {
 
   return (
     <div className="space-y-6">
+      {/* Saved config context */}
+      {(savedInvariant || savedFees) && (
+        <div className="surface-elevated rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Info className="w-3.5 h-3.5 text-muted-foreground" />
+            <h4 className="text-[10px] font-bold text-foreground">Using Saved Configuration</h4>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {savedInvariant && (
+              <div className="px-2 py-1 rounded-md bg-secondary border border-border">
+                <span className="text-[9px] text-muted-foreground">Invariant: </span>
+                <span className="text-[9px] font-mono text-foreground">{savedInvariant.expression}</span>
+              </div>
+            )}
+            {savedFees && (
+              <div className="px-2 py-1 rounded-md bg-secondary border border-border">
+                <span className="text-[9px] text-muted-foreground">Fee: </span>
+                <span className="text-[9px] font-mono text-foreground">{(savedFees.reduce((a,b) => a+b, 0) / savedFees.length).toFixed(0)} bps avg</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="surface-elevated rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <Shield className="w-4 h-4 text-foreground" />
@@ -128,6 +183,7 @@ const StabilityAnalysis = ({ assets }: { assets?: Asset[] }) => {
             </div>
             <span className="text-[10px] font-mono text-foreground float-right">{feeRate.toFixed(2)}</span>
             <input type="range" min={0.01} max={1} step={0.01} value={feeRate} onChange={e => setFeeRate(Number(e.target.value))} className="w-full accent-foreground h-1" />
+            {savedFees && <p className="text-[8px] text-muted-foreground mt-0.5">From fee structure</p>}
           </div>
           <div>
             <div className="flex items-center gap-1 mb-1">

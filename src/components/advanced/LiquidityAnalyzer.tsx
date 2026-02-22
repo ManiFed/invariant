@@ -83,7 +83,18 @@ interface Asset {
   color: string;
 }
 
-const LiquidityAnalyzer = ({ assets: multiAssets }: { assets?: Asset[] }) => {
+interface SavedInvariant {
+  expression: string;
+  presetId: string;
+  weightA: number;
+  weightB: number;
+  kValue: number;
+  amplification: number;
+  rangeLower: number;
+  rangeUpper: number;
+}
+
+const LiquidityAnalyzer = ({ assets: multiAssets, savedInvariant }: { assets?: Asset[]; savedInvariant?: SavedInvariant | null }) => {
   const colors = useChartColors();
   const [compareA, setCompareA] = useState("cp");
   const [compareB, setCompareB] = useState("cl");
