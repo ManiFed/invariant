@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Boxes, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, Boxes, ChevronUp, ChevronDown, GitCompare } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import MultiAssetInvariantEditor from "@/components/labs/MultiAssetInvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
@@ -10,17 +10,19 @@ import LiquidityAnalyzer from "@/components/advanced/LiquidityAnalyzer";
 import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import DeploymentExport from "@/components/advanced/DeploymentExport";
 import FeeStructureEditor from "@/components/advanced/FeeStructureEditor";
+import AMMComparison from "@/components/advanced/AMMComparison";
 import { Asset, ASSET_COLORS, defaultAssets } from "@/components/labs/MultiAssetComponents";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
   { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your multi-asset AMM curve", step: 1 },
   { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution per asset pair", step: 2 },
-  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Multi-asset correlated simulations", step: 3 },
-  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Cross-pair toxic flow & MEV", step: 4 },
-  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Multi-asset depth & efficiency", step: 5 },
-  { id: "stability", label: "Stability", icon: Shield, desc: "Multi-asset edge case diagnostics", step: 6 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export multi-token Solidity contract", step: 7 },
+  { id: "compare", label: "Compare", icon: GitCompare, desc: "Import an AMM to compare against", step: 3 },
+  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Multi-asset correlated simulations", step: 4 },
+  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Cross-pair toxic flow & MEV", step: 5 },
+  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Multi-asset depth & efficiency", step: 6 },
+  { id: "stability", label: "Stability", icon: Shield, desc: "Multi-asset edge case diagnostics", step: 7 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export multi-token Solidity contract", step: 8 },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -261,6 +263,7 @@ const MultiAssetLab = () => {
                 />
               )}
               {activeTab === "fees" && <FeeStructureEditor assets={assets} onSaveFees={handleSaveFees} savedFees={savedFees} onSavePairFees={handleSavePairFees} savedPairFees={savedPairFees} />}
+              {activeTab === "compare" && <AMMComparison savedInvariant={savedInvariant} assets={assets} />}
               {activeTab === "montecarlo" && <MonteCarloEngine assets={assets} savedInvariant={savedInvariant} savedFees={savedFees} />}
               {activeTab === "arbitrage" && <ArbitrageEngine assets={assets} savedInvariant={savedInvariant} savedFees={savedFees} />}
               {activeTab === "liquidity" && <LiquidityAnalyzer assets={assets} savedInvariant={savedInvariant} />}

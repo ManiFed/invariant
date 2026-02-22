@@ -192,10 +192,13 @@ const BeginnerMode = () => {
       {/* Teaching Lab banner — dismissible */}
       {showBanner &&
       <div className="border-b border-border px-6 py-2 bg-secondary/50 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Have questions about how AMMs work?</p>
+          <p className="text-xs text-muted-foreground">Have questions about how AMMs work? Want more features?</p>
           <div className="flex items-center gap-2">
             <button onClick={() => navigate("/learn")} className="text-xs font-medium text-foreground hover:underline inline-flex items-center gap-1">
-              Try the Teaching Lab <ArrowRight className="w-3 h-3" />
+              Teaching Lab <ArrowRight className="w-3 h-3" />
+            </button>
+            <button onClick={() => navigate("/advanced")} className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1">
+              Advanced Mode <ArrowRight className="w-3 h-3" />
             </button>
             <button onClick={() => setShowBanner(false)} className="text-muted-foreground hover:text-foreground transition-colors">
               <span className="text-xs">✕</span>
@@ -555,27 +558,6 @@ const BeginnerMode = () => {
 
           </GuidedSection>
           </div>
-
-          {/* Liquidity Range Assistant */}
-          <LiquidityRangeAssistant
-            selectedTemplate={selectedTemplate}
-            tokenAPrice={tokenAPrice}
-            liquidity={liquidity}
-            volMultiplier={volMultiplier}
-            feeRate={feeRate}
-            colors={colors} />
-
-
-          {/* Risk Dashboard */}
-          <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <h3 className="text-sm font-semibold text-foreground mb-4">Risk Dashboard</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <RiskMetric label="Downside Deviation" value={`${(volMultiplier * 4.2).toFixed(1)}%`} level={volMultiplier > 1.5 ? "high" : volMultiplier > 0.8 ? "medium" : "low"} />
-              <RiskMetric label="Inventory Imbalance" value={selectedTemplate === "weighted" ? "Low" : "Medium"} level={selectedTemplate === "weighted" ? "low" : "medium"} />
-              <RiskMetric label="Volatility Sensitivity" value={selectedTemplate === "concentrated" ? "High" : "Medium"} level={selectedTemplate === "concentrated" ? "high" : "medium"} />
-              <RiskMetric label="Rebalance Frequency" value={selectedTemplate === "concentrated" ? "High" : "Low"} level={selectedTemplate === "concentrated" ? "high" : "low"} />
-            </div>
-          </motion.div>
 
           {/* Quick Comparison */}
           <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
