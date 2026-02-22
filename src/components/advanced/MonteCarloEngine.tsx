@@ -44,7 +44,15 @@ function HelpBtn({ id }: { id: string }) {
   );
 }
 
-const MonteCarloEngine = () => {
+interface Asset {
+  id: string;
+  symbol: string;
+  reserve: number;
+  weight: number;
+  color: string;
+}
+
+const MonteCarloEngine = ({ assets }: { assets?: Asset[] }) => {
   const colors = useChartColors();
   const [volatility, setVolatility] = useState(80);
   const [drift, setDrift] = useState(0);
@@ -163,6 +171,23 @@ const MonteCarloEngine = () => {
 
   return (
     <div className="space-y-6">
+      {/* Multi-asset context */}
+      {assets && assets.length > 0 && (
+        <div className="surface-elevated rounded-xl p-4">
+          <h4 className="text-[10px] font-bold text-foreground mb-2">Multi-Asset Simulation</h4>
+          <p className="text-[9px] text-muted-foreground mb-2">Simulating correlated price paths for {assets.length} assets with portfolio weights.</p>
+          <div className="flex gap-2 flex-wrap">
+            {assets.map(a => (
+              <span key={a.id} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-secondary border border-border text-[9px] font-mono">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color }} />
+                <span className="text-foreground">{a.symbol}</span>
+                <span className="text-muted-foreground">{(a.weight * 100).toFixed(0)}%</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="surface-elevated rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">

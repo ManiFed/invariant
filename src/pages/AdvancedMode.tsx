@@ -144,10 +144,13 @@ const AdvancedMode = () => {
           </button>
           <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
           {savedInvariant && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border">
+            <button
+              onClick={() => setActiveTab("invariant")}
+              className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors cursor-pointer"
+            >
               <span className="text-[9px] text-muted-foreground">Active:</span>
               <span className="text-[10px] font-mono text-foreground">{savedInvariant.expression}</span>
-            </div>
+            </button>
           )}
           <ThemeToggle />
         </div>

@@ -75,7 +75,15 @@ function parseCustomMetrics(expr: string): { efficiency: string; avgSlippage: st
   };
 }
 
-const LiquidityAnalyzer = () => {
+interface Asset {
+  id: string;
+  symbol: string;
+  reserve: number;
+  weight: number;
+  color: string;
+}
+
+const LiquidityAnalyzer = ({ assets: multiAssets }: { assets?: Asset[] }) => {
   const colors = useChartColors();
   const [compareA, setCompareA] = useState("cp");
   const [compareB, setCompareB] = useState("cl");
@@ -200,6 +208,25 @@ const LiquidityAnalyzer = () => {
 
   return (
     <div className="space-y-6">
+      {/* Multi-asset context */}
+      {multiAssets && multiAssets.length > 0 && (
+        <div className="surface-elevated rounded-xl p-4">
+          <h4 className="text-[10px] font-bold text-foreground mb-2">Multi-Asset Liquidity Profile</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {multiAssets.map(a => (
+              <div key={a.id} className="p-2 rounded-lg bg-secondary border border-border">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color }} />
+                  <span className="text-[10px] font-mono text-foreground">{a.symbol}</span>
+                </div>
+                <p className="text-[9px] text-muted-foreground">Reserve: {a.reserve.toLocaleString()} · Weight: {(a.weight * 100).toFixed(0)}%</p>
+                <p className="text-[9px] text-muted-foreground">Effective liq: ${(a.reserve * a.weight * 100).toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="surface-elevated rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="w-4 h-4 text-foreground" />
