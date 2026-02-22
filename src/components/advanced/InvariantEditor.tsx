@@ -68,46 +68,66 @@ const MATH_KEYBOARD = [
   { label: "γ", insert: "γ", group: "greek" },
 ];
 
+// Normalize expression: convert unicode math symbols to parseable form
+function normalizeExpr(expr: string): string {
+  return expr
+    .replace(/·/g, "*")
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/−/g, "-")
+    .replace(/√/g, "sqrt")
+    .replace(/π/g, "Math.PI")
+    .replace(/²/g, "^2")
+    .replace(/³/g, "^3")
+    .replace(/₀/g, "0").replace(/₁/g, "1").replace(/₂/g, "2").replace(/₃/g, "3")
+    .replace(/₄/g, "4").replace(/₅/g, "5").replace(/₆/g, "6").replace(/₇/g, "7")
+    .replace(/₈/g, "8").replace(/₉/g, "9")
+    .replace(/ₐ/g, "a").replace(/ᵦ/g, "b")
+    .replace(/α/g, "a").replace(/β/g, "b").replace(/γ/g, "g");
+}
+
 // Validate and parse custom expression
 function validateExpression(expr: string): { valid: boolean; error: string | null; parsed: string } {
   if (!expr.trim()) return { valid: false, error: "Expression is empty", parsed: "" };
   
+  const normalized = normalizeExpr(expr);
+  
   // Check for required variables
-  if (!expr.includes("x") && !expr.includes("y")) {
+  if (!normalized.includes("x") && !normalized.includes("y")) {
     return { valid: false, error: "Expression must contain at least 'x' or 'y' reserve variables", parsed: "" };
   }
 
   // Check balanced parentheses
   let depth = 0;
-  for (const ch of expr) {
+  for (const ch of normalized) {
     if (ch === "(") depth++;
     if (ch === ")") depth--;
     if (depth < 0) return { valid: false, error: "Unexpected closing parenthesis ')' — check your bracket placement", parsed: "" };
   }
   if (depth > 0) return { valid: false, error: `Missing ${depth} closing parenthes${depth > 1 ? "es" : "is"} — add ')' to balance`, parsed: "" };
 
-  // Check for dangling operators
-  const trimmed = expr.trim();
-  if (/[+\-*/^]\s*$/.test(trimmed)) {
-    const lastOp = trimmed.match(/[+\-*/^]\s*$/)?.[0]?.trim();
+  // Check for dangling operators (but only real ops, not after = k)
+  const withoutEqK = normalized.replace(/\s*=\s*k\s*$/i, "").trim();
+  if (/[+\-*/^]\s*$/.test(withoutEqK)) {
+    const lastOp = withoutEqK.match(/[+\-*/^]\s*$/)?.[0]?.trim();
     return { valid: false, error: `Expression ends with '${lastOp}' — add a value or variable after it`, parsed: "" };
   }
-  if (/^[*/^]/.test(trimmed)) {
-    return { valid: false, error: `Expression starts with an operator — add a value before '${trimmed[0]}'`, parsed: "" };
+  if (/^[*/^]/.test(withoutEqK)) {
+    return { valid: false, error: `Expression starts with an operator — add a value before '${withoutEqK[0]}'`, parsed: "" };
   }
 
-  // Check for consecutive operators
-  if (/[+\-*/^]\s*[+*/^]/.test(trimmed)) {
+  // Check for consecutive operators (but allow negative exponents like ^-2)
+  if (/[+*/^]\s*[+*/^]/.test(withoutEqK)) {
     return { valid: false, error: "Two operators next to each other — remove one or add a value between them", parsed: "" };
   }
 
   // Check for empty function calls
-  const emptyFunc = trimmed.match(/(sqrt|ln|log|abs|min|max)\(\s*\)/);
+  const emptyFunc = normalized.match(/(sqrt|ln|log|abs|min|max)\(\s*\)/);
   if (emptyFunc) {
     return { valid: false, error: `${emptyFunc[1]}() is empty — put a value inside the parentheses`, parsed: "" };
   }
 
-  return { valid: true, error: null, parsed: trimmed };
+  return { valid: true, error: null, parsed: normalized };
 }
 
 // Evaluate curve: given x, k, and parameters, compute y
@@ -164,20 +184,25 @@ const InvariantEditor = () => {
   const customFn = useMemo(() => {
     if (presetId !== "custom" || !validation.valid) return null;
     try {
-      let expr = expression;
+      let expr = normalizeExpr(expression);
       // Remove "= k" part
       expr = expr.replace(/\s*=\s*k\s*$/i, "").trim();
       
-      // x^a * y^b pattern
-      const weightMatch = expr.match(/x\^?([\d.]*)\s*[·×*]\s*y\^?([\d.]*)/);
+      // x^a * y^b pattern (handles x^0.4 * y^0.6, x^0.4*y^0.6, etc.)
+      const weightMatch = expr.match(/x\s*\^\s*([\d.]+)\s*\*\s*y\s*\^\s*([\d.]+)/);
       if (weightMatch) {
         const a = parseFloat(weightMatch[1]) || 1;
         const b = parseFloat(weightMatch[2]) || 1;
         return (x: number, k: number) => Math.pow(k / Math.pow(x, a), 1 / b);
       }
 
-      // sqrt(x * y) or √(x·y)
-      if (/sqrt\s*\(\s*x\s*[*·×]\s*y\s*\)/.test(expr) || /√\s*\(\s*x\s*[*·×]\s*y\s*\)/.test(expr)) {
+      // x * y pattern (plain constant product, no exponents)
+      if (/^x\s*\*\s*y$/.test(expr.trim())) {
+        return (x: number, k: number) => k / x;
+      }
+
+      // sqrt(x * y) or sqrt(x*y)
+      if (/sqrt\s*\(\s*x\s*\*\s*y\s*\)/.test(expr)) {
         return (x: number, k: number) => (k * k) / x;
       }
 
@@ -187,7 +212,7 @@ const InvariantEditor = () => {
       }
 
       // x^a + y^b pattern
-      const sumMatch = expr.match(/x\^([\d.]+)\s*\+\s*y\^([\d.]+)/);
+      const sumMatch = expr.match(/x\s*\^\s*([\d.]+)\s*\+\s*y\s*\^\s*([\d.]+)/);
       if (sumMatch) {
         const a = parseFloat(sumMatch[1]);
         const b = parseFloat(sumMatch[2]);
@@ -197,7 +222,16 @@ const InvariantEditor = () => {
         };
       }
 
-      // Fallback: treat as x * y
+      // a*x^n * y^m pattern (coefficient included)
+      const coeffMatch = expr.match(/([\d.]+)\s*\*\s*x\s*\^\s*([\d.]+)\s*\*\s*y\s*\^\s*([\d.]+)/);
+      if (coeffMatch) {
+        const coeff = parseFloat(coeffMatch[1]);
+        const a = parseFloat(coeffMatch[2]);
+        const b = parseFloat(coeffMatch[3]);
+        return (x: number, k: number) => Math.pow(k / (coeff * Math.pow(x, a)), 1 / b);
+      }
+
+      // Fallback: treat as x * y if both vars present
       if (expr.includes("x") && expr.includes("y")) {
         return (x: number, k: number) => k / x;
       }
