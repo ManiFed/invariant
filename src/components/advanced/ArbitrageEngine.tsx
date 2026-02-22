@@ -65,7 +65,7 @@ const ArbitrageEngine = () => {
   const totalFees = arbData.reduce((s, d) => s + d.feeCapture, 0);
   const captureRate = totalArbVolume > 0 ? ((totalFees / totalArbVolume) * 100).toFixed(2) : "0";
 
-  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10, color: colors.tooltipText };
 
   return (
     <div className="space-y-6">

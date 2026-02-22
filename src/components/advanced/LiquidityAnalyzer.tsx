@@ -193,7 +193,7 @@ const LiquidityAnalyzer = () => {
     return dims.map((d, i) => ({ dimension: d, [compareA]: Math.round(vA[i]), [compareB]: Math.round(vB[i]) }));
   }, [compareA, compareB, customASlip, customBSlip]);
 
-  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10, color: colors.tooltipText };
 
   const needsCustomA = compareA === "customA" || compareB === "customA";
   const needsCustomB = compareA === "customB" || compareB === "customB";

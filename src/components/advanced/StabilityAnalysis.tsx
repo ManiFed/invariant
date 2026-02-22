@@ -73,7 +73,7 @@ const StabilityAnalysis = () => {
   const passCount = checks.filter(c => c.status === "pass").length;
   const warnCount = checks.filter(c => c.status === "warn").length;
   const failCount = checks.filter(c => c.status === "fail").length;
-  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10, color: colors.tooltipText };
 
   return (
     <div className="space-y-6">

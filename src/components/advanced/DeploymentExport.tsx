@@ -285,7 +285,7 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10, color: colors.tooltipText };
 
   return (
     <div className="space-y-4">

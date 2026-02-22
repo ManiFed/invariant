@@ -147,7 +147,7 @@ const MonteCarloEngine = () => {
     };
   }, [volatility, drift, jumpProb, jumpSize, numPaths, timeHorizon, feeRate, seed]);
 
-  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 };
+  const tooltipStyle = { background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10, color: colors.tooltipText };
 
   const handleExport = () => {
     const csv = ["Day," + Array.from({ length: Math.min(numPaths, 20) }, (_, i) => `Path${i}`).join(",")];
