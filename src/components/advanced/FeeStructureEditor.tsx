@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { DollarSign, HelpCircle, RotateCcw, Plus, Minus, Download, Save, LineChart as LineChartIcon, SlidersHorizontal } from "lucide-react";
+import { DollarSign, HelpCircle, RotateCcw, Plus, Minus, Download, Save, LineChart as LineChartIcon, SlidersHorizontal, Code2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line, ReferenceLine } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -170,7 +170,8 @@ export default function FeeStructureEditor({ assets, onSaveFees, savedFees, onSa
     return Math.max(1, Math.round(breakevenBps));
   }, []);
 
-  const [editMode, setEditMode] = useState<"sliders" | "graph">("sliders");
+  const [editMode, setEditMode] = useState<"sliders" | "graph" | "expression">("sliders");
+  const [feeExpression, setFeeExpression] = useState("fee(price) = 30 + 20 * sin(price * π / 200)");
   const graphContainerRef = useRef<HTMLDivElement>(null);
 
   // Draggable graph data
@@ -302,10 +303,14 @@ export default function FeeStructureEditor({ assets, onSaveFees, savedFees, onSa
               className={`flex items-center gap-1 px-2.5 py-1 text-[9px] font-medium transition-all ${editMode === "graph" ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               <LineChartIcon className="w-3 h-3" /> Graph
             </button>
+            <button onClick={() => setEditMode("expression")}
+              className={`flex items-center gap-1 px-2.5 py-1 text-[9px] font-medium transition-all ${editMode === "expression" ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              <Code2 className="w-3 h-3" /> Expression
+            </button>
           </div>
         </div>
 
-        {/* Fee editing: sliders or draggable graph */}
+        {/* Fee editing: sliders, draggable graph, or expression */}
         {editMode === "sliders" ? (
           <div className="space-y-1">
             <div className="flex items-center justify-between mb-1">
@@ -325,7 +330,7 @@ export default function FeeStructureEditor({ assets, onSaveFees, savedFees, onSa
               ))}
             </div>
           </div>
-        ) : (
+        ) : editMode === "graph" ? (
           <div>
             <p className="text-[9px] text-muted-foreground mb-2">Click and drag on the graph to set fee values at fine precision.</p>
             <div
@@ -348,10 +353,66 @@ export default function FeeStructureEditor({ assets, onSaveFees, savedFees, onSa
               </ResponsiveContainer>
             </div>
           </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-secondary border border-border space-y-2">
+              <label className="text-[9px] text-muted-foreground">Fee expression — define fee as a function of price (0–200)</label>
+              <textarea
+                value={feeExpression}
+                onChange={e => setFeeExpression(e.target.value)}
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-[10px] font-mono text-foreground outline-none resize-none h-16"
+                placeholder="fee(price) = 30 + 20 * sin(price * π / 200)"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    try {
+                      const newFees = Array.from({ length: NUM_POINTS }, (_, i) => {
+                        const price = (i / NUM_POINTS) * 200;
+                        // Simple expression evaluator
+                        const expr = feeExpression
+                          .replace(/fee\(.*?\)\s*=\s*/, "")
+                          .replace(/π/g, String(Math.PI))
+                          .replace(/pi/gi, String(Math.PI))
+                          .replace(/price/g, String(price))
+                          .replace(/sin/g, "Math.sin")
+                          .replace(/cos/g, "Math.cos")
+                          .replace(/abs/g, "Math.abs")
+                          .replace(/sqrt/g, "Math.sqrt")
+                          .replace(/pow/g, "Math.pow")
+                          .replace(/min/g, "Math.min")
+                          .replace(/max/g, "Math.max");
+                        const val = new Function(`return ${expr}`)();
+                        return Math.max(1, Math.min(100, Math.round(Number(val) || 30)));
+                      });
+                      updateFees(newFees);
+                    } catch {
+                      alert("Invalid expression. Use 'price' as variable. Example: 30 + 20 * sin(price * π / 200)");
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[10px] font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                >
+                  Apply Expression
+                </button>
+                <span className="text-[8px] text-muted-foreground">Use 'price' (0–200), sin, cos, abs, sqrt, π. Output in bps (1–100).</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: "Flat 30bps", expr: "fee(price) = 30" },
+                { label: "U-shaped", expr: "fee(price) = 10 + 80 * pow(abs(price - 100) / 100, 2)" },
+                { label: "Bell curve", expr: "fee(price) = 80 - 60 * pow(abs(price - 100) / 100, 2)" },
+              ].map(p => (
+                <button key={p.label} onClick={() => setFeeExpression(p.expr)}
+                  className="px-2 py-1.5 rounded-md text-[9px] font-medium bg-secondary text-muted-foreground hover:text-foreground border border-border transition-colors">
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Fee Distribution Graph */}
       <div className="grid md:grid-cols-2 gap-4">
         <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <div className="flex items-center gap-1.5 mb-1">
