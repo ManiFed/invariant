@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FileText, GraduationCap, Heart, BookOpen, Library, Lightbulb } from "lucide-react";
+import { ArrowRight, Beaker, FileText, GraduationCap, Heart, Library, Lightbulb, FlaskConical } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -63,6 +63,14 @@ const Index = () => {
             icon={<Lightbulb className="w-5 h-5" />}
             badge="Pro"
             onClick={() => navigate("/advanced")} />
+
+          <NavCard
+            title="Labs"
+            description="Multi-asset pools and time-varying AMM mechanisms"
+            icon={<FlaskConical className="w-5 h-5" />}
+            badge="New"
+            badgeColor="border-warning/30 text-warning"
+            onClick={() => navigate("/labs")} />
 
           <NavCard
             title="AMM Library"
