@@ -8,7 +8,9 @@ import BeginnerMode from "./pages/BeginnerMode";
 import AdvancedMode from "./pages/AdvancedMode";
 import TeachingLab from "./pages/TeachingLab";
 import Documentation from "./pages/Documentation";
+import Library from "./pages/Library";
 import NotFound from "./pages/NotFound";
+import FloatingAIChat from "./components/FloatingAIChat";
 
 const queryClient = new QueryClient();
 
@@ -24,8 +26,10 @@ const App = () => (
           <Route path="/advanced" element={<AdvancedMode />} />
           <Route path="/learn" element={<TeachingLab />} />
           <Route path="/docs" element={<Documentation />} />
+          <Route path="/library" element={<Library />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <FloatingAIChat />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

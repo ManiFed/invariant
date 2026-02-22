@@ -58,6 +58,19 @@ const BeginnerMode = () => {
   // Guided tour state
   const [guideStep, setGuideStep] = useState(0);
   const [showGuide, setShowGuide] = useState(true);
+  const [showBanner, setShowBanner] = useState(true);
+
+  // Refs for auto-scroll targets
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Auto-scroll when guide step changes
+  useEffect(() => {
+    if (!showGuide) return;
+    const target = guidedSteps[guideStep]?.target;
+    if (target && sectionRefs.current[target]) {
+      sectionRefs.current[target]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [guideStep, showGuide]);
 
   // Plain-english scenario & risk controls
   const [riskLevel, setRiskLevel] = useState<"conservative" | "moderate" | "aggressive">("moderate");
@@ -176,13 +189,20 @@ const BeginnerMode = () => {
         </div>
       </header>
 
-      {/* Teaching Lab banner */}
-      <div className="border-b border-border px-6 py-2 bg-secondary/50 flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Have questions about how AMMs work?</p>
-        <button onClick={() => navigate("/learn")} className="text-xs font-medium text-foreground hover:underline inline-flex items-center gap-1">
-          Try the Teaching Lab <ArrowRight className="w-3 h-3" />
-        </button>
-      </div>
+      {/* Teaching Lab banner — dismissible */}
+      {showBanner && (
+        <div className="border-b border-border px-6 py-2 bg-secondary/50 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Have questions about how AMMs work?</p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate("/learn")} className="text-xs font-medium text-foreground hover:underline inline-flex items-center gap-1">
+              Try the Teaching Lab <ArrowRight className="w-3 h-3" />
+            </button>
+            <button onClick={() => setShowBanner(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+              <span className="text-xs">✕</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Guided Tour Overlay — collapsible */}
       <AnimatePresence>
@@ -250,6 +270,7 @@ const BeginnerMode = () => {
         {/* Sidebar — always visible */}
         <aside className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-border p-5 overflow-y-auto space-y-6">
           {/* Section: Template */}
+          <div ref={el => { sectionRefs.current["template"] = el; }}>
           <GuidedSection
             number="1"
             title="Choose Your AMM Template"
@@ -293,8 +314,10 @@ const BeginnerMode = () => {
               ))}
             </div>
           </GuidedSection>
+          </div>
 
           {/* Section: Parameters */}
+          <div ref={el => { sectionRefs.current["params"] = el; }}>
           <GuidedSection
             number="2"
             title="Configure Your Pool"
@@ -371,11 +394,13 @@ const BeginnerMode = () => {
               <PoolReserveViz tokenA={tokenAReserve} tokenB={tokenBReserve} tokenAPrice={tokenAPrice} />
             </div>
           </GuidedSection>
+          </div>
         </aside>
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Pool Health Score + Metrics */}
+          <div ref={el => { sectionRefs.current["health"] = el; }}>
           <GuidedSection
             number="3"
             title="Pool Health & Key Metrics"
@@ -398,8 +423,10 @@ const BeginnerMode = () => {
               <MetricCard icon={<AlertTriangle className="w-3.5 h-3.5" />} label="Break-even Vol" value={`${breakEvenVol}%`} color="warning" tipKey="breakEvenVol" expandedTip={expandedTip} setExpandedTip={setExpandedTip} />
             </div>
           </GuidedSection>
+          </div>
 
           {/* Try a Swap */}
+          <div ref={el => { sectionRefs.current["swap"] = el; }}>
           <GuidedSection
             number="4"
             title="Try a Swap"
@@ -449,8 +476,10 @@ const BeginnerMode = () => {
               </AnimatePresence>
             </motion.div>
           </GuidedSection>
+          </div>
 
           {/* Charts */}
+          <div ref={el => { sectionRefs.current["charts"] = el; }}>
           <GuidedSection
             number="5"
             title="Slippage & Impermanent Loss Analysis"
@@ -506,8 +535,10 @@ const BeginnerMode = () => {
               </motion.div>
             </div>
           </GuidedSection>
+          </div>
 
           {/* Plain-English Scenario Simulator */}
+          <div ref={el => { sectionRefs.current["scenario"] = el; }}>
           <GuidedSection
             number="6"
             title="What If...? Scenario Simulator"
@@ -523,6 +554,7 @@ const BeginnerMode = () => {
               colors={colors}
             />
           </GuidedSection>
+          </div>
 
           {/* Liquidity Range Assistant */}
           <LiquidityRangeAssistant
@@ -1054,19 +1086,31 @@ const LiquidityRangeAssistant = ({ selectedTemplate, tokenAPrice, liquidity: liq
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
         <div className="p-2 rounded-lg bg-secondary border border-border text-center">
-          <p className="text-[9px] text-muted-foreground mb-0.5">Capital Efficiency</p>
+          <div className="flex items-center justify-center gap-1 mb-0.5">
+            <p className="text-[9px] text-muted-foreground">Capital Efficiency</p>
+            <TipToggle tipKey="capitalEfficiency" expandedTip={null} setExpandedTip={() => {}} />
+          </div>
           <p className="text-xs font-semibold font-mono-data text-foreground">{efficiencyMultiplier}x</p>
         </div>
         <div className="p-2 rounded-lg bg-secondary border border-border text-center">
-          <p className="text-[9px] text-muted-foreground mb-0.5">Daily Fees (est.)</p>
+          <div className="flex items-center justify-center gap-1 mb-0.5">
+            <p className="text-[9px] text-muted-foreground">Daily Fees (est.)</p>
+            <TipToggle tipKey="dailyFees" expandedTip={null} setExpandedTip={() => {}} />
+          </div>
           <p className="text-xs font-semibold font-mono-data text-success">${dailyFeesInRange}</p>
         </div>
         <div className="p-2 rounded-lg bg-secondary border border-border text-center">
-          <p className="text-[9px] text-muted-foreground mb-0.5">Out-of-Range Risk</p>
+          <div className="flex items-center justify-center gap-1 mb-0.5">
+            <p className="text-[9px] text-muted-foreground">Out-of-Range Risk</p>
+            <HelpCircle className="w-2.5 h-2.5 text-muted-foreground/50" />
+          </div>
           <p className={`text-xs font-semibold font-mono-data ${outOfRangeDays > 15 ? "text-destructive" : outOfRangeDays > 8 ? "text-warning" : "text-success"}`}>~{outOfRangeDays}d / 30d</p>
         </div>
         <div className="p-2 rounded-lg bg-secondary border border-border text-center">
-          <p className="text-[9px] text-muted-foreground mb-0.5">Effective Liquidity</p>
+          <div className="flex items-center justify-center gap-1 mb-0.5">
+            <p className="text-[9px] text-muted-foreground">Effective Liquidity</p>
+            <HelpCircle className="w-2.5 h-2.5 text-muted-foreground/50" />
+          </div>
           <p className="text-xs font-semibold font-mono-data text-foreground">${(capital * parseFloat(efficiencyMultiplier)).toLocaleString()}</p>
         </div>
       </div>

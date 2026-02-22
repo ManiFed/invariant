@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FlaskConical, FileText, GraduationCap, Heart } from "lucide-react";
+import { ArrowRight, Beaker, FlaskConical, FileText, GraduationCap, Heart, BookOpen } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -14,6 +14,9 @@ const Index = () => {
         <div className="flex items-center gap-4 text-sm">
           <button onClick={() => navigate("/docs")} className="text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">
             Docs
+          </button>
+          <button onClick={() => navigate("/library")} className="text-muted-foreground hover:text-foreground transition-colors hidden sm:inline">
+            Library
           </button>
           <ThemeToggle />
           <button
