@@ -403,6 +403,21 @@ const MonteCarloEngine = ({ assets, savedInvariant, savedFees }: { assets?: Asse
             </motion.div>
           </div>
 
+          {/* 3-Asset Simplex Trajectory */}
+          {assets && assets.length >= 3 && (
+            <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <h4 className="text-xs font-semibold text-foreground">Reserve Composition Simplex</h4>
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-3">
+                Simulated paths mapped into the 3-asset reserve simplex ({assets[0]?.symbol}/{assets[1]?.symbol}/{assets[2]?.symbol})
+              </p>
+              <div className="h-72">
+                <SimplexTrajectory assets={assets} paths={paths} displayPaths={displayPaths} colors={colors} />
+              </div>
+            </motion.div>
+          )}
+
           {/* Drawdown Distribution */}
           <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
             <div className="flex items-center gap-1.5 mb-1">
@@ -437,6 +452,44 @@ const MonteCarloEngine = ({ assets, savedInvariant, savedFees }: { assets?: Asse
         </motion.div>
       )}
     </div>
+  );
+};
+
+// Simplex trajectory for 3-asset pools
+function ternaryToCart(a: number, b: number, c: number) {
+  const sum = a + b + c;
+  return { x: 0.5 * (2 * (b/sum) + (c/sum)), y: (Math.sqrt(3) / 2) * (c/sum) };
+}
+
+const SimplexTrajectory = ({ assets, paths, displayPaths, colors }: { assets: Asset[]; paths: any[]; displayPaths: number; colors: any }) => {
+  const trajectories = useMemo(() => {
+    const numShow = Math.min(displayPaths, 10);
+    const results: { points: { x: number; y: number }[]; color: string }[] = [];
+    for (let p = 0; p < numShow; p++) {
+      const pts: { x: number; y: number }[] = [];
+      for (const day of paths) {
+        const val = day[`p${p}`] as number ?? 100;
+        const pr = val / 100;
+        const w0 = assets[0].weight, w1 = assets[1].weight;
+        const r0 = 1 / Math.pow(pr, w1 / (w0 + w1));
+        const r1 = Math.pow(pr, w0 / (w0 + w1));
+        const r2 = 1 / Math.pow(pr, 0.5);
+        pts.push(ternaryToCart(r0, r1, r2));
+      }
+      results.push({ points: pts, color: colors.series[p % colors.series.length] });
+    }
+    return results;
+  }, [paths, displayPaths, assets, colors]);
+  const v0 = ternaryToCart(1,0,0), v1 = ternaryToCart(0,1,0), v2 = ternaryToCart(0,0,1);
+  return (
+    <svg viewBox="-0.05 -0.05 1.1 1.0" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      <polygon points={`${v0.x},${0.866-v0.y} ${v1.x},${0.866-v1.y} ${v2.x},${0.866-v2.y}`} fill="none" stroke="hsl(var(--border))" strokeWidth="0.005" />
+      {trajectories.map((t, ti) => (<polyline key={ti} points={t.points.map(p => `${p.x},${0.866-p.y}`).join(" ")} fill="none" stroke={t.color} strokeWidth="0.003" strokeOpacity={0.5} />))}
+      {trajectories.map((t, ti) => t.points.length > 0 && (<circle key={`e${ti}`} cx={t.points[t.points.length-1].x} cy={0.866-t.points[t.points.length-1].y} r="0.008" fill={t.color} />))}
+      <text x={v0.x} y={0.866-v0.y+0.05} textAnchor="middle" fontSize="0.035" fill="hsl(var(--foreground))">{assets[0]?.symbol}</text>
+      <text x={v1.x-0.03} y={0.866-v1.y+0.02} textAnchor="end" fontSize="0.035" fill="hsl(var(--foreground))">{assets[1]?.symbol}</text>
+      <text x={v2.x+0.03} y={0.866-v2.y+0.02} textAnchor="start" fontSize="0.035" fill="hsl(var(--foreground))">{assets[2]?.symbol}</text>
+    </svg>
   );
 };
 
