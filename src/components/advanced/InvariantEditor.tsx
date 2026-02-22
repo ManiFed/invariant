@@ -1,9 +1,25 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Code2, Play, Zap, HelpCircle, AlertTriangle, CheckCircle } from "lucide-react";
+import { Code2, Play, Zap, HelpCircle, AlertTriangle, CheckCircle, Save } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+interface SavedInvariant {
+  expression: string;
+  presetId: string;
+  weightA: number;
+  weightB: number;
+  kValue: number;
+  amplification: number;
+  rangeLower: number;
+  rangeUpper: number;
+}
+
+interface InvariantEditorProps {
+  onSaveInvariant?: (inv: SavedInvariant) => void;
+  savedInvariant?: SavedInvariant | null;
+}
 
 const presets = [
   { label: "Constant Product", expr: "x * y = k", params: { a: 0.5, b: 0.5 }, id: "cp" },
@@ -20,9 +36,9 @@ const HELP: Record<string, { title: string; desc: string }> = {
   amplification: { title: "Amplification (A)", desc: "Controls how concentrated liquidity is around the 1:1 price. Higher A = flatter curve near peg = less slippage for correlated pairs." },
   rangeLower: { title: "Range Lower", desc: "Lower price bound for concentrated liquidity. Below this price, you hold 100% token X." },
   rangeUpper: { title: "Range Upper", desc: "Upper price bound for concentrated liquidity. Above this price, you hold 100% token Y." },
-  spotPrice: { title: "Spot Price", desc: "The instantaneous exchange rate at a point on the curve, calculated as −dy/dx. This is what the next infinitesimally small trade would cost." },
-  convexity: { title: "Convexity", desc: "The second derivative d²y/dx². Measures how quickly the price changes. Higher convexity = more slippage for large trades." },
-  invariantCurve: { title: "Invariant Curve", desc: "Shows the relationship between token reserves. Every valid pool state must lie on this curve. Trades move the point along the curve." },
+  spotPrice: { title: "Spot Price", desc: "The instantaneous exchange rate at a point on the curve, calculated as −dy/dx." },
+  convexity: { title: "Convexity", desc: "The second derivative d²y/dx². Measures how quickly the price changes." },
+  invariantCurve: { title: "Invariant Curve", desc: "Shows the relationship between token reserves. Every valid pool state must lie on this curve." },
 };
 
 function HelpBtn({ id }: { id: string }) {
@@ -68,7 +84,6 @@ const MATH_KEYBOARD = [
   { label: "γ", insert: "γ", group: "greek" },
 ];
 
-// Normalize expression: convert unicode math symbols to parseable form
 function normalizeExpr(expr: string): string {
   return expr
     .replace(/·/g, "*")
@@ -86,59 +101,36 @@ function normalizeExpr(expr: string): string {
     .replace(/α/g, "a").replace(/β/g, "b").replace(/γ/g, "g");
 }
 
-// Validate and parse custom expression
 function validateExpression(expr: string): { valid: boolean; error: string | null; parsed: string } {
   if (!expr.trim()) return { valid: false, error: "Expression is empty", parsed: "" };
-  
   const normalized = normalizeExpr(expr);
-  
-  // Check for required variables
   if (!normalized.includes("x") && !normalized.includes("y")) {
     return { valid: false, error: "Expression must contain at least 'x' or 'y' reserve variables", parsed: "" };
   }
-
-  // Check balanced parentheses
   let depth = 0;
   for (const ch of normalized) {
     if (ch === "(") depth++;
     if (ch === ")") depth--;
-    if (depth < 0) return { valid: false, error: "Unexpected closing parenthesis ')' — check your bracket placement", parsed: "" };
+    if (depth < 0) return { valid: false, error: "Unexpected closing parenthesis ')'", parsed: "" };
   }
-  if (depth > 0) return { valid: false, error: `Missing ${depth} closing parenthes${depth > 1 ? "es" : "is"} — add ')' to balance`, parsed: "" };
-
-  // Check for dangling operators (but only real ops, not after = k)
+  if (depth > 0) return { valid: false, error: `Missing ${depth} closing parenthes${depth > 1 ? "es" : "is"}`, parsed: "" };
   const withoutEqK = normalized.replace(/\s*=\s*k\s*$/i, "").trim();
   if (/[+\-*/^]\s*$/.test(withoutEqK)) {
     const lastOp = withoutEqK.match(/[+\-*/^]\s*$/)?.[0]?.trim();
-    return { valid: false, error: `Expression ends with '${lastOp}' — add a value or variable after it`, parsed: "" };
+    return { valid: false, error: `Expression ends with '${lastOp}' — add a value after it`, parsed: "" };
   }
-  if (/^[*/^]/.test(withoutEqK)) {
-    return { valid: false, error: `Expression starts with an operator — add a value before '${withoutEqK[0]}'`, parsed: "" };
-  }
-
-  // Check for consecutive operators (but allow negative exponents like ^-2)
-  if (/[+*/^]\s*[+*/^]/.test(withoutEqK)) {
-    return { valid: false, error: "Two operators next to each other — remove one or add a value between them", parsed: "" };
-  }
-
-  // Check for empty function calls
+  if (/^[*/^]/.test(withoutEqK)) return { valid: false, error: `Expression starts with an operator`, parsed: "" };
+  if (/[+*/^]\s*[+*/^]/.test(withoutEqK)) return { valid: false, error: "Two operators next to each other", parsed: "" };
   const emptyFunc = normalized.match(/(sqrt|ln|log|abs|min|max)\(\s*\)/);
-  if (emptyFunc) {
-    return { valid: false, error: `${emptyFunc[1]}() is empty — put a value inside the parentheses`, parsed: "" };
-  }
-
+  if (emptyFunc) return { valid: false, error: `${emptyFunc[1]}() is empty`, parsed: "" };
   return { valid: true, error: null, parsed: normalized };
 }
 
-// Evaluate curve: given x, k, and parameters, compute y
-function evalCurve(preset: string, x: number, k: number, wA: number, wB: number, amp: number, rLow: number, rHigh: number, customFn: ((x: number, k: number) => number) | null): number | null {
+function evalCurve(preset: string, x: number, k: number, wA: number, wB: number, amp: number, rLow: number, rHigh: number, customFn: ((x: number, k: number) => number | null) | null): number | null {
   try {
     switch (preset) {
       case "cp": return k / x;
-      case "ss": {
-        const y = (k - amp * x) / (1 + amp * x / k);
-        return y > 0 ? y : null;
-      }
+      case "ss": { const y = (k - amp * x) / (1 + amp * x / k); return y > 0 ? y : null; }
       case "wt": return Math.pow(k / Math.pow(x, wA), 1 / wB);
       case "cl": {
         const sqrtPa = Math.sqrt(rLow * 100);
@@ -155,74 +147,51 @@ function evalCurve(preset: string, x: number, k: number, wA: number, wB: number,
         return k / x;
       default: return k / x;
     }
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-const InvariantEditor = () => {
+const InvariantEditor = ({ onSaveInvariant, savedInvariant }: InvariantEditorProps) => {
   const colors = useChartColors();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [expression, setExpression] = useState("x * y = k");
-  const [selectedPreset, setSelectedPreset] = useState(0);
-  const [weightA, setWeightA] = useState(0.5);
-  const [weightB, setWeightB] = useState(0.5);
-  const [kValue, setKValue] = useState(10000);
-  const [amplification, setAmplification] = useState(100);
-  const [rangeLower, setRangeLower] = useState(0.8);
-  const [rangeUpper, setRangeUpper] = useState(1.2);
+  const [expression, setExpression] = useState(savedInvariant?.expression || "x * y = k");
+  const [selectedPreset, setSelectedPreset] = useState(savedInvariant ? presets.findIndex(p => p.id === savedInvariant.presetId) : 0);
+  const [weightA, setWeightA] = useState(savedInvariant?.weightA ?? 0.5);
+  const [weightB, setWeightB] = useState(savedInvariant?.weightB ?? 0.5);
+  const [kValue, setKValue] = useState(savedInvariant?.kValue ?? 10000);
+  const [amplification, setAmplification] = useState(savedInvariant?.amplification ?? 100);
+  const [rangeLower, setRangeLower] = useState(savedInvariant?.rangeLower ?? 0.8);
+  const [rangeUpper, setRangeUpper] = useState(savedInvariant?.rangeUpper ?? 1.2);
 
   const presetId = presets[selectedPreset]?.id || "cp";
 
-  // Validate expression in real-time
   const validation = useMemo(() => {
     if (presetId !== "custom") return { valid: true, error: null, parsed: expression };
     return validateExpression(expression);
   }, [expression, presetId]);
 
-  // Parse custom expression into a function
   const customFn = useMemo(() => {
     if (presetId !== "custom" || !validation.valid) return null;
     try {
       let expr = normalizeExpr(expression);
-      // Remove "= k" part
       expr = expr.replace(/\s*=\s*k\s*$/i, "").trim();
       
-      // x^a * y^b pattern (handles x^0.4 * y^0.6, x^0.4*y^0.6, etc.)
       const weightMatch = expr.match(/x\s*\^\s*([\d.]+)\s*\*\s*y\s*\^\s*([\d.]+)/);
       if (weightMatch) {
         const a = parseFloat(weightMatch[1]) || 1;
         const b = parseFloat(weightMatch[2]) || 1;
         return (x: number, k: number) => Math.pow(k / Math.pow(x, a), 1 / b);
       }
+      if (/^x\s*\*\s*y$/.test(expr.trim())) return (x: number, k: number) => k / x;
+      if (/sqrt\s*\(\s*x\s*\*\s*y\s*\)/.test(expr)) return (x: number, k: number) => (k * k) / x;
+      if (/^x\s*\+\s*y$/.test(expr.trim())) return (x: number, k: number) => k - x;
 
-      // x * y pattern (plain constant product, no exponents)
-      if (/^x\s*\*\s*y$/.test(expr.trim())) {
-        return (x: number, k: number) => k / x;
-      }
-
-      // sqrt(x * y) or sqrt(x*y)
-      if (/sqrt\s*\(\s*x\s*\*\s*y\s*\)/.test(expr)) {
-        return (x: number, k: number) => (k * k) / x;
-      }
-
-      // x + y pattern (constant sum)
-      if (/^x\s*\+\s*y$/.test(expr.trim())) {
-        return (x: number, k: number) => k - x;
-      }
-
-      // x^a + y^b pattern
       const sumMatch = expr.match(/x\s*\^\s*([\d.]+)\s*\+\s*y\s*\^\s*([\d.]+)/);
       if (sumMatch) {
         const a = parseFloat(sumMatch[1]);
         const b = parseFloat(sumMatch[2]);
-        return (x: number, k: number) => {
-          const rem = k - Math.pow(x, a);
-          return rem > 0 ? Math.pow(rem, 1 / b) : null;
-        };
+        return (x: number, k: number) => { const rem = k - Math.pow(x, a); return rem > 0 ? Math.pow(rem, 1 / b) : null; };
       }
 
-      // a*x^n * y^m pattern (coefficient included)
       const coeffMatch = expr.match(/([\d.]+)\s*\*\s*x\s*\^\s*([\d.]+)\s*\*\s*y\s*\^\s*([\d.]+)/);
       if (coeffMatch) {
         const coeff = parseFloat(coeffMatch[1]);
@@ -231,15 +200,9 @@ const InvariantEditor = () => {
         return (x: number, k: number) => Math.pow(k / (coeff * Math.pow(x, a)), 1 / b);
       }
 
-      // Fallback: treat as x * y if both vars present
-      if (expr.includes("x") && expr.includes("y")) {
-        return (x: number, k: number) => k / x;
-      }
-      
+      if (expr.includes("x") && expr.includes("y")) return (x: number, k: number) => k / x;
       return null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }, [expression, presetId, validation.valid]);
 
   const insertAtCursor = useCallback((sym: string) => {
@@ -250,16 +213,8 @@ const InvariantEditor = () => {
       const newExpr = expression.slice(0, start) + sym + expression.slice(end);
       setExpression(newExpr);
       setSelectedPreset(4);
-      // Restore cursor position after render
-      setTimeout(() => {
-        input.focus();
-        const newPos = start + sym.length;
-        input.setSelectionRange(newPos, newPos);
-      }, 0);
-    } else {
-      setExpression(prev => prev + sym);
-      setSelectedPreset(4);
-    }
+      setTimeout(() => { input.focus(); const newPos = start + sym.length; input.setSelectionRange(newPos, newPos); }, 0);
+    } else { setExpression(prev => prev + sym); setSelectedPreset(4); }
   }, [expression]);
 
   const curveData = useMemo(() => {
@@ -290,13 +245,35 @@ const InvariantEditor = () => {
     }).slice(1);
   }, [spotPriceData]);
 
+  // Show error when graphs have no data due to bad expression
+  const graphError = presetId === "custom" && validation.valid && curveData.length === 0;
+
+  const handleSave = () => {
+    if (onSaveInvariant) {
+      onSaveInvariant({
+        expression,
+        presetId,
+        weightA, weightB, kValue,
+        amplification, rangeLower, rangeUpper,
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="surface-elevated rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Code2 className="w-4 h-4 text-foreground" />
-          <h3 className="text-sm font-semibold text-foreground">Invariant Expression</h3>
-          <HelpBtn id="invariantCurve" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Code2 className="w-4 h-4 text-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Invariant Expression</h3>
+            <HelpBtn id="invariantCurve" />
+          </div>
+          {onSaveInvariant && (
+            <button onClick={handleSave}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+              <Save className="w-3 h-3" /> Set as Active Invariant
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 mb-4">
           {presets.map((p, i) => (
@@ -307,42 +284,30 @@ const InvariantEditor = () => {
           ))}
         </div>
 
-        {/* Expression input with validation */}
+        {/* Expression input */}
         <div className="space-y-2">
           <div className="relative">
             <input ref={inputRef} value={expression}
               onChange={e => { setExpression(e.target.value); setSelectedPreset(4); }}
-              onKeyDown={e => {
-                // Allow typing math characters naturally
-                if (e.key === "*" || e.key === "/" || e.key === "+" || e.key === "-" || e.key === "^" || e.key === "(" || e.key === ")") {
-                  // Let default behavior handle it
-                }
-              }}
               className={`w-full bg-muted border rounded-lg px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors ${
                 presetId === "custom" && !validation.valid ? "border-destructive/50 focus:border-destructive" : "border-border focus:border-foreground/30"
               }`}
               placeholder="Enter invariant expression (e.g., x^0.6 * y^0.4 = k)"
-              spellCheck={false}
-              autoComplete="off"
+              spellCheck={false} autoComplete="off"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
               {presetId === "custom" && (
                 <span className="mr-1">
-                  {validation.valid ? (
-                    <CheckCircle className="w-3.5 h-3.5 text-success" />
-                  ) : (
-                    <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                  )}
+                  {validation.valid ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <AlertTriangle className="w-3.5 h-3.5 text-destructive" />}
                 </span>
               )}
-              <button onClick={() => { setSelectedPreset(4); }}
+              <button onClick={() => setSelectedPreset(4)}
                 className="p-1.5 rounded-md bg-secondary text-foreground hover:bg-secondary/80 transition-colors">
                 <Play className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Syntax error message */}
           <AnimatePresence>
             {presetId === "custom" && validation.error && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
@@ -357,7 +322,7 @@ const InvariantEditor = () => {
             )}
           </AnimatePresence>
 
-          {/* Enhanced math keyboard */}
+          {/* Math keyboard */}
           <div className="space-y-1.5">
             <div className="flex gap-0.5 flex-wrap">
               <span className="text-[8px] text-muted-foreground w-8 flex items-center">Vars</span>
@@ -392,7 +357,6 @@ const InvariantEditor = () => {
                 </button>
               ))}
             </div>
-            {/* Quick templates */}
             <div className="flex gap-1 flex-wrap mt-1">
               <span className="text-[8px] text-muted-foreground flex items-center mr-1">Templates:</span>
               {[
@@ -480,26 +444,39 @@ const InvariantEditor = () => {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
-        <ChartPanel title="Invariant Curve" subtitle="Token reserves relationship" helpId="invariantCurve" data={curveData} dataKey="y" color={colors.line} colors={colors} />
-        <ChartPanel title="Spot Price" subtitle="−dy/dx (marginal price)" helpId="spotPrice" data={spotPriceData} dataKey="spotPrice" color={colors.green} colors={colors} />
-        <ChartPanel title="Convexity" subtitle="d²y/dx² (curvature)" helpId="convexity" data={convexityData} dataKey="convexity" color={colors.red} colors={colors} />
-      </div>
+      {/* Graphs with error handling */}
+      {graphError ? (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="surface-elevated rounded-xl p-5">
+          <div className="flex items-center gap-2 text-warning">
+            <AlertTriangle className="w-4 h-4" />
+            <h4 className="text-xs font-semibold">Unable to render graphs</h4>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            The expression <span className="font-mono text-foreground">"{expression}"</span> is syntactically valid but produces no plottable data. 
+            This usually means the formula doesn't yield positive y values for the given k={kValue}. Try adjusting k or simplifying the expression.
+          </p>
+        </motion.div>
+      ) : (
+        <div className="grid md:grid-cols-3 gap-4">
+          <ChartPanel title="Invariant Curve" subtitle="Token reserves relationship" helpId="invariantCurve" data={curveData} dataKey="y" color={colors.line} colors={colors} />
+          <ChartPanel title="Spot Price" subtitle="−dy/dx (marginal price)" helpId="spotPrice" data={spotPriceData} dataKey="spotPrice" color={colors.green} colors={colors} />
+          <ChartPanel title="Convexity" subtitle="d²y/dx² (curvature)" helpId="convexity" data={convexityData} dataKey="convexity" color={colors.red} colors={colors} />
+        </div>
+      )}
 
-      {/* Optimizer: find optimal expression for a goal */}
+      {/* Expression Optimizer */}
       <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
         <div className="flex items-center gap-2 mb-4">
           <Zap className="w-4 h-4 text-foreground" />
           <h3 className="text-sm font-semibold text-foreground">Expression Optimizer</h3>
-          <HelpBtn id="invariantCurve" />
         </div>
-        <p className="text-[10px] text-muted-foreground mb-3">Choose what to optimize for, and we'll suggest the best invariant parameters.</p>
+        <p className="text-[10px] text-muted-foreground mb-3">Build a custom optimization profile by weighting multiple objectives.</p>
         <ExpressionOptimizer 
           onApply={(wA, wB, k) => { setWeightA(wA); setWeightB(wB); setKValue(k); setSelectedPreset(4); setExpression(`x^${wA.toFixed(2)} * y^${wB.toFixed(2)} = k`); }} 
         />
       </motion.div>
 
-      {/* Reverse Engineer: drag sliders to modify expression */}
+      {/* Reverse Engineer */}
       <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
         <div className="flex items-center gap-2 mb-4">
           <Code2 className="w-4 h-4 text-foreground" />
@@ -509,7 +486,7 @@ const InvariantEditor = () => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-[10px] text-muted-foreground block mb-1">Curvature (flatness near center)</label>
-            <input type="range" min="0.1" max="2" step="0.05" value={weightA}
+            <input type="range" min="0.1" max="0.9" step="0.05" value={Math.min(0.9, Math.max(0.1, weightA))}
               onChange={e => { 
                 const wA = Number(e.target.value); 
                 const wB = Math.max(0.1, 1 - wA);
@@ -561,15 +538,28 @@ const ChartPanel = ({ title, subtitle, helpId, data, dataKey, color, colors }: {
     </div>
     <p className="text-[10px] text-muted-foreground mb-3">{subtitle}</p>
     <div className="h-40">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-          <XAxis dataKey="x" tick={{ fontSize: 9, fill: colors.tick }} />
-          <YAxis tick={{ fontSize: 9, fill: colors.tick }} />
-          <Tooltip contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10 }} />
-          <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
+      {data.length === 0 ? (
+        <div className="h-full flex items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <AlertTriangle className="w-4 h-4 mx-auto mb-1 text-warning" />
+            <p className="text-[9px]">No data — check expression</p>
+          </div>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+            <XAxis dataKey="x" tick={{ fontSize: 9, fill: colors.tick }} />
+            <YAxis tick={{ fontSize: 9, fill: colors.tick }} />
+            <Tooltip 
+              contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 10, color: colors.tick }} 
+              labelStyle={{ color: colors.tick }}
+              itemStyle={{ color: colors.tick }}
+            />
+            <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
     </div>
   </div>
 );
@@ -581,33 +571,76 @@ const DerivedProp = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-/* ─── Expression Optimizer ─── */
+/* ─── Expression Optimizer (improved) ─── */
 
 function ExpressionOptimizer({ onApply }: { onApply: (wA: number, wB: number, k: number) => void }) {
-  const [goal, setGoal] = useState<"min_slippage" | "min_il" | "max_fees" | "balanced">("balanced");
+  const [weights, setWeights] = useState({
+    slippage: 50,
+    il: 30,
+    fees: 50,
+    mev: 20,
+    capital: 40,
+  });
+
+  const setWeight = (key: keyof typeof weights, val: number) => {
+    setWeights(prev => ({ ...prev, [key]: val }));
+  };
 
   const optimized = useMemo(() => {
-    switch (goal) {
-      case "min_slippage": return { wA: 0.5, wB: 0.5, k: 500000, desc: "Equal weights with deep liquidity minimize slippage. x^0.5 * y^0.5 = k with high k." };
-      case "min_il": return { wA: 0.8, wB: 0.2, k: 100000, desc: "80/20 weighted pool reduces IL for token X. Majority weight on the volatile asset." };
-      case "max_fees": return { wA: 0.5, wB: 0.5, k: 50000, desc: "Standard constant product with moderate depth maximizes fee capture from arbitrage." };
-      case "balanced": return { wA: 0.6, wB: 0.4, k: 200000, desc: "60/40 weighting balances IL protection with fee capture efficiency." };
-    }
-  }, [goal]);
+    const { slippage, il, fees, mev, capital } = weights;
+    const total = slippage + il + fees + mev + capital || 1;
+    // Weighted parameter calculation
+    const slipN = slippage / total;
+    const ilN = il / total;
+    const feesN = fees / total;
+    const mevN = mev / total;
+    const capN = capital / total;
+
+    // wA tends toward 0.5 for slippage/fees, toward 0.8 for IL protection, toward 0.5 for MEV resistance
+    const wA = parseFloat((0.5 * slipN + 0.8 * ilN + 0.5 * feesN + 0.5 * mevN + 0.6 * capN).toFixed(2));
+    const wB = parseFloat((1 - wA).toFixed(2));
+    // k: deeper for slippage, moderate otherwise
+    const k = Math.round(50000 + 450000 * slipN + 100000 * feesN + 50000 * capN);
+
+    const parts: string[] = [];
+    if (slippage > 30) parts.push("low slippage");
+    if (il > 30) parts.push("IL protection");
+    if (fees > 30) parts.push("fee capture");
+    if (mev > 30) parts.push("MEV resistance");
+    if (capital > 30) parts.push("capital efficiency");
+
+    const desc = parts.length > 0
+      ? `Optimized for ${parts.join(", ")}. Weight A=${wA}, Weight B=${wB}, k=${k.toLocaleString()}.`
+      : "Adjust the sliders above to set your optimization priorities.";
+
+    return { wA, wB, k, desc };
+  }, [weights]);
+
+  const objectives = [
+    { key: "slippage" as const, label: "Min Slippage", emoji: "🎯", desc: "Minimize price impact" },
+    { key: "il" as const, label: "Min IL", emoji: "🛡️", desc: "Reduce impermanent loss" },
+    { key: "fees" as const, label: "Max Fees", emoji: "💰", desc: "Maximize fee revenue" },
+    { key: "mev" as const, label: "MEV Resist", emoji: "🔒", desc: "Reduce MEV extraction" },
+    { key: "capital" as const, label: "Capital Eff.", emoji: "📊", desc: "Improve capital usage" },
+  ];
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {([
-          { id: "min_slippage" as const, label: "Min Slippage", emoji: "🎯" },
-          { id: "min_il" as const, label: "Min IL", emoji: "🛡️" },
-          { id: "max_fees" as const, label: "Max Fees", emoji: "💰" },
-          { id: "balanced" as const, label: "Balanced", emoji: "⚖️" },
-        ]).map(g => (
-          <button key={g.id} onClick={() => setGoal(g.id)}
-            className={`p-2 rounded-lg border text-left text-[10px] transition-all ${goal === g.id ? "border-foreground/30 bg-foreground/5" : "border-border bg-card hover:border-foreground/10"}`}>
-            <span>{g.emoji} {g.label}</span>
-          </button>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        {objectives.map(o => (
+          <div key={o.key} className="p-2 rounded-lg border border-border bg-card">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-xs">{o.emoji}</span>
+              <span className="text-[10px] font-medium text-foreground">{o.label}</span>
+            </div>
+            <input type="range" min={0} max={100} value={weights[o.key]}
+              onChange={e => setWeight(o.key, Number(e.target.value))}
+              className="w-full accent-foreground h-1" />
+            <div className="flex justify-between mt-0.5">
+              <span className="text-[8px] text-muted-foreground">{o.desc}</span>
+              <span className="text-[8px] font-mono text-foreground">{weights[o.key]}%</span>
+            </div>
+          </div>
         ))}
       </div>
       <div className="p-3 rounded-lg bg-secondary border border-border">

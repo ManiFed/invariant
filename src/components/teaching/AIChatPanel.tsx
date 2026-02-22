@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Loader2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -7,9 +8,21 @@ interface Message {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/amm-chat`;
+const STORAGE_KEY = "ai_chat_messages";
+
+function loadMessages(): Message[] {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveMessages(msgs: Message[]) {
+  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-50))); } catch {}
+}
 
 export default function AIChatPanel() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(loadMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -18,6 +31,10 @@ export default function AIChatPanel() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+  }, [messages]);
+
+  useEffect(() => {
+    saveMessages(messages);
   }, [messages]);
 
   const send = async () => {
@@ -118,7 +135,11 @@ export default function AIChatPanel() {
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary text-foreground"
             }`}>
-              {msg.content}
+              {msg.role === "assistant" ? (
+                <div className="prose prose-xs prose-neutral dark:prose-invert max-w-none [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_code]:text-[9px] [&_code]:bg-muted [&_code]:px-1 [&_code]:rounded [&_pre]:text-[9px] [&_pre]:bg-muted [&_pre]:p-1.5 [&_pre]:rounded [&_h1]:text-xs [&_h2]:text-[11px] [&_h3]:text-[10px] [&_strong]:text-foreground [&_a]:text-primary">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+              ) : msg.content}
             </div>
             {msg.role === "user" && <User className="w-3 h-3 text-muted-foreground mt-1 shrink-0" />}
           </div>
