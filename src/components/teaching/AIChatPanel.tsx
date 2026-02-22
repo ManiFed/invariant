@@ -7,6 +7,10 @@ interface Message {
   content: string;
 }
 
+interface AIChatPanelProps {
+  context?: string;
+}
+
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/amm-chat`;
 const STORAGE_KEY = "ai_chat_messages";
 
@@ -21,7 +25,7 @@ function saveMessages(msgs: Message[]) {
   try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-50))); } catch {}
 }
 
-export default function AIChatPanel() {
+export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
   const [messages, setMessages] = useState<Message[]>(loadMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +60,7 @@ export default function AIChatPanel() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages: allMessages }),
+        body: JSON.stringify({ messages: allMessages, context: context || undefined }),
       });
 
       if (!resp.ok || !resp.body) {

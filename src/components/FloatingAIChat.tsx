@@ -4,12 +4,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X } from "lucide-react";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
 
+const ROUTE_CONTEXT: Record<string, string> = {
+  "/": "the homepage of Invariant Studio",
+  "/beginner": "the Beginner Mode — an interactive AMM playground with guided tour",
+  "/advanced": "the Advanced Mode — professional invariant engineering tools",
+  "/learn": "the Teaching Lab course",
+  "/docs": "the Documentation page",
+  "/library": "the AMM Library — browsing famous and community AMM designs",
+};
+
 export default function FloatingAIChat() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
   // Hide on teaching lab — AI is embedded in sidebar there
   if (location.pathname === "/learn") return null;
+
+  const context = ROUTE_CONTEXT[location.pathname] || `the page at ${location.pathname}`;
 
   return (
     <>
@@ -29,7 +40,7 @@ export default function FloatingAIChat() {
               </button>
             </div>
             <div className="flex-1 min-h-0">
-              <AIChatPanel />
+              <AIChatPanel context={context} />
             </div>
           </motion.div>
         )}

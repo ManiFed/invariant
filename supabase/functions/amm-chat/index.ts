@@ -9,9 +9,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages } = await req.json();
+    const { messages, context } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+    const contextLine = context ? `\n\nThe user is currently viewing: ${context}. Tailor your answers to be relevant to what they're looking at.` : "";
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -32,8 +34,9 @@ serve(async (req) => {
 - Arbitrage: how it keeps pool prices aligned with markets
 - Fees: how LPs earn, the tradeoff between fees and IL
 - Concentrated liquidity: capital efficiency vs range risk
+- Advanced invariant design, custom curves, multi-asset AMMs, time-variance
 
-Keep answers concise (2-4 sentences), accurate, and beginner-friendly. Use simple analogies. If asked about something unrelated to AMMs or DeFi, politely redirect.`
+Keep answers concise (2-4 sentences), accurate, and beginner-friendly. Use simple analogies. If asked about something unrelated to AMMs or DeFi, politely redirect.${contextLine}`
           },
           ...messages,
         ],

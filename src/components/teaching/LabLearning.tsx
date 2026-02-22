@@ -101,7 +101,7 @@ export default function LabLearning({ pool, history, lastTrade, tab, initialX, i
 
       {/* AI Assistant */}
       <div className="flex-1 min-h-0">
-        <AIChatPanel />
+        <AIChatPanel context={`the Teaching Lab dashboard, viewing the "${tab}" tab with live metrics. Current price: ${currentPrice.toFixed(4)}, IL: ${il.toFixed(2)}%, Fee revenue: ${pool.totalFees.toFixed(2)}`} />
       </div>
     </div>);
 
