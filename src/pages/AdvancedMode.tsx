@@ -36,6 +36,7 @@ interface SavedInvariant {
 }
 
 const SESSION_KEY = "advanced_invariant";
+const FEE_SESSION_KEY = "advanced_fees";
 
 interface LibraryAMM {
   id: string;
@@ -60,17 +61,30 @@ function loadInvariant(): SavedInvariant | null {
   } catch { return null; }
 }
 
+function loadFees(): number[] | null {
+  try {
+    const raw = sessionStorage.getItem(FEE_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 const AdvancedMode = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
   const [savedInvariant, setSavedInvariant] = useState<SavedInvariant | null>(loadInvariant);
+  const [savedFees, setSavedFees] = useState<number[] | null>(loadFees);
   const [showImport, setShowImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveInvariant = useCallback((inv: SavedInvariant) => {
     setSavedInvariant(inv);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(inv));
+  }, []);
+
+  const handleSaveFees = useCallback((fees: number[]) => {
+    setSavedFees(fees);
+    sessionStorage.setItem(FEE_SESSION_KEY, JSON.stringify(fees));
   }, []);
 
   const importFromLibrary = (amm: LibraryAMM) => {
@@ -106,6 +120,9 @@ const AdvancedMode = () => {
           rangeLower: json.rangeLower ?? 0.5,
           rangeUpper: json.rangeUpper ?? 2.0,
         };
+        if (json.fees) {
+          handleSaveFees(json.fees);
+        }
         handleSaveInvariant(inv);
         setShowImport(false);
         setActiveTab("invariant");
@@ -119,7 +136,6 @@ const AdvancedMode = () => {
 
   const hasInvariant = savedInvariant !== null;
 
-  // If user tries to navigate to a non-invariant tab without saving, redirect
   const handleTabClick = (id: TabId) => {
     if (id !== "invariant" && !hasInvariant) return;
     setActiveTab(id);
@@ -196,7 +212,7 @@ const AdvancedMode = () => {
       </Dialog>
 
       <div className="flex flex-1 min-h-0">
-        {/* Sidebar Navigation — collapsed, expand on hover, fixed */}
+        {/* Sidebar */}
         <aside
           className={`border-r border-border shrink-0 transition-all duration-200 flex flex-col sticky top-0 h-screen ${hovered ? "w-56" : "w-14"}`}
           onMouseEnter={() => setHovered(true)}
@@ -238,7 +254,6 @@ const AdvancedMode = () => {
               );
             })}
           </nav>
-          {/* Step indicator when collapsed */}
           {!hovered && !hasInvariant && (
             <div className="px-2 py-3 border-t border-border">
               <div className="flex items-center justify-center">
@@ -250,7 +265,6 @@ const AdvancedMode = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6 max-w-7xl">
-          {/* Prompt to design invariant first */}
           {!hasInvariant && activeTab === "invariant" && (
             <motion.div
               initial={{ opacity: 0, y: -5 }}
@@ -267,12 +281,12 @@ const AdvancedMode = () => {
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               {activeTab === "invariant" && <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />}
-              {activeTab === "fees" && <FeeStructureEditor />}
-              {activeTab === "montecarlo" && <MonteCarloEngine />}
-              {activeTab === "arbitrage" && <ArbitrageEngine />}
-              {activeTab === "liquidity" && <LiquidityAnalyzer />}
-              {activeTab === "stability" && <StabilityAnalysis />}
-              {activeTab === "deploy" && <DeploymentExport />}
+              {activeTab === "fees" && <FeeStructureEditor onSaveFees={handleSaveFees} savedFees={savedFees} />}
+              {activeTab === "montecarlo" && <MonteCarloEngine savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "arbitrage" && <ArbitrageEngine savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "liquidity" && <LiquidityAnalyzer savedInvariant={savedInvariant} />}
+              {activeTab === "stability" && <StabilityAnalysis savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "deploy" && <DeploymentExport savedInvariant={savedInvariant} savedFees={savedFees} />}
             </motion.div>
           </AnimatePresence>
         </main>

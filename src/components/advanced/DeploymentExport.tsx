@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, Check, Download, Fuel, Settings2, FileCode2, ChevronDown, ChevronRight, Zap, FileJson, FileText, Share2, HelpCircle } from "lucide-react";
+import { Copy, Check, Download, Fuel, Settings2, FileCode2, ChevronDown, ChevronRight, Zap, FileJson, FileText, Share2, HelpCircle, Info, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,12 +15,12 @@ const curveOptions: { id: CurveType; label: string; desc: string }[] = [
 ];
 
 const DEPLOY_HELP: Record<string, { title: string; desc: string }> = {
-  contractName: { title: "Contract Name", desc: "The Solidity contract identifier. Must be a valid Solidity name (no spaces). This becomes the contract name in your .sol file." },
-  curveType: { title: "Curve Type", desc: "The AMM invariant your contract implements. Each type has different gas costs, slippage profiles, and complexity tradeoffs." },
-  swapFee: { title: "Swap Fee", desc: "Percentage taken from each trade. Goes to liquidity providers. Typical values: 0.05% for stables, 0.3% for standard pairs, 1% for exotic." },
-  adminFee: { title: "Admin Fee", desc: "Percentage of the swap fee that goes to the protocol/admin rather than LPs. 10% admin fee on 0.3% swap fee = 0.03% per trade to admin." },
-  gasPrice: { title: "Gas Price (gwei)", desc: "Current network gas price. Higher gas = more expensive deployments and swaps. Check etherscan.io/gastracker for current prices." },
-  ethPrice: { title: "ETH Price", desc: "Current ETH market price in USD. Used to convert gas costs from ETH to dollar values." },
+  contractName: { title: "Contract Name", desc: "The Solidity contract identifier. Must be a valid Solidity name." },
+  curveType: { title: "Curve Type", desc: "The AMM invariant your contract implements." },
+  swapFee: { title: "Swap Fee", desc: "Percentage taken from each trade. Goes to liquidity providers." },
+  adminFee: { title: "Admin Fee", desc: "Percentage of the swap fee that goes to the protocol/admin." },
+  gasPrice: { title: "Gas Price (gwei)", desc: "Current network gas price." },
+  ethPrice: { title: "ETH Price", desc: "Current ETH market price in USD. Auto-fetched from CoinGecko." },
 };
 
 function DeployHelpBtn({ id }: { id: string }) {
@@ -46,10 +46,19 @@ const generateSolidity = (
   fee: number,
   tokens: number,
   name: string,
-  adminFee: number
+  adminFee: number,
+  invariantExpr?: string,
+  feeStructure?: number[]
 ) => {
   const feeScaled = Math.round(fee * 100);
   const adminFeeScaled = Math.round(adminFee * 100);
+
+  const feeComment = feeStructure 
+    ? `\n    // Fee structure: ${feeStructure.length} points, avg ${(feeStructure.reduce((a,b) => a+b, 0) / feeStructure.length).toFixed(0)} bps`
+    : "";
+  const invariantComment = invariantExpr 
+    ? `\n    // Invariant: ${invariantExpr}` 
+    : "";
 
   const common = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
@@ -59,7 +68,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title ${name}
-/// @notice Auto-generated AMM contract — review before production use
+/// @notice Auto-generated AMM contract — review before production use${invariantComment}${feeComment}
 contract ${name.replace(/\s+/g, "")} is ReentrancyGuard, Ownable {
 
     uint256 public constant FEE_BPS = ${feeScaled};        // ${fee}%
@@ -197,7 +206,18 @@ interface Asset {
   color: string;
 }
 
-const DeploymentExport = ({ assets }: { assets?: Asset[] }) => {
+interface SavedInvariant {
+  expression: string;
+  presetId: string;
+  weightA: number;
+  weightB: number;
+  kValue: number;
+  amplification: number;
+  rangeLower: number;
+  rangeUpper: number;
+}
+
+const DeploymentExport = ({ assets, savedInvariant, savedFees }: { assets?: Asset[]; savedInvariant?: SavedInvariant | null; savedFees?: number[] | null }) => {
   const colors = useChartColors();
   const [curve, setCurve] = useState<CurveType>("constant_product");
   const [fee, setFee] = useState(0.3);
@@ -206,11 +226,38 @@ const DeploymentExport = ({ assets }: { assets?: Asset[] }) => {
   const [contractName, setContractName] = useState(assets && assets.length > 2 ? "MultiAssetAMM" : "MyAMM");
   const [gasPrice, setGasPrice] = useState(30);
   const [ethPrice, setEthPrice] = useState(3500);
+  const [ethPriceLoading, setEthPriceLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showCode, setShowCode] = useState(true);
   const [exportFormat, setExportFormat] = useState<"solidity" | "json" | "markdown">("solidity");
 
-  const solidity = useMemo(() => generateSolidity(curve, fee, tokens, contractName, adminFee), [curve, fee, tokens, contractName, adminFee]);
+  // Fetch ETH price from free API
+  useEffect(() => {
+    const fetchEthPrice = async () => {
+      try {
+        const res = await fetch("https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD");
+        const data = await res.json();
+        if (data.USD) {
+          setEthPrice(Math.round(data.USD));
+        }
+      } catch {
+        // Fallback to default
+      } finally {
+        setEthPriceLoading(false);
+      }
+    };
+    fetchEthPrice();
+  }, []);
+
+  // Use saved fee structure to set swap fee
+  useEffect(() => {
+    if (savedFees && savedFees.length > 0) {
+      const avgBps = savedFees.reduce((a, b) => a + b, 0) / savedFees.length;
+      setFee(parseFloat((avgBps / 100).toFixed(2)));
+    }
+  }, [savedFees]);
+
+  const solidity = useMemo(() => generateSolidity(curve, fee, tokens, contractName, adminFee, savedInvariant?.expression, savedFees || undefined), [curve, fee, tokens, contractName, adminFee, savedInvariant, savedFees]);
 
   const gas = gasEstimates[curve];
   const gasData = useMemo(() => {
@@ -225,27 +272,28 @@ const DeploymentExport = ({ assets }: { assets?: Asset[] }) => {
 
   const totalDeployCost = ((gas.deploy * gasPrice * 1e-9) * ethPrice).toFixed(2);
 
-  // JSON config export
   const jsonConfig = useMemo(() => JSON.stringify({
     name: contractName,
     curveType: curve,
+    invariant: savedInvariant?.expression || curveOptions.find(c => c.id === curve)?.desc,
     swapFeeBps: Math.round(fee * 100),
     adminFeeBps: Math.round(adminFee * 100),
     numTokens: tokens,
+    feeStructure: savedFees || undefined,
     gasEstimates: gas,
     solidityVersion: "^0.8.20",
     dependencies: ["@openzeppelin/contracts"],
-  }, null, 2), [contractName, curve, fee, adminFee, tokens, gas]);
+  }, null, 2), [contractName, curve, fee, adminFee, tokens, gas, savedInvariant, savedFees]);
 
-  // Markdown documentation export
   const markdownDoc = useMemo(() => `# ${contractName} — AMM Contract Documentation
 
 ## Overview
 - **Curve Type:** ${curveOptions.find(c => c.id === curve)?.label}
-- **Formula:** ${curveOptions.find(c => c.id === curve)?.desc}
+- **Formula:** ${savedInvariant?.expression || curveOptions.find(c => c.id === curve)?.desc}
 - **Swap Fee:** ${fee}%
 - **Admin Fee:** ${adminFee}% of swap fees
 - **Tokens:** ${tokens}
+${savedFees ? `- **Fee Structure:** ${savedFees.length} points, avg ${(savedFees.reduce((a,b) => a+b, 0) / savedFees.length).toFixed(0)} bps` : ""}
 
 ## Gas Estimates (at ${gasPrice} gwei, ETH $${ethPrice})
 | Operation | Gas | Cost (USD) |
@@ -263,7 +311,7 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
 - Uses OpenZeppelin ReentrancyGuard
 - Uses OpenZeppelin Ownable for admin functions
 - ⚠️ This is auto-generated code — audit before production use
-`, [contractName, curve, fee, adminFee, tokens, gasData, gasPrice, ethPrice]);
+`, [contractName, curve, fee, adminFee, tokens, gasData, gasPrice, ethPrice, savedInvariant, savedFees]);
 
   const exportContent = exportFormat === "solidity" ? solidity : exportFormat === "json" ? jsonConfig : markdownDoc;
   const exportExt = exportFormat === "solidity" ? ".sol" : exportFormat === "json" ? ".json" : ".md";
@@ -297,6 +345,30 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
 
   return (
     <div className="space-y-4">
+      {/* Saved config context */}
+      {(savedInvariant || savedFees) && (
+        <div className="surface-elevated rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Info className="w-3.5 h-3.5 text-muted-foreground" />
+            <h4 className="text-[10px] font-bold text-foreground">Using Saved Configuration</h4>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {savedInvariant && (
+              <div className="px-2 py-1 rounded-md bg-secondary border border-border">
+                <span className="text-[9px] text-muted-foreground">Invariant: </span>
+                <span className="text-[9px] font-mono text-foreground">{savedInvariant.expression}</span>
+              </div>
+            )}
+            {savedFees && (
+              <div className="px-2 py-1 rounded-md bg-secondary border border-border">
+                <span className="text-[9px] text-muted-foreground">Fee: </span>
+                <span className="text-[9px] font-mono text-foreground">{(savedFees.reduce((a,b) => a+b, 0) / savedFees.length).toFixed(0)} bps avg ({savedFees.length} pts)</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Config */}
       <div className="grid md:grid-cols-2 gap-4">
         <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
@@ -341,6 +413,7 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
                   <span className="text-[10px] font-mono text-foreground">{fee}%</span>
                 </div>
                 <input type="range" min={0.01} max={1} step={0.01} value={fee} onChange={e => setFee(Number(e.target.value))} className="w-full accent-foreground h-1" />
+                {savedFees && <p className="text-[8px] text-muted-foreground mt-0.5">From fee structure</p>}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -379,10 +452,12 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
                 <div className="flex items-center gap-1">
                   <label className="text-[10px] text-muted-foreground">ETH Price</label>
                   <DeployHelpBtn id="ethPrice" />
+                  {ethPriceLoading && <Loader2 className="w-2.5 h-2.5 animate-spin text-muted-foreground" />}
                 </div>
                 <span className="text-[10px] font-mono text-foreground">${ethPrice.toLocaleString()}</span>
               </div>
               <input type="range" min={1000} max={10000} step={100} value={ethPrice} onChange={e => setEthPrice(Number(e.target.value))} className="w-full accent-foreground h-1" />
+              {!ethPriceLoading && <p className="text-[8px] text-muted-foreground mt-0.5">Live price from CryptoCompare</p>}
             </div>
           </div>
 
@@ -431,7 +506,6 @@ ${gasData.map(g => `| ${g.op} | ${g.gas.toLocaleString()} | $${g.usd.toFixed(2)}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            {/* Export format tabs */}
             <div className="flex rounded-md border border-border overflow-hidden mr-2">
               {([
                 { id: "solidity" as const, icon: FileCode2, label: "Solidity" },

@@ -1,6 +1,6 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
-import { DollarSign, HelpCircle, RotateCcw } from "lucide-react";
+import { DollarSign, HelpCircle, RotateCcw, Plus, Minus, Download, Save } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -39,20 +39,93 @@ const PRESETS = [
   { label: "Descending", desc: "Fees decrease with price", gen: () => Array.from({ length: NUM_POINTS }, (_, i) => Math.round(85 - (i / NUM_POINTS) * 80)) },
 ];
 
-export default function FeeStructureEditor({ assets }: { assets?: Asset[] }) {
+interface FeeStructureEditorProps {
+  assets?: Asset[];
+  onSaveFees?: (fees: number[]) => void;
+  savedFees?: number[] | null;
+  onSavePairFees?: (pairFees: Record<string, number[]>) => void;
+  savedPairFees?: Record<string, number[]> | null;
+}
+
+export default function FeeStructureEditor({ assets, onSaveFees, savedFees, onSavePairFees, savedPairFees }: FeeStructureEditorProps) {
   const colors = useChartColors();
-  const [fees, setFees] = useState<number[]>(() => PRESETS[0].gen());
-  const [activePreset, setActivePreset] = useState(0);
+  const [fees, setFees] = useState<number[]>(() => savedFees || PRESETS[0].gen());
+  const [activePreset, setActivePreset] = useState(savedFees ? -1 : 0);
   const [dragging, setDragging] = useState(false);
+  const [bulkAmount, setBulkAmount] = useState(5);
+  
+  // Multi-asset pair fee selection
+  const pairs = useMemo(() => {
+    if (!assets || assets.length < 2) return [];
+    const result: { key: string; label: string }[] = [];
+    for (let i = 0; i < assets.length; i++) {
+      for (let j = i + 1; j < assets.length; j++) {
+        result.push({ key: `${assets[i].symbol}>${assets[j].symbol}`, label: `${assets[i].symbol} → ${assets[j].symbol}` });
+      }
+    }
+    return result;
+  }, [assets]);
+  
+  const [selectedPair, setSelectedPair] = useState<string | null>(null);
+  const [pairFees, setPairFees] = useState<Record<string, number[]>>(savedPairFees || {});
+
+  // When pair selection changes, load that pair's fees
+  useEffect(() => {
+    if (selectedPair && pairFees[selectedPair]) {
+      setFees(pairFees[selectedPair]);
+      setActivePreset(-1);
+    } else if (selectedPair) {
+      // Initialize with current fees
+      setPairFees(prev => ({ ...prev, [selectedPair]: [...fees] }));
+    }
+  }, [selectedPair]);
+
+  const updateFees = useCallback((newFees: number[]) => {
+    setFees(newFees);
+    setActivePreset(-1);
+    if (selectedPair) {
+      setPairFees(prev => {
+        const next = { ...prev, [selectedPair]: newFees };
+        onSavePairFees?.(next);
+        return next;
+      });
+    }
+    onSaveFees?.(newFees);
+  }, [selectedPair, onSaveFees, onSavePairFees]);
 
   const setFeeAt = useCallback((index: number, value: number) => {
-    setFees(prev => {
-      const next = [...prev];
-      next[index] = Math.max(1, Math.min(100, value));
-      return next;
-    });
-    setActivePreset(-1);
-  }, []);
+    const next = [...fees];
+    next[index] = Math.max(1, Math.min(100, value));
+    updateFees(next);
+  }, [fees, updateFees]);
+
+  const bulkAdjust = useCallback((delta: number) => {
+    const next = fees.map(f => Math.max(1, Math.min(100, f + delta)));
+    updateFees(next);
+  }, [fees, updateFees]);
+
+  const handlePreset = useCallback((i: number) => {
+    const newFees = PRESETS[i].gen();
+    setFees(newFees);
+    setActivePreset(i);
+    if (selectedPair) {
+      setPairFees(prev => {
+        const next = { ...prev, [selectedPair]: newFees };
+        onSavePairFees?.(next);
+        return next;
+      });
+    }
+    onSaveFees?.(newFees);
+  }, [selectedPair, onSaveFees, onSavePairFees]);
+
+  const handleExportFees = useCallback(() => {
+    const data = { fees, pairFees: Object.keys(pairFees).length > 0 ? pairFees : undefined };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "fee_structure.json"; a.click();
+    URL.revokeObjectURL(url);
+  }, [fees, pairFees]);
 
   const chartData = useMemo(() => 
     fees.map((fee, i) => ({
@@ -63,10 +136,9 @@ export default function FeeStructureEditor({ assets }: { assets?: Asset[] }) {
   [fees]);
 
   const revenueData = useMemo(() => {
-    // Simulate revenue projection with non-uniform fees
     return fees.map((fee, i) => {
       const priceDistance = Math.abs(i - NUM_POINTS / 2) / (NUM_POINTS / 2);
-      const volumeWeight = Math.exp(-priceDistance * 2); // Most volume near center
+      const volumeWeight = Math.exp(-priceDistance * 2);
       const revenue = fee * volumeWeight * 10;
       const ilCost = priceDistance * 30;
       return {
@@ -87,13 +159,35 @@ export default function FeeStructureEditor({ assets }: { assets?: Asset[] }) {
     border: `1px solid ${colors.tooltipBorder}`, 
     borderRadius: 8, 
     fontSize: 10,
-    color: "inherit"
+    color: colors.tooltipText,
   };
 
   return (
     <div className="space-y-6">
-      {/* Multi-asset context */}
-      {assets && assets.length > 0 && (
+      {/* Multi-asset pair selector */}
+      {assets && assets.length > 2 && pairs.length > 0 && (
+        <div className="surface-elevated rounded-xl p-4">
+          <h4 className="text-[10px] font-bold text-foreground mb-2">Per-Pair Fee Structure</h4>
+          <p className="text-[9px] text-muted-foreground mb-3">Select a trading pair to customize its individual fee curve.</p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setSelectedPair(null)}
+              className={`px-3 py-1.5 rounded-md text-[10px] font-medium transition-all ${!selectedPair ? "bg-foreground/5 text-foreground border border-foreground/20" : "bg-secondary text-secondary-foreground border border-transparent"}`}
+            >
+              Global (all pairs)
+            </button>
+            {pairs.map(p => (
+              <button key={p.key} onClick={() => setSelectedPair(p.key)}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-medium transition-all ${selectedPair === p.key ? "bg-foreground/5 text-foreground border border-foreground/20" : "bg-secondary text-secondary-foreground border border-transparent"}`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Multi-asset context for 2-asset */}
+      {assets && assets.length > 0 && assets.length <= 2 && (
         <div className="surface-elevated rounded-xl p-4">
           <h4 className="text-[10px] font-bold text-foreground mb-2">Multi-Asset Fee Context</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -107,30 +201,55 @@ export default function FeeStructureEditor({ assets }: { assets?: Asset[] }) {
         </div>
       )}
 
-      {/* Presets */}
+      {/* Presets + Bulk Adjust */}
       <div className="surface-elevated rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <DollarSign className="w-4 h-4 text-foreground" />
           <h3 className="text-sm font-semibold text-foreground">Fee Structure</h3>
           <HelpBtn label="Custom Fee Distribution" desc="Define how swap fees vary across the price curve. Higher fees at volatile ranges protect LPs, while lower fees at the center attract more volume." />
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={handleExportFees}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-medium bg-secondary text-muted-foreground hover:text-foreground border border-border transition-colors">
+              <Download className="w-3 h-3" /> Export
+            </button>
+            {onSaveFees && (
+              <button onClick={() => onSaveFees(fees)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
+                <Save className="w-3 h-3" /> Save
+              </button>
+            )}
+          </div>
         </div>
-        <p className="text-[10px] text-muted-foreground mb-3">
-          {assets && assets.length > 2 ? `Fee structure applied across all ${assets.length} asset pairs.` : "Choose a preset or drag the sliders below to create a custom fee distribution."}
-        </p>
 
         <div className="flex gap-2 mb-4 flex-wrap">
           {PRESETS.map((p, i) => (
-            <button key={p.label} onClick={() => { setFees(p.gen()); setActivePreset(i); }}
+            <button key={p.label} onClick={() => handlePreset(i)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 activePreset === i ? "bg-foreground/5 text-foreground border border-foreground/20" : "bg-secondary text-secondary-foreground border border-transparent hover:border-border"
               }`}>
               {p.label}
             </button>
           ))}
-          <button onClick={() => { setFees(PRESETS[0].gen()); setActivePreset(0); }}
+          <button onClick={() => { handlePreset(0); }}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors ml-auto">
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+        </div>
+
+        {/* Bulk adjust */}
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-secondary border border-border">
+          <span className="text-[10px] text-muted-foreground">Bulk Adjust:</span>
+          <button onClick={() => bulkAdjust(-bulkAmount)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-background text-foreground border border-border hover:bg-accent transition-colors">
+            <Minus className="w-3 h-3" /> {bulkAmount} bps
+          </button>
+          <input type="number" value={bulkAmount} onChange={e => setBulkAmount(Math.max(1, Math.min(50, Number(e.target.value))))}
+            className="w-14 bg-background border border-border rounded-md px-2 py-1 text-[10px] font-mono text-foreground outline-none text-center" />
+          <button onClick={() => bulkAdjust(bulkAmount)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-background text-foreground border border-border hover:bg-accent transition-colors">
+            <Plus className="w-3 h-3" /> {bulkAmount} bps
+          </button>
+          <span className="text-[9px] text-muted-foreground ml-auto">Shift all fees up or down</span>
         </div>
 
         {/* Summary stats */}
@@ -183,7 +302,7 @@ export default function FeeStructureEditor({ assets }: { assets?: Asset[] }) {
             <h4 className="text-xs font-semibold text-foreground">Fee Distribution</h4>
             <HelpBtn label="Fee Curve" desc="Visualizes how fees change across the price range. Each bar represents the fee at that price point." />
           </div>
-          <p className="text-[10px] text-muted-foreground mb-3">Fee (bps) by price</p>
+          <p className="text-[10px] text-muted-foreground mb-3">Fee (bps) by price{selectedPair ? ` — ${selectedPair}` : ""}</p>
           <div className="h-56" onWheel={e => e.stopPropagation()}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
