@@ -115,6 +115,7 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
   };
 
   return (
+    <>
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
         {messages.length === 0 &&
         <div className="text-[10px] text-muted-foreground text-center py-4 space-y-1">
@@ -169,6 +170,6 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
           </button>
         </div>
       </div>
-    </div>);
-
+    </>
+  );
 }
