@@ -428,7 +428,7 @@ const LiquidityStrategyLab = () => {
               {activeTab === "strategy" && (
                 <StrategyEditor strategies={strategies} onStrategiesChange={handleStrategiesChange} />
               )}
-              {activeTab === "compare" && <AMMComparison savedInvariant={savedInvariant} />}
+              
               {activeTab === "backtest" && (
                 <div>
                   {strategyBanner}
