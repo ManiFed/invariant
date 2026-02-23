@@ -12,7 +12,7 @@ const CHANNEL_NAME = "invariant-atlas-live";
 const LEADER_BROADCAST_INTERVAL = 1000; // Leader broadcasts every 1s for tight sync
 const MAX_SYNC_CANDIDATES = 200;
 const STATE_REQUEST_TIMEOUT = 3000;
-const FAILOVER_TIMEOUT = 6000;  // Promote follower to leader if no broadcast for 6s
+const FAILOVER_TIMEOUT = 2500;  // Promote follower quickly if the active leader disappears
 const FAILOVER_CHECK_INTERVAL = 2000;
 
 export type SyncRole = "leader" | "follower";

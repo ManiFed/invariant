@@ -186,6 +186,8 @@ export function useDiscoveryEngine() {
       cancelled = true;
       unsubscribeCloudRef.current?.();
       if (keepaliveIntervalRef.current) clearInterval(keepaliveIntervalRef.current);
+      syncRef.current?.cleanup();
+      syncRef.current = null;
     };
   }, []);
 
