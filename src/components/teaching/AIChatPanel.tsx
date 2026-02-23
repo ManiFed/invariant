@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2 } from "lucide-react";
+import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -116,18 +116,19 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 py-2 border-b border-border bg-gradient-to-r from-primary/10 via-background to-accent/20">
         <div className="flex items-center gap-1.5">
-          <Bot className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider">AI Assistant</span>
+          <Sparkles className="w-3.5 h-3.5 text-primary" />
+          <span className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider">Ammy Assistant</span>
         </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
         {messages.length === 0 && (
           <div className="text-[10px] text-muted-foreground text-center py-4 space-y-1">
+            <div className="mx-auto w-fit rounded-full bg-primary/15 px-2 py-1 text-primary animate-pulse">✨</div>
             <Bot className="w-5 h-5 mx-auto text-muted-foreground/50" />
-            <p>Ask me anything about AMMs!</p>
+            <p>hi, i'm ammy! i'm here to answer any questions you might have about AMMs!</p>
             <p className="text-[9px]">Try: "What is slippage?" or "How do fees work?"</p>
           </div>
         )}
@@ -164,7 +165,7 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && send()}
-            placeholder="Ask about AMMs..."
+            placeholder="Ask Ammy about AMMs..."
             className="flex-1 px-2 py-1.5 text-[10px] bg-secondary rounded-md border border-border min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <button
