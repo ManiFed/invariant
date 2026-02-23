@@ -1,20 +1,42 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Activity, Map, Fingerprint, Radio, Cloud, Monitor } from "lucide-react";
+import { ArrowLeft, Activity, Map, Fingerprint, Radio, Cloud, HardDrive, Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
 import AtlasSurface from "@/components/labs/AtlasSurface";
 import DesignDetail from "@/components/labs/DesignDetail";
-import { useDiscoveryEngine } from "@/hooks/use-discovery-engine";
+import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 
 type View = "dashboard" | "atlas" | "detail";
 
+const SYNC_BADGE: Record<SyncMode, { icon: typeof Cloud; label: string; className: string }> = {
+  cloud: {
+    icon: Cloud,
+    label: "CLOUD SYNC",
+    className: "bg-chart-1/5 border-chart-1/20 text-chart-1",
+  },
+  persisted: {
+    icon: HardDrive,
+    label: "PERSISTENT",
+    className: "bg-chart-4/5 border-chart-4/20 text-chart-4",
+  },
+  memory: {
+    icon: HardDrive,
+    label: "IN-MEMORY",
+    className: "bg-secondary border-border text-muted-foreground",
+  },
+  loading: {
+    icon: Loader2,
+    label: "CONNECTING",
+    className: "bg-secondary border-border text-muted-foreground",
+  },
+};
+
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection, cloudMode } = useDiscoveryEngine();
+  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, cloudStatus } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
-  // Keep a stable ref to the selected candidate to prevent flicker
   const detailCandidateRef = useRef(selectedCandidate);
   if (selectedCandidate) {
     detailCandidateRef.current = selectedCandidate;
@@ -36,11 +58,12 @@ const DiscoveryAtlas = () => {
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
   ];
 
-  // Use the ref for the detail view to prevent it from disappearing
-  // when selectedCandidate briefly becomes null during state transitions
   const detailCandidate = activeView === "detail"
     ? (selectedCandidate || detailCandidateRef.current)
     : selectedCandidate;
+
+  const badge = SYNC_BADGE[syncMode];
+  const BadgeIcon = badge.icon;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -50,24 +73,25 @@ const DiscoveryAtlas = () => {
           <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
-
           <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT ATLAS</span>
-
         </div>
         <div className="flex items-center gap-2">
-          {/* Cloud/Local mode indicator */}
-          {cloudMode === true && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-chart-1/5 border border-chart-1/20">
-              <Cloud className="w-3 h-3 text-chart-1" />
-              <span className="text-[9px] font-medium text-chart-1">CLOUD SYNC</span>
-            </div>
-          )}
-          {cloudMode === false && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary border border-border">
-              <Monitor className="w-3 h-3 text-muted-foreground" />
-              <span className="text-[9px] font-medium text-muted-foreground">LOCAL</span>
-            </div>
-          )}
+          {/* Sync mode badge */}
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${badge.className}`}
+            title={
+              cloudStatus === "no-tables"
+                ? "Supabase reachable but atlas tables not found. Run the migration SQL in your Supabase dashboard."
+                : cloudStatus === "unreachable"
+                ? "Could not reach Supabase. Engine state is saved locally in IndexedDB."
+                : syncMode === "cloud"
+                ? "Connected to Supabase. Candidates sync across sessions."
+                : "Engine state persists in IndexedDB across page reloads."
+            }
+          >
+            <BadgeIcon className={`w-3 h-3 ${syncMode === "loading" ? "animate-spin" : ""}`} />
+            <span className="text-[9px] font-medium">{badge.label}</span>
+          </div>
           {/* Always-on status */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-success/5 border border-success/20">
             <Radio className="w-3 h-3 text-success animate-pulse" />

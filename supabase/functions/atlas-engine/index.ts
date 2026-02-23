@@ -547,6 +547,85 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (action === "bootstrap") {
+      // Auto-create tables if they don't exist (uses service role key)
+      const bootstrapSQL = `
+        CREATE TABLE IF NOT EXISTS atlas_candidates (
+          id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          candidate_id TEXT NOT NULL,
+          regime TEXT NOT NULL CHECK (regime IN ('low-vol', 'high-vol', 'jump-diffusion')),
+          generation INTEGER NOT NULL,
+          bins DOUBLE PRECISION[] NOT NULL,
+          metrics JSONB NOT NULL,
+          features JSONB NOT NULL,
+          stability DOUBLE PRECISION NOT NULL,
+          score DOUBLE PRECISION NOT NULL,
+          is_population BOOLEAN NOT NULL DEFAULT FALSE,
+          is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_atlas_candidates_regime ON atlas_candidates(regime);
+        CREATE INDEX IF NOT EXISTS idx_atlas_candidates_archived ON atlas_candidates(is_archived);
+        CREATE INDEX IF NOT EXISTS idx_atlas_candidates_population ON atlas_candidates(is_population);
+        CREATE INDEX IF NOT EXISTS idx_atlas_candidates_score ON atlas_candidates(score);
+        CREATE INDEX IF NOT EXISTS idx_atlas_candidates_created ON atlas_candidates(created_at);
+        CREATE TABLE IF NOT EXISTS atlas_state (
+          id TEXT PRIMARY KEY DEFAULT 'global',
+          total_generations INTEGER NOT NULL DEFAULT 0,
+          last_regime TEXT,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        INSERT INTO atlas_state (id, total_generations) VALUES ('global', 0) ON CONFLICT DO NOTHING;
+        ALTER TABLE atlas_candidates ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE atlas_state ENABLE ROW LEVEL SECURITY;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'atlas_candidates' AND policyname = 'Allow public read access on atlas_candidates') THEN
+            CREATE POLICY "Allow public read access on atlas_candidates" ON atlas_candidates FOR SELECT TO anon, authenticated USING (true);
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'atlas_state' AND policyname = 'Allow public read access on atlas_state') THEN
+            CREATE POLICY "Allow public read access on atlas_state" ON atlas_state FOR SELECT TO anon, authenticated USING (true);
+          END IF;
+        END $$;
+      `;
+
+      // Use the Supabase management SQL endpoint (service role has full access)
+      const dbUrl = Deno.env.get("SUPABASE_DB_URL");
+      if (dbUrl) {
+        // Direct postgres connection if available
+        // Fall through to REST-based approach if not
+      }
+
+      // Use supabase-js rpc or raw SQL via postgrest
+      const { error: sqlError } = await supabase.rpc("exec_sql", { query: bootstrapSQL }).single();
+
+      if (sqlError) {
+        // rpc function doesn't exist; try creating tables via individual operations
+        // This is a best-effort approach
+        const { error: stateErr } = await supabase
+          .from("atlas_state")
+          .upsert({ id: "global", total_generations: 0, updated_at: new Date().toISOString() });
+
+        if (!stateErr) {
+          return new Response(
+            JSON.stringify({ success: true, message: "Tables already exist" }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({ success: false, error: "Could not bootstrap tables. Run the migration SQL manually in the Supabase dashboard." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Tables created successfully" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (action === "status") {
       const { data: stateData } = await supabase
         .from("atlas_state")
