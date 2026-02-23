@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Activity, Crown, Zap, TrendingUp, AlertTriangle, Hash } from "lucide-react";
+import { Activity, Crown, Zap, TrendingUp, AlertTriangle, Hash, Trophy } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area,
+  AreaChart, Area, XAxis, YAxis, Tooltip,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
-import type { EngineState, RegimeId, Candidate } from "@/lib/discovery-engine";
-import { NUM_BINS, binPrice, REGIMES } from "@/lib/discovery-engine";
+import type { EngineState, RegimeId, Candidate, ChampionMetric } from "@/lib/discovery-engine";
+import { NUM_BINS, binPrice, CHAMPION_METRIC_LABELS } from "@/lib/discovery-engine";
 
 const REGIME_COLORS: Record<RegimeId, string> = {
   "low-vol": "hsl(142, 72%, 45%)",
@@ -23,9 +23,10 @@ const REGIME_LABELS: Record<RegimeId, string> = {
 
 interface LiveDashboardProps {
   state: EngineState;
+  onSelectCandidate: (id: string) => void;
 }
 
-function ChampionCard({ regime, champion }: { regime: RegimeId; champion: Candidate | null }) {
+function ChampionCard({ regime, champion, onClick }: { regime: RegimeId; champion: Candidate | null; onClick?: () => void }) {
   if (!champion) {
     return (
       <div className="surface-elevated rounded-xl p-4 border-l-2" style={{ borderLeftColor: REGIME_COLORS[regime] }}>
@@ -40,7 +41,11 @@ function ChampionCard({ regime, champion }: { regime: RegimeId; champion: Candid
 
   const m = champion.metrics;
   return (
-    <div className="surface-elevated rounded-xl p-4 border-l-2" style={{ borderLeftColor: REGIME_COLORS[regime] }}>
+    <div
+      className="surface-elevated rounded-xl p-4 border-l-2 cursor-pointer hover:bg-secondary/30 transition-colors"
+      style={{ borderLeftColor: REGIME_COLORS[regime] }}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Crown className="w-3.5 h-3.5" style={{ color: REGIME_COLORS[regime] }} />
@@ -73,6 +78,18 @@ function MiniStat({ label, value, positive }: { label: string; value: string; po
       <p className={`text-[10px] font-mono font-semibold ${positive === true ? "text-success" : positive === false ? "text-destructive" : "text-foreground"}`}>{value}</p>
     </div>
   );
+}
+
+function MetricChampionValue(c: Candidate, metric: ChampionMetric): string {
+  switch (metric) {
+    case "fees": return c.metrics.totalFees.toFixed(2);
+    case "utilization": return `${(c.metrics.liquidityUtilization * 100).toFixed(1)}%`;
+    case "lpValue": return c.metrics.lpValueVsHodl.toFixed(4);
+    case "lowSlippage": return `${(c.metrics.totalSlippage * 100).toFixed(3)}%`;
+    case "lowArbLeak": return c.metrics.arbLeakage.toFixed(2);
+    case "lowDrawdown": return `${(c.metrics.maxDrawdown * 100).toFixed(1)}%`;
+    case "stability": return c.stability.toFixed(4);
+  }
 }
 
 function LiquidityDensityChart({ candidate, color }: { candidate: Candidate; color: string }) {
@@ -155,7 +172,7 @@ function RadarMetrics({ candidates }: { candidates: (Candidate | null)[] }) {
   );
 }
 
-export default function LiveDashboard({ state }: LiveDashboardProps) {
+export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboardProps) {
   const regimeIds: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
   const champions = regimeIds.map(r => state.populations[r].champion);
   const totalEvaluated = regimeIds.reduce((sum, r) => sum + state.populations[r].totalEvaluated, 0);
@@ -168,6 +185,41 @@ export default function LiveDashboard({ state }: LiveDashboardProps) {
       .slice(0, 20),
     [state.activityLog]
   );
+
+  // Collect all metric champions across regimes (deduplicated)
+  const allMetricChampions = useMemo(() => {
+    const metrics: ChampionMetric[] = ["fees", "utilization", "lpValue", "lowSlippage", "lowArbLeak", "lowDrawdown", "stability"];
+    const results: { metric: ChampionMetric; candidate: Candidate; regime: RegimeId }[] = [];
+    const seen = new Set<string>();
+
+    for (const metric of metrics) {
+      // Find the best across all regimes for this metric
+      let best: { candidate: Candidate; regime: RegimeId } | null = null;
+      for (const rid of regimeIds) {
+        const mc = state.populations[rid].metricChampions[metric];
+        if (!mc) continue;
+        if (!best) { best = { candidate: mc, regime: rid }; continue; }
+        // Compare
+        const isBetter = (() => {
+          switch (metric) {
+            case "fees": return mc.metrics.totalFees > best.candidate.metrics.totalFees;
+            case "utilization": return mc.metrics.liquidityUtilization > best.candidate.metrics.liquidityUtilization;
+            case "lpValue": return mc.metrics.lpValueVsHodl > best.candidate.metrics.lpValueVsHodl;
+            case "lowSlippage": return mc.metrics.totalSlippage < best.candidate.metrics.totalSlippage;
+            case "lowArbLeak": return mc.metrics.arbLeakage < best.candidate.metrics.arbLeakage;
+            case "lowDrawdown": return mc.metrics.maxDrawdown < best.candidate.metrics.maxDrawdown;
+            case "stability": return mc.stability < best.candidate.stability;
+          }
+        })();
+        if (isBetter) best = { candidate: mc, regime: rid };
+      }
+      if (best && !seen.has(best.candidate.id)) {
+        results.push({ metric, ...best });
+        seen.add(best.candidate.id);
+      }
+    }
+    return results;
+  }, [state.populations]);
 
   return (
     <div className="space-y-5">
@@ -200,23 +252,54 @@ export default function LiveDashboard({ state }: LiveDashboardProps) {
             <p className="text-[9px] text-muted-foreground">Status</p>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${state.running ? "bg-success animate-pulse" : "bg-muted-foreground"}`} />
-            <p className="text-sm font-semibold text-foreground">{state.running ? "Running" : "Stopped"}</p>
+            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+            <p className="text-sm font-semibold text-foreground">Running</p>
           </div>
         </motion.div>
       </div>
 
-      {/* Champions per regime */}
+      {/* Overall champions per regime */}
       <div>
         <h3 className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5">
-          <Crown className="w-3.5 h-3.5" /> Current Champions
+          <Crown className="w-3.5 h-3.5" /> Overall Champions
         </h3>
         <div className="grid md:grid-cols-3 gap-3">
           {regimeIds.map(r => (
-            <ChampionCard key={r} regime={r} champion={state.populations[r].champion} />
+            <ChampionCard
+              key={r}
+              regime={r}
+              champion={state.populations[r].champion}
+              onClick={state.populations[r].champion ? () => onSelectCandidate(state.populations[r].champion!.id) : undefined}
+            />
           ))}
         </div>
       </div>
+
+      {/* Per-metric champions */}
+      {allMetricChampions.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
+          <h3 className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5">
+            <Trophy className="w-3.5 h-3.5" /> Metric Champions
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+            {allMetricChampions.map(({ metric, candidate, regime }) => (
+              <div
+                key={metric}
+                className="surface-elevated rounded-xl p-3 cursor-pointer hover:bg-secondary/30 transition-colors border-t-2"
+                style={{ borderTopColor: REGIME_COLORS[regime] }}
+                onClick={() => onSelectCandidate(candidate.id)}
+              >
+                <p className="text-[8px] text-muted-foreground mb-1">{CHAMPION_METRIC_LABELS[metric]}</p>
+                <p className="text-xs font-bold font-mono text-foreground mb-1">{MetricChampionValue(candidate, metric)}</p>
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: REGIME_COLORS[regime] }} />
+                  <span className="text-[7px] font-mono text-muted-foreground">{candidate.id.slice(0, 10)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Radar comparison + Liquidity density curves */}
       <div className="grid md:grid-cols-2 gap-4">
@@ -265,7 +348,7 @@ export default function LiveDashboard({ state }: LiveDashboardProps) {
           <Activity className="w-3.5 h-3.5" /> Activity Log
         </h4>
         {recentActivity.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground text-center py-4">No activity yet. Start the engine to begin discovery.</p>
+          <p className="text-[10px] text-muted-foreground text-center py-4">No activity yet. Engine is initializing...</p>
         ) : (
           <div className="space-y-1 max-h-60 overflow-y-auto">
             {recentActivity.map((entry, i) => (

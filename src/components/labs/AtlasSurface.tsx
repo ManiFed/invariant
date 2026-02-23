@@ -168,6 +168,43 @@ function CollectiveSpiderGraph({ candidates, filterRegime }: { candidates: Candi
   );
 }
 
+// ─── Individual Spider Graph ─────────────────────────────────────────────────
+
+function IndividualSpiderGraph({ candidate }: { candidate: Candidate }) {
+  const colors = useChartColors();
+
+  const data = useMemo(() => {
+    const m = candidate.metrics;
+    return [
+      { axis: "Fees", value: Math.min(m.totalFees / 50, 1) * 100 },
+      { axis: "Utilization", value: m.liquidityUtilization * 100 },
+      { axis: "LP Value", value: Math.min(m.lpValueVsHodl, 1.2) / 1.2 * 100 },
+      { axis: "Low Slippage", value: Math.max(0, (1 - m.totalSlippage * 10)) * 100 },
+      { axis: "Low Arb Leak", value: Math.max(0, (1 - m.arbLeakage / 50)) * 100 },
+      { axis: "Stability", value: Math.max(0, (1 - candidate.stability * 5)) * 100 },
+      { axis: "Low Drawdown", value: Math.max(0, (1 - m.maxDrawdown * 2)) * 100 },
+    ];
+  }, [candidate]);
+
+  const color = REGIME_COLORS[candidate.regime];
+
+  return (
+    <div className="h-48">
+      <ResponsiveContainer width="100%" height="100%">
+        <RadarChart data={data}>
+          <PolarGrid stroke={colors.grid} />
+          <PolarAngleAxis dataKey="axis" tick={{ fontSize: 7, fill: colors.tick }} />
+          <Tooltip
+            contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 8, fontSize: 9, color: colors.tooltipText }}
+            wrapperStyle={{ pointerEvents: "none" }}
+          />
+          <Radar dataKey="value" stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} name="Performance" />
+        </RadarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // ─── Main Atlas Surface ─────────────────────────────────────────────────────
 
 export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceProps) {
@@ -536,7 +573,7 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
         </motion.div>
       </div>
 
-      {/* Hovered candidate quick info */}
+      {/* Hovered candidate quick info + individual spider graph */}
       {hoveredCandidate && (
         <motion.div
           className="surface-elevated rounded-xl p-4"
@@ -555,12 +592,24 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
               Open Detail
             </button>
           </div>
-          <div className="grid grid-cols-5 gap-2">
-            <QuickStat label="Curvature" value={hoveredCandidate.features.curvature.toFixed(4)} />
-            <QuickStat label="Entropy" value={hoveredCandidate.features.entropy.toFixed(2)} />
-            <QuickStat label="Symmetry" value={hoveredCandidate.features.symmetry.toFixed(3)} />
-            <QuickStat label="Tail Ratio" value={hoveredCandidate.features.tailDensityRatio.toFixed(3)} />
-            <QuickStat label="Peak Conc." value={hoveredCandidate.features.peakConcentration.toFixed(2)} />
+          <div className="grid md:grid-cols-3 gap-4">
+            {/* Feature stats */}
+            <div className="md:col-span-1 space-y-2">
+              <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide">Shape Features</p>
+              <div className="grid grid-cols-2 gap-2">
+                <QuickStat label="Curvature" value={hoveredCandidate.features.curvature.toFixed(4)} />
+                <QuickStat label="Entropy" value={hoveredCandidate.features.entropy.toFixed(2)} />
+                <QuickStat label="Symmetry" value={hoveredCandidate.features.symmetry.toFixed(3)} />
+                <QuickStat label="Tail Ratio" value={hoveredCandidate.features.tailDensityRatio.toFixed(3)} />
+                <QuickStat label="Peak Conc." value={hoveredCandidate.features.peakConcentration.toFixed(2)} />
+                <QuickStat label="Score" value={hoveredCandidate.score.toFixed(3)} />
+              </div>
+            </div>
+            {/* Individual spider graph */}
+            <div className="md:col-span-2">
+              <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Performance Profile</p>
+              <IndividualSpiderGraph candidate={hoveredCandidate} />
+            </div>
           </div>
         </motion.div>
       )}

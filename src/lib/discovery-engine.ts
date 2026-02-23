@@ -71,11 +71,25 @@ export interface Candidate {
   timestamp: number;
 }
 
+/** Per-metric champion IDs */
+export type ChampionMetric = "fees" | "utilization" | "lpValue" | "lowSlippage" | "lowArbLeak" | "lowDrawdown" | "stability";
+
+export const CHAMPION_METRIC_LABELS: Record<ChampionMetric, string> = {
+  fees: "Highest Fees",
+  utilization: "Best Utilization",
+  lpValue: "Best LP/HODL",
+  lowSlippage: "Lowest Slippage",
+  lowArbLeak: "Lowest Arb Leak",
+  lowDrawdown: "Lowest Drawdown",
+  stability: "Most Stable",
+};
+
 /** Population state for one regime */
 export interface PopulationState {
   regime: RegimeId;
   candidates: Candidate[];
   champion: Candidate | null;
+  metricChampions: Record<ChampionMetric, Candidate | null>;
   generation: number;
   totalEvaluated: number;
 }
@@ -633,6 +647,9 @@ export function runGeneration(
   const newPop = allCandidates.slice(0, POPULATION_SIZE);
   const newChampion = newPop[0];
 
+  // Compute per-metric champions from the full candidate set
+  const metricChampions = computeMetricChampions(allCandidates, population.metricChampions);
+
   // Check for champion replacement
   const prevChampionScore = population.champion?.score ?? Infinity;
   if (newChampion.score < prevChampionScore) {
@@ -661,16 +678,53 @@ export function runGeneration(
     generation: gen,
   });
 
+  // Only archive top 5% of candidates (by score) to save memory
+  const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
+  const topCandidates = allCandidates.slice(0, archiveCount);
+
   return {
     newPopulation: {
       regime: regimeConfig.id,
       candidates: newPop,
       champion: newChampion,
+      metricChampions,
       generation: gen,
       totalEvaluated: population.totalEvaluated + allCandidates.length,
     },
-    newCandidates: allCandidates,
+    newCandidates: topCandidates,
     events,
+  };
+}
+
+/** Compute per-metric champions, keeping the best across all time */
+function computeMetricChampions(
+  candidates: Candidate[],
+  prev: Record<ChampionMetric, Candidate | null>
+): Record<ChampionMetric, Candidate | null> {
+  function best(
+    current: Candidate | null,
+    pool: Candidate[],
+    key: (c: Candidate) => number,
+    lower: boolean
+  ): Candidate | null {
+    let champ = current;
+    for (const c of pool) {
+      if (!champ) { champ = c; continue; }
+      const val = key(c);
+      const champVal = key(champ);
+      if (lower ? val < champVal : val > champVal) champ = c;
+    }
+    return champ;
+  }
+
+  return {
+    fees: best(prev.fees, candidates, c => c.metrics.totalFees, false),
+    utilization: best(prev.utilization, candidates, c => c.metrics.liquidityUtilization, false),
+    lpValue: best(prev.lpValue, candidates, c => c.metrics.lpValueVsHodl, false),
+    lowSlippage: best(prev.lowSlippage, candidates, c => c.metrics.totalSlippage, true),
+    lowArbLeak: best(prev.lowArbLeak, candidates, c => c.metrics.arbLeakage, true),
+    lowDrawdown: best(prev.lowDrawdown, candidates, c => c.metrics.maxDrawdown, true),
+    stability: best(prev.stability, candidates, c => c.stability, true),
   };
 }
 
@@ -768,11 +822,16 @@ export function generatePriceImpactCurve(bins: Float64Array, numPoints: number =
 
 // ─── Initialize Engine State ────────────────────────────────────────────────
 
+const EMPTY_METRIC_CHAMPIONS: Record<ChampionMetric, Candidate | null> = {
+  fees: null, utilization: null, lpValue: null, lowSlippage: null,
+  lowArbLeak: null, lowDrawdown: null, stability: null,
+};
+
 export function createInitialState(): EngineState {
   const populations: Record<RegimeId, PopulationState> = {
-    "low-vol": { regime: "low-vol", candidates: [], champion: null, generation: 0, totalEvaluated: 0 },
-    "high-vol": { regime: "high-vol", candidates: [], champion: null, generation: 0, totalEvaluated: 0 },
-    "jump-diffusion": { regime: "jump-diffusion", candidates: [], champion: null, generation: 0, totalEvaluated: 0 },
+    "low-vol": { regime: "low-vol", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
+    "high-vol": { regime: "high-vol", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
+    "jump-diffusion": { regime: "jump-diffusion", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
   };
   return { populations, archive: [], activityLog: [], running: false, totalGenerations: 0 };
 }

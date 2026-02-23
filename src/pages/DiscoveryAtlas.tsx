@@ -12,21 +12,18 @@ type View = "dashboard" | "atlas" | "detail";
 
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, getCandidate } = useDiscoveryEngine();
+  const { state, selectedCandidate, selectCandidate, clearSelection } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
 
   const handleSelectCandidate = useCallback((id: string) => {
-    setSelectedCandidateId(id);
+    selectCandidate(id);
     setActiveView("detail");
-  }, []);
+  }, [selectCandidate]);
 
   const handleBackFromDetail = useCallback(() => {
-    setSelectedCandidateId(null);
+    clearSelection();
     setActiveView("atlas");
-  }, []);
-
-  const selectedCandidate = selectedCandidateId ? getCandidate(selectedCandidateId) : undefined;
+  }, [clearSelection]);
 
   const tabs = [
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
@@ -81,7 +78,7 @@ const DiscoveryAtlas = () => {
               </button>
             );
           })}
-          {selectedCandidateId && (
+          {selectedCandidate && (
             <button
               onClick={() => setActiveView("detail")}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
@@ -102,7 +99,7 @@ const DiscoveryAtlas = () => {
         <AnimatePresence mode="wait">
           {activeView === "dashboard" && (
             <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-              <LiveDashboard state={state} />
+              <LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} />
             </motion.div>
           )}
           {activeView === "atlas" && (
