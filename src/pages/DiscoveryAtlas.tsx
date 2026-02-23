@@ -35,7 +35,7 @@ const SYNC_BADGE: Record<SyncMode, { icon: typeof Cloud; label: string; classNam
 
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, cloudStatus } = useDiscoveryEngine();
+  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, cloudStatus, togglePersistence } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const detailCandidateRef = useRef(selectedCandidate);
   if (selectedCandidate) {
@@ -76,22 +76,35 @@ const DiscoveryAtlas = () => {
           <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT ATLAS</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Sync mode badge */}
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${badge.className}`}
-            title={
-              cloudStatus === "no-tables"
-                ? "Supabase reachable but atlas tables not found. Run the migration SQL in your Supabase dashboard."
-                : cloudStatus === "unreachable"
-                ? "Could not reach Supabase. Engine state is saved locally in IndexedDB."
-                : syncMode === "cloud"
-                ? "Connected to Supabase. Candidates sync across sessions."
-                : "Engine state persists in IndexedDB across page reloads."
-            }
-          >
-            <BadgeIcon className={`w-3 h-3 ${syncMode === "loading" ? "animate-spin" : ""}`} />
-            <span className="text-[9px] font-medium">{badge.label}</span>
-          </div>
+          {/* Sync mode badge — click to toggle persistent/local */}
+          {(syncMode === "persisted" || syncMode === "memory") ? (
+            <button
+              onClick={togglePersistence}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${badge.className}`}
+              title={
+                syncMode === "persisted"
+                  ? "Saving to IndexedDB. Click to switch to in-memory (no persistence)."
+                  : "In-memory only. Click to enable IndexedDB persistence."
+              }
+            >
+              <BadgeIcon className="w-3 h-3" />
+              <span className="text-[9px] font-medium">{badge.label}</span>
+            </button>
+          ) : (
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${badge.className}`}
+              title={
+                cloudStatus === "no-tables"
+                  ? "Supabase reachable but atlas tables not found. Run the migration SQL in your Supabase dashboard."
+                  : cloudStatus === "unreachable"
+                  ? "Could not reach Supabase. Engine state is saved locally in IndexedDB."
+                  : "Connected to Supabase. Candidates sync across sessions."
+              }
+            >
+              <BadgeIcon className={`w-3 h-3 ${syncMode === "loading" ? "animate-spin" : ""}`} />
+              <span className="text-[9px] font-medium">{badge.label}</span>
+            </div>
+          )}
           {/* Always-on status */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-success/5 border border-success/20">
             <Radio className="w-3 h-3 text-success animate-pulse" />

@@ -44,7 +44,11 @@ export function useDiscoveryEngine() {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // ─── Local engine tick ─────────────────────────────────────────────────────
+  // Use a ref for syncMode inside tick so tick never needs to be recreated
+  const syncModeRef = useRef<SyncMode>(syncMode);
+  syncModeRef.current = syncMode;
+
+  // ─── Local engine tick (stable — no deps, uses refs) ───────────────────────
 
   const tick = useCallback(() => {
     if (!runningRef.current) return;
@@ -57,7 +61,7 @@ export function useDiscoveryEngine() {
 
       const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig);
 
-      const limit = syncMode === "cloud" ? CLOUD_ARCHIVE_LIMIT : LOCAL_ARCHIVE_LIMIT;
+      const limit = syncModeRef.current === "cloud" ? CLOUD_ARCHIVE_LIMIT : LOCAL_ARCHIVE_LIMIT;
       const newArchive = [...prev.archive, ...newCandidates];
       if (newArchive.length > limit) {
         newArchive.splice(0, newArchive.length - limit);
@@ -73,7 +77,7 @@ export function useDiscoveryEngine() {
     });
 
     timeoutRef.current = setTimeout(tick, TICK_INTERVAL);
-  }, [syncMode]);
+  }, []); // stable — reads syncMode from ref
 
   // ─── Initialization: Cloud → IndexedDB → Memory ────────────────────────────
 
@@ -103,12 +107,10 @@ export function useDiscoveryEngine() {
 
       if (persistedState && persistedState.archive.length > 0) {
         setState(persistedState);
-        setSyncMode("persisted");
-        return;
       }
 
-      // 3. Fall through to in-memory (already initialized)
-      setSyncMode(persistedState ? "persisted" : "memory");
+      // Always use "persisted" — IndexedDB saves silently fail if unavailable
+      setSyncMode("persisted");
     })();
 
     return () => { cancelled = true; };
@@ -183,13 +185,10 @@ export function useDiscoveryEngine() {
     };
   }, [syncMode]);
 
-  // ─── IndexedDB periodic persistence (non-cloud modes) ─────────────────────
+  // ─── IndexedDB periodic persistence ────────────────────────────────────────
 
   useEffect(() => {
-    if (syncMode === "loading" || syncMode === "cloud") return;
-
-    // Mark as persisted (IndexedDB will be used)
-    if (syncMode === "memory") setSyncMode("persisted");
+    if (syncMode !== "persisted") return;
 
     const persist = () => {
       saveAtlasState(stateRef.current);
@@ -206,7 +205,7 @@ export function useDiscoveryEngine() {
     };
   }, [syncMode]);
 
-  // ─── Start local engine (always runs for responsiveness) ───────────────────
+  // ─── Start local engine (runs once after init completes) ───────────────────
 
   useEffect(() => {
     if (syncMode === "loading") return;
@@ -216,11 +215,22 @@ export function useDiscoveryEngine() {
     runningRef.current = true;
     tick();
 
+    // Only clean up on unmount (localStartedRef prevents re-entry)
     return () => {
       runningRef.current = false;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [syncMode, tick]);
+
+  // ─── Toggle sync mode (user-facing) ────────────────────────────────────────
+
+  const togglePersistence = useCallback(() => {
+    setSyncMode(prev => {
+      if (prev === "persisted") return "memory";
+      if (prev === "memory") return "persisted";
+      return prev; // don't toggle cloud or loading
+    });
+  }, []);
 
   // ─── Selection (snapshot-based, survives archive churn) ────────────────────
 
@@ -254,5 +264,6 @@ export function useDiscoveryEngine() {
     clearSelection,
     syncMode,
     cloudStatus,
+    togglePersistence,
   };
 }
