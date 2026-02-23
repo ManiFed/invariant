@@ -12,12 +12,28 @@ import { type Candidate, type RegimeId, REGIMES, createInitialState, runGenerati
 
 type View = "dashboard" | "atlas" | "observatory" | "experiments" | "detail";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
+type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
+type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
 
 type ExperimentConfig = {
   contributor: string;
   regime: RegimeId;
   objective: ObjectiveType;
   generations: number;
+  searchStrategy: SearchStrategy;
+  objectiveComposer: ObjectiveComposer;
+  objectiveVector: string[];
+  structuralEvolution: boolean;
+  parameterTuning: boolean;
+  liquidityMutation: boolean;
+  feePolicySearch: boolean;
+  populationSize: number;
+  mutationStrength: number;
+  structuralMutationProbability: number;
+  invariantMutationProbability: number;
+  topologyMutationProbability: number;
+  stressMode: "baseline" | "regime-path" | "adversarial" | "distribution-weighted";
+  compositionPlan: string;
 };
 
 type Experiment = {
@@ -32,6 +48,8 @@ type Experiment = {
   convergenceRate: number;
   parameterDispersion: number;
   performanceVariance: number;
+  structuralFragility: number;
+  robustnessScore: number;
 };
 
 const SYNC_BADGE: Record<SyncMode, { icon: typeof Wifi; label: string; className: string }> = {
@@ -73,7 +91,26 @@ const DiscoveryAtlas = () => {
   const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence, ingestExperimentCandidates } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [config, setConfig] = useState<ExperimentConfig>({ contributor: "guest", regime: "low-vol", objective: "balanced", generations: 8 });
+  const [config, setConfig] = useState<ExperimentConfig>({
+    contributor: "guest",
+    regime: "low-vol",
+    objective: "balanced",
+    generations: 8,
+    searchStrategy: "map-elites",
+    objectiveComposer: "pareto",
+    objectiveVector: ["fee_revenue", "slippage", "arb_leakage", "tail_drawdown", "utilization", "regime_robustness"],
+    structuralEvolution: true,
+    parameterTuning: true,
+    liquidityMutation: true,
+    feePolicySearch: true,
+    populationSize: 96,
+    mutationStrength: 0.35,
+    structuralMutationProbability: 0.24,
+    invariantMutationProbability: 0.18,
+    topologyMutationProbability: 0.1,
+    stressMode: "regime-path",
+    compositionPlan: "Explore invariant families → narrow top 3 → robust optimization → adversarial stress → fine tune liquidity",
+  });
   const [atlasFilters, setAtlasFilters] = useState({ contributor: "all", experimentId: "all", objectiveType: "all", regime: "all" as RegimeId | "all" });
   const detailCandidateRef = useRef(selectedCandidate);
 
@@ -97,6 +134,10 @@ const DiscoveryAtlas = () => {
       const convergenceRate = Number((prevBest - bestScore).toFixed(4));
       prevBest = bestScore;
       const performanceVariance = champion ? Number((champion.stability * champion.stability).toFixed(5)) : 0;
+      const structuralFragility = champion ? Number((Math.max(0, 1 - champion.stability) * (1 + expConfig.topologyMutationProbability)).toFixed(4)) : 0;
+      const robustnessScore = champion
+        ? Number((champion.stability * (1 - expConfig.mutationStrength * 0.2) * (expConfig.stressMode === "adversarial" ? 0.9 : 1)).toFixed(4))
+        : 0;
 
       setExperiments((prev) => prev.map((experiment) => (
         experiment.id === expId
@@ -109,6 +150,8 @@ const DiscoveryAtlas = () => {
               convergenceRate,
               parameterDispersion: champion ? Number(binDispersion(champion).toFixed(3)) : 0,
               performanceVariance,
+              structuralFragility,
+              robustnessScore,
               status: generation >= expConfig.generations ? "completed" : "running",
             }
           : experiment
@@ -145,6 +188,8 @@ const DiscoveryAtlas = () => {
       convergenceRate: 0,
       parameterDispersion: 0,
       performanceVariance: 0,
+      structuralFragility: 0,
+      robustnessScore: 0,
     }, ...prev]);
     runExperiment(expId, config);
     setActiveView("experiments");
@@ -275,30 +320,98 @@ const DiscoveryAtlas = () => {
           {activeView === "observatory" && <motion.div key="observatory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GeometryObservatory /></motion.div>}
           {activeView === "experiments" && (
             <motion.div key="experiments" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="space-y-4">
-              <section className="surface-elevated rounded-xl border border-border p-4 grid sm:grid-cols-5 gap-2 items-end">
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1">Contributor</p>
-                  <input className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.contributor} onChange={(event) => setConfig((prev) => ({ ...prev, contributor: event.target.value || "guest" }))} />
+              <section className="surface-elevated rounded-xl border border-border p-4 space-y-4">
+                <div className="grid sm:grid-cols-5 gap-2 items-end">
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Contributor</p>
+                    <input className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.contributor} onChange={(event) => setConfig((prev) => ({ ...prev, contributor: event.target.value || "guest" }))} />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Regime</p>
+                    <select className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.regime} onChange={(event) => setConfig((prev) => ({ ...prev, regime: event.target.value as RegimeId }))}>
+                      {REGIMES.map((regime) => <option key={regime.id} value={regime.id}>{regime.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Search strategy</p>
+                    <select className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.searchStrategy} onChange={(event) => setConfig((prev) => ({ ...prev, searchStrategy: event.target.value as SearchStrategy }))}>
+                      <option value="genetic">Genetic algorithm</option>
+                      <option value="cma-es">CMA-ES</option>
+                      <option value="rl">Reinforcement learning</option>
+                      <option value="bayesian">Bayesian optimization</option>
+                      <option value="map-elites">MAP-Elites</option>
+                      <option value="random">Pure random baseline</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1">Objective aggregation</p>
+                    <select className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.objectiveComposer} onChange={(event) => setConfig((prev) => ({ ...prev, objectiveComposer: event.target.value as ObjectiveComposer }))}>
+                      <option value="weighted-sum">Weighted sum</option>
+                      <option value="lexicographic">Lexicographic</option>
+                      <option value="pareto">Pareto frontier only</option>
+                      <option value="risk-adjusted">Risk-adjusted composite</option>
+                      <option value="worst-case">Worst-case across regimes</option>
+                    </select>
+                  </div>
+                  <button onClick={handleSubmitExperiment} className="px-3 py-2 rounded-md bg-foreground text-background text-xs font-semibold">Compile experiment</button>
                 </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1">Regime</p>
-                  <select className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.regime} onChange={(event) => setConfig((prev) => ({ ...prev, regime: event.target.value as RegimeId }))}>
-                    {REGIMES.map((regime) => <option key={regime.id} value={regime.id}>{regime.label}</option>)}
-                  </select>
+
+                <div className="grid lg:grid-cols-3 gap-3 text-[11px]">
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Generations</p>
+                    <input type="number" min={3} max={40} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.generations} onChange={(event) => setConfig((prev) => ({ ...prev, generations: Number(event.target.value) || 8 }))} />
+                  </label>
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Population size</p>
+                    <input type="number" min={32} max={512} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.populationSize} onChange={(event) => setConfig((prev) => ({ ...prev, populationSize: Number(event.target.value) || 96 }))} />
+                  </label>
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Mutation strength</p>
+                    <input type="number" min={0.01} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.mutationStrength} onChange={(event) => setConfig((prev) => ({ ...prev, mutationStrength: Number(event.target.value) || 0.35 }))} />
+                  </label>
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Structural mutation probability</p>
+                    <input type="number" min={0} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.structuralMutationProbability} onChange={(event) => setConfig((prev) => ({ ...prev, structuralMutationProbability: Number(event.target.value) || 0.24 }))} />
+                  </label>
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Invariant mutation probability</p>
+                    <input type="number" min={0} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.invariantMutationProbability} onChange={(event) => setConfig((prev) => ({ ...prev, invariantMutationProbability: Number(event.target.value) || 0.18 }))} />
+                  </label>
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Topology mutation probability</p>
+                    <input type="number" min={0} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.topologyMutationProbability} onChange={(event) => setConfig((prev) => ({ ...prev, topologyMutationProbability: Number(event.target.value) || 0.1 }))} />
+                  </label>
                 </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1">Objective</p>
-                  <select className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.objective} onChange={(event) => setConfig((prev) => ({ ...prev, objective: event.target.value as ObjectiveType }))}>
-                    <option value="balanced">Balanced metric vector</option>
-                    <option value="lp-value">Max LP/HODL</option>
-                    <option value="slippage">Min slippage & leakage</option>
-                  </select>
+
+                <div className="grid lg:grid-cols-2 gap-3 text-[11px]">
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Regime sampling mode</p>
+                    <select className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.stressMode} onChange={(event) => setConfig((prev) => ({ ...prev, stressMode: event.target.value as ExperimentConfig["stressMode"] }))}>
+                      <option value="baseline">Preset baseline regime</option>
+                      <option value="regime-path">Regime path simulation</option>
+                      <option value="adversarial">Adversarial regime generation</option>
+                      <option value="distribution-weighted">Distribution-weighted Monte Carlo</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <p className="text-muted-foreground mb-1">Objective vector</p>
+                    <input className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.objectiveVector.join(", ")} onChange={(event) => setConfig((prev) => ({ ...prev, objectiveVector: event.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))} />
+                  </label>
                 </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1">Generations</p>
-                  <input type="number" min={3} max={20} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.generations} onChange={(event) => setConfig((prev) => ({ ...prev, generations: Number(event.target.value) || 8 }))} />
+
+                <div className="grid sm:grid-cols-4 gap-2 text-[11px]">
+                  {[{ label: "Structural evolution", key: "structuralEvolution" }, { label: "Parameter tuning", key: "parameterTuning" }, { label: "Liquidity geometry mutation", key: "liquidityMutation" }, { label: "Fee policy search", key: "feePolicySearch" }].map((toggle) => (
+                    <label key={toggle.key} className="flex items-center gap-2 rounded border border-border p-2">
+                      <input type="checkbox" checked={config[toggle.key as keyof Pick<ExperimentConfig, "structuralEvolution" | "parameterTuning" | "liquidityMutation" | "feePolicySearch">] as boolean} onChange={(event) => setConfig((prev) => ({ ...prev, [toggle.key]: event.target.checked }))} />
+                      <span>{toggle.label}</span>
+                    </label>
+                  ))}
                 </div>
-                <button onClick={handleSubmitExperiment} className="px-3 py-2 rounded-md bg-foreground text-background text-xs font-semibold">Submit experiment</button>
+
+                <label className="block text-[11px]">
+                  <p className="text-muted-foreground mb-1">Hierarchical composition plan</p>
+                  <textarea className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-16" value={config.compositionPlan} onChange={(event) => setConfig((prev) => ({ ...prev, compositionPlan: event.target.value }))} />
+                </label>
               </section>
 
               {experiments.map((experiment) => (
@@ -307,14 +420,19 @@ const DiscoveryAtlas = () => {
                     <p className="text-sm font-semibold">{experiment.id} · {experiment.config.contributor}</p>
                     <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${experiment.status === "completed" ? "border-success/30 text-success" : "border-warning/30 text-warning"}`}>{experiment.status.toUpperCase()}</span>
                   </div>
-                  <div className="grid sm:grid-cols-6 gap-2 text-[11px] text-muted-foreground">
+                  <div className="grid sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground">
                     <div>Gen {experiment.currentGeneration}/{experiment.config.generations}</div>
-                    <div>Objective: {experiment.config.objective}</div>
-                    <div>Pareto: {experiment.paretoCount}</div>
+                    <div>Strategy: {experiment.config.searchStrategy}</div>
+                    <div>Objective: {experiment.config.objectiveComposer}</div>
+                    <div>Pareto set: {experiment.paretoCount}</div>
                     <div>Δ score: {experiment.convergenceRate.toFixed(4)}</div>
                     <div>Dispersion: {experiment.parameterDispersion.toFixed(2)}</div>
                     <div>Variance: {experiment.performanceVariance.toFixed(5)}</div>
+                    <div>Fragility: {experiment.structuralFragility.toFixed(4)}</div>
+                    <div>Robustness: {experiment.robustnessScore.toFixed(4)}</div>
+                    <div>Stress mode: {experiment.config.stressMode}</div>
                   </div>
+                  <p className="mt-3 text-[11px] text-muted-foreground">Plan: {experiment.config.compositionPlan}</p>
                   {experiment.bestCandidate && (
                     <button className="mt-3 text-xs text-chart-3 underline" onClick={() => handleSelectCandidate(experiment.bestCandidate!.id)}>
                       Open champion · LP/HODL {experiment.bestCandidate.metrics.lpValueVsHodl.toFixed(3)} · Slippage {(experiment.bestCandidate.metrics.totalSlippage * 100).toFixed(2)}%
