@@ -65,7 +65,7 @@ const DiscoveryAtlas = () => {
   const badge = SYNC_BADGE[syncMode];
   const BadgeIcon = badge.icon;
 
-  const canToggle = syncMode === "persisted" || syncMode === "memory" || syncMode === "live";
+  const canToggle = syncMode === "persisted" || syncMode === "memory";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -85,7 +85,7 @@ const DiscoveryAtlas = () => {
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${badge.className}`}
               title={
                 syncMode === "live"
-                  ? "Broadcasting to all viewers via Realtime. Click to switch to local-only."
+                  ? "Cloud stream is shared globally and updates in real time."
                   : syncMode === "persisted"
                   ? "Saving to IndexedDB. Click to switch to in-memory."
                   : "In-memory only. Click to enable persistence."
