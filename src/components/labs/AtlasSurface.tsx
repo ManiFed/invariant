@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Map, Layers, Eye, ZoomIn } from "lucide-react";
+import { Map as MapIcon, Layers, Eye, ZoomIn } from "lucide-react";
 import type { EngineState, RegimeId, Candidate } from "@/lib/discovery-engine";
 import { embedCandidates, computeCoverage } from "@/lib/discovery-engine";
 
@@ -44,12 +44,12 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
 
   // Create lookup: embeddingId → candidate
   const candidateMap = useMemo(() => {
-    const map = new Map<string, Candidate>();
-    for (const c of filteredCandidates) map.set(c.id, c);
-    return map;
+    const lookup = new globalThis.Map<string, Candidate>();
+    for (const c of filteredCandidates) lookup.set(c.id, c);
+    return lookup;
   }, [filteredCandidates]);
 
-  const hoveredCandidate = hoveredId ? candidateMap.get(hoveredId) : null;
+  const hoveredCandidate = hoveredId ? candidateMap.get(hoveredId) ?? null : null;
 
   // Density heatmap colors
   const maxDensity = useMemo(() => {
@@ -76,7 +76,7 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
       {/* Controls row */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Map className="w-4 h-4 text-foreground" />
+          <MapIcon className="w-4 h-4 text-foreground" />
           <h3 className="text-sm font-semibold text-foreground">Atlas Map</h3>
           <span className="text-[9px] font-mono text-muted-foreground ml-2">
             {filteredCandidates.length} candidates plotted
