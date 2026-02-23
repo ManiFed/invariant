@@ -6,10 +6,11 @@ import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
 import AtlasSurface from "@/components/labs/AtlasSurface";
 import DesignDetail from "@/components/labs/DesignDetail";
+import GeometryObservatory from "@/components/labs/GeometryObservatory";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "experiments" | "detail";
+type View = "dashboard" | "atlas" | "observatory" | "experiments" | "detail";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 
 type ExperimentConfig = {
@@ -180,6 +181,7 @@ const DiscoveryAtlas = () => {
   const tabs = [
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
+    { id: "observatory" as const, label: "Geometry Observatory", icon: FlaskConical },
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
   ];
 
@@ -270,6 +272,7 @@ const DiscoveryAtlas = () => {
         <AnimatePresence mode="wait">
           {activeView === "dashboard" && <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
           {activeView === "atlas" && <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} /></motion.div>}
+          {activeView === "observatory" && <motion.div key="observatory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GeometryObservatory /></motion.div>}
           {activeView === "experiments" && (
             <motion.div key="experiments" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="space-y-4">
               <section className="surface-elevated rounded-xl border border-border p-4 grid sm:grid-cols-5 gap-2 items-end">

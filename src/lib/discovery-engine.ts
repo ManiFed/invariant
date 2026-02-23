@@ -30,6 +30,8 @@ export interface RegimeConfig {
   jumpIntensity: number;  // expected jumps per year
   jumpMean: number;       // mean log-jump size
   jumpStd: number;        // std of log-jump size
+  meanReversion?: number; // OU pull toward anchor price
+  arbResponsiveness?: number; // 0-1 fraction of deviation corrected per arb step
 }
 
 export const REGIMES: RegimeConfig[] = [
@@ -52,10 +54,12 @@ export interface MetricVector {
 /** Feature descriptors derived from the liquidity density shape */
 export interface FeatureDescriptor {
   curvature: number;       // sum of squared second differences
+  curvatureGradient: number; // first derivative of local curvature profile
   entropy: number;         // Shannon entropy of normalized bin weights
   symmetry: number;        // correlation between left and right halves
   tailDensityRatio: number; // ratio of tail bins to center bins
   peakConcentration: number; // max bin weight / mean bin weight
+  concentrationWidth: number; // weighted stddev around center bin
 }
 
 /** A single AMM candidate */
@@ -244,6 +248,8 @@ export function generatePricePath(regime: RegimeConfig, steps: number, dt: numbe
   const path = new Float64Array(steps + 1);
   path[0] = 0; // log-price starts at 0 (price = 1.0)
   const { volatility, drift, jumpIntensity, jumpMean, jumpStd } = regime;
+  const meanReversion = regime.meanReversion ?? 0;
+  const anchor = 0;
 
   for (let t = 1; t <= steps; t++) {
     const diffusion = (drift - 0.5 * volatility * volatility) * dt + volatility * Math.sqrt(dt) * randn();
@@ -258,7 +264,8 @@ export function generatePricePath(regime: RegimeConfig, steps: number, dt: numbe
       }
     }
 
-    path[t] = path[t - 1] + diffusion + jumpComponent;
+    const reversion = meanReversion * (anchor - path[t - 1]) * dt;
+    path[t] = path[t - 1] + diffusion + jumpComponent + reversion;
   }
   return path;
 }
@@ -307,9 +314,10 @@ function executeRandomTrade(state: SimState): void {
 }
 
 /** Execute arbitrage step: realign AMM price to external reference */
-function executeArbitrage(state: SimState, externalLogPrice: number): void {
+function executeArbitrage(state: SimState, externalLogPrice: number, regime?: RegimeConfig): void {
   const deviation = Math.abs(state.currentLogPrice - externalLogPrice);
   if (deviation < ARB_THRESHOLD) return;
+  const arbResponsiveness = Math.min(Math.max(regime?.arbResponsiveness ?? 1, 0.05), 1);
 
   // Compute the optimal arb trade size to close the gap
   const arbSize = deviation * TOTAL_LIQUIDITY * 0.1;
@@ -319,7 +327,8 @@ function executeArbitrage(state: SimState, externalLogPrice: number): void {
   if (arbProfit > 0) {
     state.arbLeakage += arbProfit;
     state.totalFees += fee;
-    state.currentLogPrice = externalLogPrice; // price realigned
+    const correction = (externalLogPrice - state.currentLogPrice) * arbResponsiveness;
+    state.currentLogPrice += correction;
   }
 }
 
@@ -331,7 +340,7 @@ function computeLpValue(state: SimState, externalLogPrice: number): number {
 }
 
 /** Run a single simulation path and return metrics */
-function simulatePath(bins: Float64Array, pricePath: Float64Array): MetricVector {
+function simulatePath(bins: Float64Array, pricePath: Float64Array, regime?: RegimeConfig): MetricVector {
   const state = initSimState(bins);
   let hodlValue = TOTAL_LIQUIDITY;
   let peakLpValue = TOTAL_LIQUIDITY;
@@ -347,7 +356,7 @@ function simulatePath(bins: Float64Array, pricePath: Float64Array): MetricVector
     }
 
     // Arbitrage correction
-    executeArbitrage(state, pricePath[t]);
+    executeArbitrage(state, pricePath[t], regime);
     state.currentLogPrice = pricePath[t];
 
     // Track values
@@ -405,14 +414,14 @@ export function evaluateCandidate(
   // Training paths
   for (let p = 0; p < numTrainPaths; p++) {
     const pricePath = generatePricePath(regime, PATH_STEPS, DT);
-    allMetrics.push(simulatePath(bins, pricePath));
+    allMetrics.push(simulatePath(bins, pricePath, regime));
   }
 
   // Evaluation paths (separate for overfitting prevention)
   const evalMetrics: MetricVector[] = [];
   for (let p = 0; p < numEvalPaths; p++) {
     const pricePath = generatePricePath(regime, PATH_STEPS, DT);
-    const m = simulatePath(bins, pricePath);
+    const m = simulatePath(bins, pricePath, regime);
     allMetrics.push(m);
     evalMetrics.push(m);
   }
@@ -452,7 +461,7 @@ export function evaluateCandidate(
   for (let t = 1; t < lastPath.length; t++) {
     const numTrades = 1 + Math.floor(Math.random() * 3);
     for (let j = 0; j < numTrades; j++) executeRandomTrade(simState);
-    executeArbitrage(simState, lastPath[t]);
+    executeArbitrage(simState, lastPath[t], regime);
     simState.currentLogPrice = lastPath[t];
     equity.push(computeLpValue(simState, lastPath[t]) / TOTAL_LIQUIDITY);
   }
@@ -469,9 +478,16 @@ export function computeFeatures(bins: Float64Array): FeatureDescriptor {
 
   // Curvature: sum of squared second differences
   let curvature = 0;
+  const localCurvature: number[] = [];
   for (let i = 1; i < n - 1; i++) {
     const d2 = norm[i - 1] - 2 * norm[i] + norm[i + 1];
     curvature += d2 * d2;
+    localCurvature.push(Math.abs(d2));
+  }
+
+  let curvatureGradient = 0;
+  for (let i = 1; i < localCurvature.length; i++) {
+    curvatureGradient += Math.abs(localCurvature[i] - localCurvature[i - 1]);
   }
 
   // Shannon entropy
@@ -511,7 +527,14 @@ export function computeFeatures(bins: Float64Array): FeatureDescriptor {
   const meanBin = 1 / n;
   const peakConcentration = maxBin / meanBin;
 
-  return { curvature, entropy, symmetry, tailDensityRatio, peakConcentration };
+  const center = (n - 1) / 2;
+  let weightedVariance = 0;
+  for (let i = 0; i < n; i++) {
+    weightedVariance += norm[i] * (i - center) ** 2;
+  }
+  const concentrationWidth = Math.sqrt(weightedVariance) / n;
+
+  return { curvature, curvatureGradient, entropy, symmetry, tailDensityRatio, peakConcentration, concentrationWidth };
 }
 
 // ─── Scoring ────────────────────────────────────────────────────────────────
@@ -747,10 +770,12 @@ export function embedCandidates(candidates: Candidate[]): { x: number; y: number
   // Extract feature matrix
   const features = candidates.map(c => [
     c.features.curvature,
+    c.features.curvatureGradient,
     c.features.entropy,
     c.features.symmetry,
     c.features.tailDensityRatio,
     c.features.peakConcentration,
+    c.features.concentrationWidth,
   ]);
 
   // Normalize each feature to [0, 1]
@@ -771,8 +796,8 @@ export function embedCandidates(candidates: Candidate[]): { x: number; y: number
   // X axis ≈ "concentration" (curvature + peakConcentration - entropy)
   // Y axis ≈ "asymmetry" (tailDensityRatio + (1-symmetry))
   return normalized.map((f, i) => ({
-    x: f[0] * 0.4 + f[4] * 0.4 - f[1] * 0.2, // curvature + peak - entropy
-    y: f[3] * 0.5 + (1 - f[2]) * 0.5,          // tail ratio + asymmetry
+    x: f[0] * 0.25 + f[5] * 0.35 + f[6] * 0.2 - f[2] * 0.2,
+    y: f[4] * 0.45 + (1 - f[3]) * 0.35 + f[1] * 0.2,
     id: candidates[i].id,
   }));
 }
