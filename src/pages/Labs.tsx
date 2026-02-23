@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Boxes, Clock, Compass } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Layers } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Labs = () => {
@@ -85,11 +85,60 @@ const Labs = () => {
           </motion.div>
         </motion.div>
 
+        {/* Liquidity Strategy Lab */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <motion.div
+            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-4"
+            onClick={() => navigate("/labs/strategy")}
+            whileHover={{ y: -3 }}
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-chart-4/10 border border-chart-4/20 flex items-center justify-center shrink-0">
+                <Layers className="w-6 h-6 text-chart-4" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="text-lg font-bold text-foreground">Liquidity Strategy Lab</h2>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-chart-4/30 text-chart-4">BACKTEST ENGINE</span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                  Design, backtest, and compare LP strategies over Monte Carlo price simulations. Evaluate active management rules — range rebalancing, volatility tracking, hedging — against passive LPing.
+                </p>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• 4 strategy presets (Passive, Range, Vol, MR)</li>
+                    <li>• Up to 3 side-by-side comparisons</li>
+                    <li>• Configurable range, cooldown, hedging</li>
+                  </ul>
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Monte Carlo simulation (up to 5k paths)</li>
+                    <li>• GBM with jump diffusion</li>
+                    <li>• Session-linked invariant &amp; fees</li>
+                  </ul>
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Equity curves with confidence bands</li>
+                    <li>• Sharpe, drawdown, win rate metrics</li>
+                    <li>• Fee vs IL attribution breakdown</li>
+                  </ul>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
+                  Enter Lab <ArrowRight className="w-3 h-3" />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+
         <motion.div
           className="grid sm:grid-cols-2 gap-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.35 }}
         >
           <motion.div
             className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all"
