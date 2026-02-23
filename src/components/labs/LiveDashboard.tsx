@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Activity, Crown, Zap, AlertTriangle } from "lucide-react";
+import { Crown, Zap, AlertTriangle } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from
@@ -262,7 +262,7 @@ export default function LiveDashboard({ state }: LiveDashboardProps) {
       {/* Activity log */}
       <motion.div className="surface-elevated rounded-xl p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
         <h4 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5" /> Activity Log
+           Activity Log
         </h4>
         {recentActivity.length === 0 ?
         <p className="text-[10px] text-muted-foreground text-center py-4">No activity yet. Start the engine to begin discovery.</p> :
