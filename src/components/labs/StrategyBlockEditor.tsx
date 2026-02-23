@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, ChevronRight, ChevronDown, GripVertical, Puzzle, Search, Layers } from "lucide-react";
+import { Plus, Trash2, ChevronRight, ChevronDown, GripVertical, Puzzle, Search, Layers, AlertTriangle } from "lucide-react";
 import {
   BLOCK_DEFINITIONS, CATEGORY_COLORS, CATEGORY_LABELS,
   type BlockCategory, type BlockDefinition, type BlockInstance, type CustomStrategy,
@@ -9,6 +9,7 @@ import {
 import { type StrategyConfig } from "@/lib/strategy-engine";
 
 const STRATEGY_COLORS = ["hsl(0, 0%, 70%)", "hsl(142, 50%, 50%)", "hsl(30, 80%, 55%)"];
+const STRUCTURAL_IDS = new Set(["if", "else_if", "else", "and", "or", "not", "on_event"]);
 
 interface Props {
   strategies: StrategyConfig[];
@@ -21,7 +22,8 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
   const [search, setSearch] = useState("");
   const [expandedCategory, setExpandedCategory] = useState<string | null>("structural");
   const [selectedStrategyIdx, setSelectedStrategyIdx] = useState(0);
-  const [dragOverUid, setDragOverUid] = useState<string | null>(null);
+  const [draggedUid, setDraggedUid] = useState<string | null>(null);
+  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
 
   const grouped = getBlocksByCategory();
   const categories = Object.keys(grouped) as BlockCategory[];
@@ -52,8 +54,11 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
 
   const activeStrategy = customStrategies[selectedStrategyIdx];
 
+  // Only allow structural (control flow) blocks at root level
   const addBlock = useCallback((blockId: string, parentUid?: string) => {
     if (!activeStrategy) return;
+    // Root level: only structural blocks allowed
+    if (!parentUid && !STRUCTURAL_IDS.has(blockId)) return;
     const instance = createBlockInstance(blockId);
     const updated = [...customStrategies];
     const strat = { ...updated[selectedStrategyIdx] };
@@ -87,6 +92,21 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
     onCustomStrategiesChange(updated);
   }, [activeStrategy, customStrategies, selectedStrategyIdx, onCustomStrategiesChange]);
 
+  // Drag-and-drop reorder at root level
+  const moveBlock = useCallback((fromUid: string, toIndex: number) => {
+    if (!activeStrategy) return;
+    const updated = [...customStrategies];
+    const strat = { ...updated[selectedStrategyIdx] };
+    const blocks = [...strat.blocks];
+    const fromIndex = blocks.findIndex(b => b.uid === fromUid);
+    if (fromIndex < 0 || fromIndex === toIndex) return;
+    const [moved] = blocks.splice(fromIndex, 1);
+    blocks.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved);
+    strat.blocks = blocks;
+    updated[selectedStrategyIdx] = strat;
+    onCustomStrategiesChange(updated);
+  }, [activeStrategy, customStrategies, selectedStrategyIdx, onCustomStrategiesChange]);
+
   // Compile to engine config
   const compileAndAdd = useCallback(() => {
     if (!activeStrategy || activeStrategy.blocks.length === 0) return;
@@ -104,7 +124,6 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
       hedgeRatio: compiled.hedgeRatio,
       color: activeStrategy.color,
     };
-    // Replace if already exists, otherwise add
     const existing = strategies.findIndex(s => s.id === activeStrategy.id);
     if (existing >= 0) {
       const updated = [...strategies];
@@ -119,6 +138,9 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
   const filteredDefs = search.trim()
     ? BLOCK_DEFINITIONS.filter(b => b.label.toLowerCase().includes(search.toLowerCase()) || b.description.toLowerCase().includes(search.toLowerCase()))
     : null;
+
+  // Only structural blocks for root palette
+  const structuralDefs = BLOCK_DEFINITIONS.filter(b => STRUCTURAL_IDS.has(b.id));
 
   return (
     <div className="space-y-4">
@@ -171,10 +193,18 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
                 className="w-full bg-secondary border border-border rounded-md pl-7 pr-2 py-1.5 text-[10px] text-foreground outline-none placeholder:text-muted-foreground" />
             </div>
 
+            {/* Info banner */}
+            <div className="flex items-start gap-1.5 px-2 py-1.5 mb-3 rounded-md bg-primary/5 border border-primary/10">
+              <AlertTriangle className="w-3 h-3 text-primary mt-0.5 shrink-0" />
+              <p className="text-[9px] text-muted-foreground leading-tight">
+                Start with a <strong className="text-foreground">Control Flow</strong> block (IF, ON EVENT) at root level. Add conditions &amp; actions inside.
+              </p>
+            </div>
+
             {filteredDefs ? (
               <div className="space-y-1">
                 {filteredDefs.map(b => (
-                  <PaletteBlock key={b.id} def={b} onAdd={() => addBlock(b.id)} />
+                  <PaletteBlock key={b.id} def={b} onAdd={() => addBlock(b.id)} disabled={!STRUCTURAL_IDS.has(b.id)} />
                 ))}
                 {filteredDefs.length === 0 && <p className="text-[10px] text-muted-foreground text-center py-4">No blocks match</p>}
               </div>
@@ -187,6 +217,7 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
                       {expandedCategory === cat ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat] }} />
                       {CATEGORY_LABELS[cat]}
+                      {cat !== "structural" && <span className="text-[8px] text-muted-foreground/50 ml-1">(inside only)</span>}
                       <span className="text-[8px] text-muted-foreground ml-auto">{Object.values(grouped[cat]).flat().length}</span>
                     </button>
                     <AnimatePresence>
@@ -197,7 +228,7 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
                               <p className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 px-1">{sub}</p>
                               <div className="space-y-0.5">
                                 {blocks.map(b => (
-                                  <PaletteBlock key={b.id} def={b} onAdd={() => addBlock(b.id)} />
+                                  <PaletteBlock key={b.id} def={b} onAdd={() => addBlock(b.id)} disabled={!STRUCTURAL_IDS.has(b.id)} />
                                 ))}
                               </div>
                             </div>
@@ -220,23 +251,49 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
               </div>
               <button onClick={compileAndAdd} disabled={activeStrategy.blocks.length === 0 || strategies.length >= 3}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-[10px] font-medium hover:opacity-90 transition-opacity disabled:opacity-40">
-                <Layers className="w-3 h-3" /> Compile & Add to Backtest
+                <Layers className="w-3 h-3" /> Compile &amp; Add to Backtest
               </button>
             </div>
 
             {activeStrategy.blocks.length === 0 ? (
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                <p className="text-[10px] text-muted-foreground">Click blocks from the palette to add them here</p>
-                <p className="text-[9px] text-muted-foreground mt-1">Use structural blocks (IF, ON EVENT) to create conditional logic</p>
+                <p className="text-[10px] text-muted-foreground">Add a <strong>Control Flow</strong> block (IF, ON EVENT) from the palette to start</p>
+                <p className="text-[9px] text-muted-foreground mt-1">Then add conditions &amp; actions inside</p>
+                <div className="flex flex-wrap justify-center gap-1.5 mt-4">
+                  {structuralDefs.map(b => (
+                    <button key={b.id} onClick={() => addBlock(b.id)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-foreground text-[9px] font-medium hover:bg-accent border border-border transition-colors">
+                      <Plus className="w-2.5 h-2.5" /> {b.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {activeStrategy.blocks.map((block, i) => (
-                  <CanvasBlock key={block.uid} block={block} depth={0}
-                    onRemove={removeBlock} onUpdateParam={updateBlockParam}
+                  <DraggableCanvasBlock
+                    key={block.uid}
+                    block={block}
+                    index={i}
+                    depth={0}
+                    onRemove={removeBlock}
+                    onUpdateParam={updateBlockParam}
                     onAddChild={(parentUid, blockId) => addBlock(blockId, parentUid)}
-                    dragOverUid={dragOverUid} />
+                    draggedUid={draggedUid}
+                    dropTargetIdx={dropTargetIdx}
+                    onDragStart={setDraggedUid}
+                    onDragEnd={() => { setDraggedUid(null); setDropTargetIdx(null); }}
+                    onDropTarget={setDropTargetIdx}
+                    onDrop={(toIdx) => { if (draggedUid) moveBlock(draggedUid, toIdx); setDraggedUid(null); setDropTargetIdx(null); }}
+                    totalCount={activeStrategy.blocks.length}
+                  />
                 ))}
+                {/* Drop zone at end */}
+                <div
+                  className={`h-2 rounded transition-colors ${dropTargetIdx === activeStrategy.blocks.length ? "bg-primary/30" : ""}`}
+                  onDragOver={e => { e.preventDefault(); setDropTargetIdx(activeStrategy.blocks.length); }}
+                  onDrop={() => { if (draggedUid) moveBlock(draggedUid, activeStrategy.blocks.length); setDraggedUid(null); setDropTargetIdx(null); }}
+                />
               </div>
             )}
           </div>
@@ -248,28 +305,141 @@ export default function StrategyBlockEditor({ strategies, onStrategiesChange, cu
 
 // ─── Palette Block ──────────────────────────────────────────
 
-function PaletteBlock({ def, onAdd }: { def: BlockDefinition; onAdd: () => void }) {
+function PaletteBlock({ def, onAdd, disabled }: { def: BlockDefinition; onAdd: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onAdd} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-secondary transition-colors text-left group">
+    <button onClick={disabled ? undefined : onAdd}
+      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors text-left group ${disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-secondary cursor-pointer"}`}
+      title={disabled ? "Can only be added inside a control flow block" : def.description}
+    >
       <span className="w-1.5 h-6 rounded-full shrink-0" style={{ backgroundColor: def.color }} />
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-medium text-foreground truncate">{def.label}</p>
         <p className="text-[8px] text-muted-foreground truncate">{def.description}</p>
       </div>
-      <Plus className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+      {!disabled && <Plus className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
     </button>
   );
 }
 
-// ─── Canvas Block (recursive) ───────────────────────────────
+// ─── Draggable Canvas Block ─────────────────────────────────
 
-function CanvasBlock({ block, depth, onRemove, onUpdateParam, onAddChild, dragOverUid }: {
+function DraggableCanvasBlock({ block, index, depth, onRemove, onUpdateParam, onAddChild, draggedUid, dropTargetIdx, onDragStart, onDragEnd, onDropTarget, onDrop, totalCount }: {
+  block: BlockInstance;
+  index: number;
+  depth: number;
+  onRemove: (uid: string) => void;
+  onUpdateParam: (uid: string, key: string, value: number | string) => void;
+  onAddChild: (parentUid: string, blockId: string) => void;
+  draggedUid: string | null;
+  dropTargetIdx: number | null;
+  onDragStart: (uid: string) => void;
+  onDragEnd: () => void;
+  onDropTarget: (idx: number) => void;
+  onDrop: (idx: number) => void;
+  totalCount: number;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const def = getBlockDef(block.blockId);
+  if (!def) return null;
+
+  const isDragging = draggedUid === block.uid;
+  const isDropTarget = dropTargetIdx === index;
+
+  return (
+    <>
+      {/* Drop indicator above */}
+      {depth === 0 && (
+        <div
+          className={`h-1 rounded transition-colors ${isDropTarget && draggedUid && draggedUid !== block.uid ? "bg-primary/40" : ""}`}
+          onDragOver={e => { e.preventDefault(); onDropTarget(index); }}
+          onDrop={e => { e.preventDefault(); onDrop(index); }}
+        />
+      )}
+      <motion.div
+        className={`rounded-lg border overflow-visible transition-opacity ${isDragging ? "opacity-40" : ""}`}
+        style={{
+          borderColor: def.color + "40",
+          marginLeft: depth * 16,
+          backgroundColor: def.color + "08",
+        }}
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
+        draggable={depth === 0}
+        onDragStart={(e: any) => { if (depth === 0) { e.dataTransfer.effectAllowed = "move"; onDragStart(block.uid); } }}
+        onDragEnd={onDragEnd}
+      >
+        {/* Block header */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5" style={{ borderBottom: `1px solid ${def.color}20` }}>
+          {depth === 0 && (
+            <GripVertical className="w-3 h-3 text-muted-foreground/40 cursor-grab shrink-0 hover:text-foreground/60 active:cursor-grabbing" />
+          )}
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: def.color }} />
+          <span className="text-[10px] font-bold text-foreground">{def.label}</span>
+          {def.acceptsChildren && (
+            <button onClick={() => setCollapsed(!collapsed)} className="text-muted-foreground hover:text-foreground transition-colors">
+              {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          )}
+          <div className="flex-1" />
+
+          {/* Inline params */}
+          {def.params.map(p => (
+            <InlineParam key={p.key} param={p} value={block.params[p.key]} onChange={v => onUpdateParam(block.uid, p.key, v)} />
+          ))}
+
+          <button onClick={() => onRemove(block.uid)} className="p-0.5 text-muted-foreground hover:text-destructive transition-colors shrink-0">
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Children (for structural blocks) */}
+        {def.acceptsChildren && !collapsed && (
+          <div className="px-2 py-1.5 space-y-1">
+            {block.children.length === 0 && (
+              <p className="text-[9px] text-muted-foreground/60 italic text-center py-1">No blocks inside — add conditions or actions below</p>
+            )}
+            {block.children.map(child => (
+              <CanvasBlock key={child.uid} block={child} depth={0}
+                onRemove={onRemove} onUpdateParam={onUpdateParam}
+                onAddChild={onAddChild} />
+            ))}
+            <div className="relative">
+              <button onClick={() => setShowAddMenu(!showAddMenu)}
+                className="w-full py-1 rounded border border-dashed border-border text-[9px] text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors">
+                + Add block inside
+              </button>
+              <AnimatePresence>
+                {showAddMenu && (
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="absolute z-10 top-full mt-1 left-0 right-0 bg-popover border border-border rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto">
+                    {BLOCK_DEFINITIONS.map(b => (
+                      <button key={b.id} onClick={() => { onAddChild(block.uid, b.id); setShowAddMenu(false); }}
+                        className="w-full flex items-center gap-1.5 px-2 py-1 rounded hover:bg-secondary text-left text-[9px]">
+                        <span className="w-1.5 h-3 rounded-full" style={{ backgroundColor: b.color }} />
+                        <span className="text-foreground">{b.label}</span>
+                        <span className="text-[8px] text-muted-foreground ml-auto">{b.category}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </>
+  );
+}
+
+// ─── Non-draggable Canvas Block (for nested children) ───────
+
+function CanvasBlock({ block, depth, onRemove, onUpdateParam, onAddChild }: {
   block: BlockInstance;
   depth: number;
   onRemove: (uid: string) => void;
   onUpdateParam: (uid: string, key: string, value: number | string) => void;
   onAddChild: (parentUid: string, blockId: string) => void;
-  dragOverUid: string | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -278,7 +448,7 @@ function CanvasBlock({ block, depth, onRemove, onUpdateParam, onAddChild, dragOv
 
   return (
     <motion.div
-      className="rounded-lg border overflow-hidden"
+      className="rounded-lg border overflow-visible"
       style={{
         borderColor: def.color + "40",
         marginLeft: depth * 16,
@@ -287,9 +457,7 @@ function CanvasBlock({ block, depth, onRemove, onUpdateParam, onAddChild, dragOv
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Block header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5" style={{ borderBottom: `1px solid ${def.color}20` }}>
-        <GripVertical className="w-3 h-3 text-muted-foreground/40 cursor-grab shrink-0" />
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: def.color }} />
         <span className="text-[10px] font-bold text-foreground">{def.label}</span>
         {def.acceptsChildren && (
@@ -298,24 +466,20 @@ function CanvasBlock({ block, depth, onRemove, onUpdateParam, onAddChild, dragOv
           </button>
         )}
         <div className="flex-1" />
-
-        {/* Inline params */}
         {def.params.map(p => (
           <InlineParam key={p.key} param={p} value={block.params[p.key]} onChange={v => onUpdateParam(block.uid, p.key, v)} />
         ))}
-
         <button onClick={() => onRemove(block.uid)} className="p-0.5 text-muted-foreground hover:text-destructive transition-colors shrink-0">
           <Trash2 className="w-3 h-3" />
         </button>
       </div>
 
-      {/* Children (for structural blocks) */}
       {def.acceptsChildren && !collapsed && (
         <div className="px-2 py-1.5 space-y-1">
           {block.children.map(child => (
             <CanvasBlock key={child.uid} block={child} depth={0}
               onRemove={onRemove} onUpdateParam={onUpdateParam}
-              onAddChild={onAddChild} dragOverUid={dragOverUid} />
+              onAddChild={onAddChild} />
           ))}
           <div className="relative">
             <button onClick={() => setShowAddMenu(!showAddMenu)}
@@ -326,11 +490,12 @@ function CanvasBlock({ block, depth, onRemove, onUpdateParam, onAddChild, dragOv
               {showAddMenu && (
                 <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="absolute z-10 top-full mt-1 left-0 right-0 bg-popover border border-border rounded-lg shadow-lg p-2 max-h-48 overflow-y-auto">
-                  {BLOCK_DEFINITIONS.filter(b => b.category !== "structural" || b.id === "and" || b.id === "or" || b.id === "not").slice(0, 30).map(b => (
+                  {BLOCK_DEFINITIONS.map(b => (
                     <button key={b.id} onClick={() => { onAddChild(block.uid, b.id); setShowAddMenu(false); }}
                       className="w-full flex items-center gap-1.5 px-2 py-1 rounded hover:bg-secondary text-left text-[9px]">
                       <span className="w-1.5 h-3 rounded-full" style={{ backgroundColor: b.color }} />
                       <span className="text-foreground">{b.label}</span>
+                      <span className="text-[8px] text-muted-foreground ml-auto">{b.category}</span>
                     </button>
                   ))}
                 </motion.div>
