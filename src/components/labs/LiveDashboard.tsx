@@ -43,7 +43,7 @@ function ChampionCard({ regime, champion }: {regime: RegimeId;champion: Candidat
     <div className="surface-elevated rounded-xl p-4 border-l-2" style={{ borderLeftColor: REGIME_COLORS[regime] }}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Crown className="w-3.5 h-3.5" style={{ color: REGIME_COLORS[regime] }} />
+          
           <span className="text-[10px] font-bold text-foreground">{REGIME_LABELS[regime]} Champion</span>
         </div>
         <span className="text-[9px] font-mono text-muted-foreground">Gen {champion.generation}</span>
