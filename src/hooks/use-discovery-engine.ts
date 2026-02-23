@@ -13,25 +13,12 @@ const ARCHIVE_LIMIT = 2000; // max stored candidates in archive
 const TICK_INTERVAL = 50; // ms between generation ticks (allow UI breathing room)
 
 export function useDiscoveryEngine() {
-  const [state, setState] = useState<EngineState>(createInitialState);
-  const runningRef = useRef(false);
+  const [state, setState] = useState<EngineState>(() => ({
+    ...createInitialState(),
+    running: true, // always on
+  }));
+  const runningRef = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const start = useCallback(() => {
-    if (runningRef.current) return;
-    runningRef.current = true;
-    setState(prev => ({ ...prev, running: true }));
-    tick();
-  }, []);
-
-  const stop = useCallback(() => {
-    runningRef.current = false;
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    setState(prev => ({ ...prev, running: false }));
-  }, []);
 
   const tick = useCallback(() => {
     if (!runningRef.current) return;
@@ -64,18 +51,15 @@ export function useDiscoveryEngine() {
     timeoutRef.current = setTimeout(tick, TICK_INTERVAL);
   }, []);
 
-  // Cleanup on unmount
+  // Auto-start on mount, cleanup on unmount
   useEffect(() => {
+    runningRef.current = true;
+    tick();
     return () => {
       runningRef.current = false;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, []);
-
-  const reset = useCallback(() => {
-    stop();
-    setState(createInitialState());
-  }, [stop]);
+  }, [tick]);
 
   const getCandidate = useCallback((id: string): Candidate | undefined => {
     return state.archive.find(c => c.id === id);
@@ -83,10 +67,6 @@ export function useDiscoveryEngine() {
 
   return {
     state,
-    start,
-    stop,
-    reset,
     getCandidate,
-    isRunning: state.running,
   };
 }
