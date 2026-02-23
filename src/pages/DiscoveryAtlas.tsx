@@ -183,15 +183,6 @@ const DiscoveryAtlas = () => {
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
   ];
 
-  const detailCandidate = activeView === "detail"
-    ? (selectedCandidate || detailCandidateRef.current)
-    : selectedCandidate;
-
-  const badge = SYNC_BADGE[syncMode];
-  const BadgeIcon = badge.icon;
-
-  const canToggle = syncMode === "persisted" || syncMode === "memory";
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">

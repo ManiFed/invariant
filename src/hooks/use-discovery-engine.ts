@@ -13,6 +13,7 @@ import {
   triggerGeneration,
 } from "@/lib/atlas-cloud";
 import {
+  AtlasSync,
   buildPopulationsFromArchive,
   type SyncRole,
   type RemoteStateExtras,
@@ -149,12 +150,23 @@ export function useDiscoveryEngine() {
 
       if (sync.connected) {
         setRole(initialRole);
+        setSyncMode("live");
 
         // If no peer responded, load from IndexedDB as starting point
         if (!receivedState) {
           const persistedState = await loadAtlasStateFromDB();
           if (!cancelled && persistedState && persistedState.archive.length > 0) {
             setState(persistedState);
+          }
+        }
+
+        keepaliveIntervalRef.current = setInterval(() => {
+          if (cancelled || roleRef.current !== "leader") return;
+
+          const staleFor = Date.now() - generationPulseRef.current;
+          if (staleFor > CLOUD_STALE_AFTER_MS) {
+            void refreshFromCloud();
+            void triggerGeneration();
           }
         }, CLOUD_KEEPALIVE_INTERVAL);
 
