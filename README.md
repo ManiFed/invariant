@@ -68,7 +68,7 @@ This repo now includes a `railway.toml` and a production `npm start` command so 
 
 1. Create a new Railway project and connect this repository.
 2. Railway will run `npm ci && npm run build` during build.
-3. Railway will run `npm run start`, which serves the built app on `0.0.0.0:$PORT`.
+3. Railway will run `npm run start`, which now uses a lightweight Node static server (`server.mjs`) to serve `dist/` on `0.0.0.0:$PORT` without requiring Vite at runtime.
 
 ### Deploy via Lovable
 
