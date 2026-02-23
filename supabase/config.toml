@@ -2,3 +2,6 @@ project_id = "kjomgwgyktklsrurpkjs"
 
 [functions.amm-chat]
 verify_jwt = false
+
+[functions.atlas-engine]
+verify_jwt = false
