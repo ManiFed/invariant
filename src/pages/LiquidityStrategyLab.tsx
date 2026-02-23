@@ -425,7 +425,6 @@ const LiquidityStrategyLab = () => {
               {activeTab === "strategy" && (
                 <StrategyEditor strategies={strategies} onStrategiesChange={handleStrategiesChange} />
               )}
-              {activeTab === "compare" && <AMMComparison savedInvariant={savedInvariant} />}
               {activeTab === "backtest" && (
                 <div>
                   {strategyBanner}
@@ -436,24 +435,6 @@ const LiquidityStrategyLab = () => {
                 <div>
                   {strategyBanner}
                   <StrategyResults results={results} />
-                </div>
-              )}
-              {activeTab === "montecarlo" && (
-                <div>
-                  {strategyBanner}
-                  <MonteCarloEngine savedInvariant={savedInvariant} savedFees={savedFees} />
-                </div>
-              )}
-              {activeTab === "arbitrage" && (
-                <div>
-                  {strategyBanner}
-                  <ArbitrageEngine savedInvariant={savedInvariant} savedFees={savedFees} />
-                </div>
-              )}
-              {activeTab === "liquidity" && (
-                <div>
-                  {strategyBanner}
-                  <LiquidityAnalyzer savedInvariant={savedInvariant} />
                 </div>
               )}
               {activeTab === "stability" && (
