@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Fingerprint, BarChart3, TrendingUp, Layers, Shield } from "lucide-react";
+import { ArrowLeft, Fingerprint, BarChart3, TrendingUp, Layers, Shield, Download } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, BarChart, Bar,
@@ -27,6 +27,35 @@ interface DesignDetailProps {
   candidate: Candidate;
   state: EngineState;
   onBack: () => void;
+}
+
+function downloadCandidateJson(candidate: Candidate) {
+  const payload = {
+    id: candidate.id,
+    regime: candidate.regime,
+    generation: candidate.generation,
+    score: candidate.score,
+    stability: candidate.stability,
+    timestamp: candidate.timestamp,
+    bins: Array.from(candidate.bins),
+    metrics: candidate.metrics,
+    features: candidate.features,
+    config: {
+      numBins: NUM_BINS,
+      logPriceRange: [-2, 2],
+      totalLiquidity: 1000,
+      feeRate: 0.003,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${candidate.id}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export default function DesignDetail({ candidate, state, onBack }: DesignDetailProps) {
@@ -120,9 +149,17 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: REGIME_COLORS[candidate.regime] }} />
-          <span className="text-[9px] font-mono text-muted-foreground">{candidate.regime}</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => downloadCandidateJson(candidate)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground border border-border text-[10px] font-medium hover:bg-accent transition-colors"
+          >
+            <Download className="w-3 h-3" /> Download .json
+          </button>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: REGIME_COLORS[candidate.regime] }} />
+            <span className="text-[9px] font-mono text-muted-foreground">{candidate.regime}</span>
+          </div>
         </div>
       </div>
 
