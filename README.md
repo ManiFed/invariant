@@ -62,6 +62,16 @@ This project is built with:
 
 ## How can I deploy this project?
 
+### Deploy to Railway
+
+This repo now includes a `railway.toml` and a production `npm start` command so Railway can build and serve the Vite app automatically.
+
+1. Create a new Railway project and connect this repository.
+2. Railway will run `npm ci && npm run build` during build.
+3. Railway will run `npm run start`, which serves the built app on `0.0.0.0:$PORT`.
+
+### Deploy via Lovable
+
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
 ## Can I connect a custom domain to my Lovable project?
