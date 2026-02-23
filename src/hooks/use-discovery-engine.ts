@@ -8,7 +8,11 @@ import {
   runGeneration,
 } from "@/lib/discovery-engine";
 import {
-  AtlasSync,
+  loadAtlasState,
+  subscribeToAtlas,
+  triggerGeneration,
+} from "@/lib/atlas-cloud";
+import {
   buildPopulationsFromArchive,
   type SyncRole,
   type RemoteStateExtras,
@@ -19,8 +23,11 @@ import {
 } from "@/lib/atlas-persistence";
 
 const LOCAL_ARCHIVE_LIMIT = 2000;
+const CLOUD_ARCHIVE_LIMIT = 10000;
 const TICK_INTERVAL = 50;
 const PERSIST_INTERVAL = 3000;
+const CLOUD_KEEPALIVE_INTERVAL = 45000;
+const CLOUD_STALE_AFTER_MS = 90000;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
 
 export type SyncMode = "live" | "persisted" | "memory" | "loading";
@@ -35,6 +42,10 @@ export function useDiscoveryEngine() {
   const runningRef = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unsubscribeCloudRef = useRef<(() => void) | null>(null);
+  const keepaliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const generationPulseRef = useRef<number>(Date.now());
+  const generationInFlightRef = useRef(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const initRef = useRef(false);
   const tickActiveRef = useRef(false);
@@ -102,6 +113,12 @@ export function useDiscoveryEngine() {
 
     let cancelled = false;
 
+    const refreshFromCloud = async () => {
+      const { state: cloudState } = await loadAtlasState();
+      if (cancelled || !cloudState) return;
+      setState(cloudState);
+    };
+
     (async () => {
       // 1. Try Supabase Realtime broadcast channel
       const sync = new AtlasSync(
@@ -139,8 +156,8 @@ export function useDiscoveryEngine() {
           if (!cancelled && persistedState && persistedState.archive.length > 0) {
             setState(persistedState);
           }
-        }
-        setSyncMode("live");
+        }, CLOUD_KEEPALIVE_INTERVAL);
+
         return;
       }
 
@@ -155,11 +172,10 @@ export function useDiscoveryEngine() {
 
     return () => {
       cancelled = true;
-      syncRef.current?.cleanup();
+      unsubscribeCloudRef.current?.();
+      if (keepaliveIntervalRef.current) clearInterval(keepaliveIntervalRef.current);
     };
   }, []);
-
-  // ─── IndexedDB periodic persistence (always active as backup) ──────────────
 
   useEffect(() => {
     if (syncMode === "loading" || syncMode === "memory") return;
@@ -193,18 +209,14 @@ export function useDiscoveryEngine() {
     };
   }, [syncMode, role, startTick, stopTick]);
 
-  // ─── Toggle persistence (user-facing) ──────────────────────────────────────
-
   const togglePersistence = useCallback(() => {
+    if (syncMode === "live") return;
     setSyncMode(prev => {
-      if (prev === "live") return "memory";
       if (prev === "persisted") return "memory";
       if (prev === "memory") return "persisted";
       return prev;
     });
-  }, []);
-
-  // ─── Selection (snapshot-based, survives archive churn) ────────────────────
+  }, [syncMode]);
 
   const selectCandidate = useCallback((id: string) => {
     setState(currentState => {
