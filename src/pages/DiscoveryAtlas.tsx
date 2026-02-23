@@ -69,7 +69,7 @@ const binDispersion = (candidate: Candidate): number => {
 
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence } = useDiscoveryEngine();
+  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence, ingestExperimentCandidates } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [config, setConfig] = useState<ExperimentConfig>({ contributor: "guest", regime: "low-vol", objective: "balanced", generations: 8 });
