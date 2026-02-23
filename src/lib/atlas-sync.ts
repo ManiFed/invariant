@@ -1,17 +1,21 @@
 // Atlas Sync — Supabase Realtime broadcast for cross-client state sharing.
-// No database tables needed. All clients join a WebSocket channel:
-//   - On join, request state from any existing client
-//   - If a client responds with higher generation count, adopt their state
-//   - Every few seconds, broadcast our state so new joiners pick it up
-//   - Result: all visitors see the same Atlas map and dashboard
+// Implements a leader/follower model so all screens show identical data:
+//   - First client (no peers) becomes the leader — runs the engine, broadcasts state
+//   - Subsequent clients become followers — stop local generation, display leader's state
+//   - If the leader disconnects, a follower promotes after a timeout
+//   - Result: all screens show the exact same dashboard at all times
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Candidate, RegimeId, PopulationState, ChampionMetric, EngineState } from "@/lib/discovery-engine";
+import type { Candidate, RegimeId, PopulationState, ChampionMetric, EngineState, ActivityEntry } from "@/lib/discovery-engine";
 
 const CHANNEL_NAME = "invariant-atlas-live";
-const BROADCAST_INTERVAL = 4000;
-const MAX_SYNC_CANDIDATES = 500;
+const LEADER_BROADCAST_INTERVAL = 1000; // Leader broadcasts every 1s for tight sync
+const MAX_SYNC_CANDIDATES = 200;
 const STATE_REQUEST_TIMEOUT = 3000;
+const FAILOVER_TIMEOUT = 6000;  // Promote follower to leader if no broadcast for 6s
+const FAILOVER_CHECK_INTERVAL = 2000;
+
+export type SyncRole = "leader" | "follower";
 
 // ─── Serialization (Float64Array → number[] for JSON) ────────────────────────
 
@@ -27,10 +31,26 @@ interface SyncCandidate {
   timestamp: number;
 }
 
+interface SyncPopulationInfo {
+  generation: number;
+  totalEvaluated: number;
+  championId: string | null;
+  metricChampionIds: Record<ChampionMetric, string | null>;
+}
+
 interface SyncSnapshot {
   totalGenerations: number;
   candidates: SyncCandidate[];
-  ts: number; // sender timestamp for dedup
+  archiveSize: number;
+  populations: Record<RegimeId, SyncPopulationInfo>;
+  activityLog: ActivityEntry[];
+  ts: number;
+}
+
+export interface RemoteStateExtras {
+  archiveSize: number;
+  populationInfo: Record<RegimeId, SyncPopulationInfo>;
+  activityLog: ActivityEntry[];
 }
 
 function serializeCandidate(c: Candidate): SyncCandidate {
@@ -63,24 +83,50 @@ const EMPTY_METRIC_CHAMPIONS: Record<ChampionMetric, Candidate | null> = {
 
 function buildPopulationsFromArchive(
   archive: Candidate[],
+  populationInfo?: Record<RegimeId, SyncPopulationInfo>,
 ): Record<RegimeId, PopulationState> {
   const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
   const pops: Record<RegimeId, PopulationState> = {} as any;
+  const candidateMap = new Map(archive.map(c => [c.id, c]));
 
   for (const regime of regimes) {
+    const info = populationInfo?.[regime];
     const regimeCandidates = archive.filter(c => c.regime === regime);
     const sorted = [...regimeCandidates].sort((a, b) => a.score - b.score);
-    const champion = sorted.length > 0 ? sorted[0] : null;
 
+    // Resolve champion: prefer synced ID, fall back to best in archive
+    let champion: Candidate | null = null;
+    if (info?.championId) {
+      champion = candidateMap.get(info.championId) ?? null;
+    }
+    if (!champion && sorted.length > 0) {
+      champion = sorted[0];
+    }
+
+    // Resolve metric champions: prefer synced IDs, fall back to archive derivation
     const metricChampions: Record<ChampionMetric, Candidate | null> = { ...EMPTY_METRIC_CHAMPIONS };
-    for (const c of regimeCandidates) {
-      if (!metricChampions.fees || c.metrics.totalFees > metricChampions.fees.metrics.totalFees) metricChampions.fees = c;
-      if (!metricChampions.utilization || c.metrics.liquidityUtilization > metricChampions.utilization.metrics.liquidityUtilization) metricChampions.utilization = c;
-      if (!metricChampions.lpValue || c.metrics.lpValueVsHodl > metricChampions.lpValue.metrics.lpValueVsHodl) metricChampions.lpValue = c;
-      if (!metricChampions.lowSlippage || c.metrics.totalSlippage < metricChampions.lowSlippage.metrics.totalSlippage) metricChampions.lowSlippage = c;
-      if (!metricChampions.lowArbLeak || c.metrics.arbLeakage < metricChampions.lowArbLeak.metrics.arbLeakage) metricChampions.lowArbLeak = c;
-      if (!metricChampions.lowDrawdown || c.metrics.maxDrawdown < metricChampions.lowDrawdown.metrics.maxDrawdown) metricChampions.lowDrawdown = c;
-      if (!metricChampions.stability || c.stability < metricChampions.stability.stability) metricChampions.stability = c;
+    let derivedFromSync = false;
+
+    if (info?.metricChampionIds) {
+      derivedFromSync = true;
+      for (const [metric, id] of Object.entries(info.metricChampionIds)) {
+        if (id) {
+          metricChampions[metric as ChampionMetric] = candidateMap.get(id) ?? null;
+        }
+      }
+    }
+
+    if (!derivedFromSync) {
+      // No sync info available: derive from archive
+      for (const c of regimeCandidates) {
+        if (!metricChampions.fees || c.metrics.totalFees > metricChampions.fees.metrics.totalFees) metricChampions.fees = c;
+        if (!metricChampions.utilization || c.metrics.liquidityUtilization > metricChampions.utilization.metrics.liquidityUtilization) metricChampions.utilization = c;
+        if (!metricChampions.lpValue || c.metrics.lpValueVsHodl > metricChampions.lpValue.metrics.lpValueVsHodl) metricChampions.lpValue = c;
+        if (!metricChampions.lowSlippage || c.metrics.totalSlippage < metricChampions.lowSlippage.metrics.totalSlippage) metricChampions.lowSlippage = c;
+        if (!metricChampions.lowArbLeak || c.metrics.arbLeakage < metricChampions.lowArbLeak.metrics.arbLeakage) metricChampions.lowArbLeak = c;
+        if (!metricChampions.lowDrawdown || c.metrics.maxDrawdown < metricChampions.lowDrawdown.metrics.maxDrawdown) metricChampions.lowDrawdown = c;
+        if (!metricChampions.stability || c.stability < metricChampions.stability.stability) metricChampions.stability = c;
+      }
     }
 
     pops[regime] = {
@@ -88,8 +134,8 @@ function buildPopulationsFromArchive(
       candidates: sorted.slice(0, 40),
       champion,
       metricChampions,
-      generation: champion?.generation || 0,
-      totalEvaluated: regimeCandidates.length,
+      generation: info?.generation ?? (champion?.generation || 0),
+      totalEvaluated: info?.totalEvaluated ?? regimeCandidates.length,
     };
   }
 
@@ -103,27 +149,44 @@ export { buildPopulationsFromArchive };
 export class AtlasSync {
   private channel: ReturnType<typeof supabase.channel> | null = null;
   private broadcastTimer: ReturnType<typeof setInterval> | null = null;
+  private failoverTimer: ReturnType<typeof setInterval> | null = null;
   private getState: () => EngineState;
-  private onRemoteState: (archive: Candidate[], totalGenerations: number) => void;
+  private onRemoteState: (
+    archive: Candidate[],
+    totalGenerations: number,
+    extras: RemoteStateExtras,
+  ) => void;
+  private onRoleChange: (role: SyncRole) => void;
   private _connected = false;
-  private _peerCount = 0;
+  private _role: SyncRole = "leader";
+  private _lastReceivedTs = 0;
 
   constructor(
     getState: () => EngineState,
-    onRemoteState: (archive: Candidate[], totalGenerations: number) => void,
+    onRemoteState: (
+      archive: Candidate[],
+      totalGenerations: number,
+      extras: RemoteStateExtras,
+    ) => void,
+    onRoleChange: (role: SyncRole) => void,
   ) {
     this.getState = getState;
     this.onRemoteState = onRemoteState;
+    this.onRoleChange = onRoleChange;
   }
 
   /** Join the channel and wait up to 3s for an existing client's state. */
-  connect(): Promise<boolean> {
+  connect(): Promise<{ receivedState: boolean; role: SyncRole }> {
     return new Promise((resolve) => {
       let resolved = false;
       const done = (receivedState: boolean) => {
         if (resolved) return;
         resolved = true;
-        resolve(receivedState);
+        this._role = receivedState ? "follower" : "leader";
+        if (this._role === "follower") {
+          this.startFailoverCheck();
+        }
+        resolve({ receivedState, role: this._role });
       };
 
       const timeout = setTimeout(() => done(false), STATE_REQUEST_TIMEOUT);
@@ -163,10 +226,26 @@ export class AtlasSync {
   }
 
   private handleSnapshot(payload: SyncSnapshot) {
-    const current = this.getState();
-    if (payload.totalGenerations > current.totalGenerations) {
-      const archive = payload.candidates.map(deserializeCandidate);
-      this.onRemoteState(archive, payload.totalGenerations);
+    this._lastReceivedTs = Date.now();
+    const archive = payload.candidates.map(deserializeCandidate);
+    const extras: RemoteStateExtras = {
+      archiveSize: payload.archiveSize,
+      populationInfo: payload.populations,
+      activityLog: payload.activityLog,
+    };
+
+    if (this._role === "follower") {
+      // Followers always adopt the latest state from the leader
+      this.onRemoteState(archive, payload.totalGenerations, extras);
+    } else {
+      // Leader: demote to follower if a remote peer is strictly ahead
+      const current = this.getState();
+      if (payload.totalGenerations > current.totalGenerations) {
+        this._role = "follower";
+        this.onRoleChange("follower");
+        this.startFailoverCheck();
+        this.onRemoteState(archive, payload.totalGenerations, extras);
+      }
     }
   }
 
@@ -175,14 +254,72 @@ export class AtlasSync {
     const state = this.getState();
     if (state.archive.length === 0 && state.totalGenerations === 0) return;
 
-    // Send the most recent candidates (cap at MAX to stay under 1MB WebSocket limit)
-    const candidates = state.archive
-      .slice(-MAX_SYNC_CANDIDATES)
-      .map(serializeCandidate);
+    // Collect all important candidate IDs (champions, metric champions)
+    // These MUST be included in the snapshot so followers display identical data
+    const importantIds = new Set<string>();
+    const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
+    const populationSnapshots: Record<RegimeId, SyncPopulationInfo> = {} as any;
+
+    for (const rid of regimes) {
+      const pop = state.populations[rid];
+      if (pop.champion) importantIds.add(pop.champion.id);
+
+      const metricChampionIds: Record<ChampionMetric, string | null> = {
+        fees: null, utilization: null, lpValue: null,
+        lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null,
+      };
+      for (const [metric, candidate] of Object.entries(pop.metricChampions)) {
+        if (candidate) {
+          importantIds.add(candidate.id);
+          metricChampionIds[metric as ChampionMetric] = candidate.id;
+        }
+      }
+
+      populationSnapshots[rid] = {
+        generation: pop.generation,
+        totalEvaluated: pop.totalEvaluated,
+        championId: pop.champion?.id ?? null,
+        metricChampionIds,
+      };
+    }
+
+    // Build candidate list: important candidates first, then fill with recent archive
+    const candidateMap = new Map<string, Candidate>();
+
+    // Always include champion and metric champion candidates
+    for (const id of importantIds) {
+      // Check archive
+      const inArchive = state.archive.find(c => c.id === id);
+      if (inArchive) { candidateMap.set(id, inArchive); continue; }
+      // Check population candidates directly (may not be in archive)
+      for (const rid of regimes) {
+        const pop = state.populations[rid];
+        if (pop.champion?.id === id) { candidateMap.set(id, pop.champion); break; }
+        for (const mc of Object.values(pop.metricChampions)) {
+          if (mc?.id === id) { candidateMap.set(id, mc); break; }
+        }
+      }
+    }
+
+    // Fill remaining slots with most recent archive candidates
+    const remaining = MAX_SYNC_CANDIDATES - candidateMap.size;
+    if (remaining > 0) {
+      const recentArchive = state.archive.slice(-remaining);
+      for (const c of recentArchive) {
+        if (!candidateMap.has(c.id)) {
+          candidateMap.set(c.id, c);
+        }
+      }
+    }
+
+    const candidates = Array.from(candidateMap.values()).map(serializeCandidate);
 
     const snapshot: SyncSnapshot = {
       totalGenerations: state.totalGenerations,
       candidates,
+      archiveSize: state.archive.length,
+      populations: populationSnapshots,
+      activityLog: state.activityLog.slice(-50),
       ts: Date.now(),
     };
 
@@ -195,14 +332,39 @@ export class AtlasSync {
 
   private startBroadcasting() {
     this.broadcastTimer = setInterval(() => {
-      this.broadcastState();
-    }, BROADCAST_INTERVAL);
+      // Only leaders broadcast regularly; followers just listen
+      if (this._role === "leader") {
+        this.broadcastState();
+      }
+    }, LEADER_BROADCAST_INTERVAL);
+  }
+
+  private startFailoverCheck() {
+    this.stopFailoverCheck();
+    this._lastReceivedTs = Date.now();
+    this.failoverTimer = setInterval(() => {
+      if (this._role === "follower" && Date.now() - this._lastReceivedTs > FAILOVER_TIMEOUT) {
+        // Leader appears to have disconnected — promote this client
+        this._role = "leader";
+        this.onRoleChange("leader");
+        this.stopFailoverCheck();
+      }
+    }, FAILOVER_CHECK_INTERVAL);
+  }
+
+  private stopFailoverCheck() {
+    if (this.failoverTimer) {
+      clearInterval(this.failoverTimer);
+      this.failoverTimer = null;
+    }
   }
 
   get connected() { return this._connected; }
+  get role() { return this._role; }
 
   cleanup() {
     if (this.broadcastTimer) clearInterval(this.broadcastTimer);
+    this.stopFailoverCheck();
     if (this.channel) supabase.removeChannel(this.channel);
     this._connected = false;
   }

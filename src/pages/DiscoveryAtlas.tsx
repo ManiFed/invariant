@@ -35,7 +35,7 @@ const SYNC_BADGE: Record<SyncMode, { icon: typeof Wifi; label: string; className
 
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, togglePersistence } = useDiscoveryEngine();
+  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const detailCandidateRef = useRef(selectedCandidate);
   if (selectedCandidate) {
@@ -107,7 +107,7 @@ const DiscoveryAtlas = () => {
           </div>
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary border border-border">
             <span className="text-[9px] font-mono text-muted-foreground">
-              Gen {state.totalGenerations} | {state.archive.length.toLocaleString()} archived
+              Gen {state.totalGenerations} | {(state.archiveSize ?? state.archive.length).toLocaleString()} archived
             </span>
           </div>
           <ThemeToggle />
