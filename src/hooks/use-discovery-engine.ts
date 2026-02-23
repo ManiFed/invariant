@@ -10,6 +10,7 @@ import {
 import {
   loadAtlasState,
   subscribeToAtlas,
+  triggerGeneration,
 } from "@/lib/atlas-cloud";
 import {
   buildPopulationsFromArchive,
@@ -23,6 +24,8 @@ const LOCAL_ARCHIVE_LIMIT = 2000;
 const CLOUD_ARCHIVE_LIMIT = 10000;
 const TICK_INTERVAL = 50;
 const PERSIST_INTERVAL = 3000;
+const CLOUD_KEEPALIVE_INTERVAL = 45000;
+const CLOUD_STALE_AFTER_MS = 90000;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
 
 export type SyncMode = "live" | "persisted" | "memory" | "loading";
@@ -37,6 +40,9 @@ export function useDiscoveryEngine() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const unsubscribeCloudRef = useRef<(() => void) | null>(null);
+  const keepaliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const generationPulseRef = useRef<number>(Date.now());
+  const generationInFlightRef = useRef(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const initRef = useRef(false);
   const localStartedRef = useRef(false);
@@ -89,6 +95,7 @@ export function useDiscoveryEngine() {
 
       if (cloudStatus === "connected" && cloudState) {
         setState(cloudState);
+        generationPulseRef.current = Date.now();
         setSyncMode("live");
 
         unsubscribeCloudRef.current = subscribeToAtlas(
@@ -116,9 +123,24 @@ export function useDiscoveryEngine() {
               ...prev,
               totalGenerations: Math.max(prev.totalGenerations, totalGenerations),
             }));
+            generationPulseRef.current = Date.now();
             refreshFromCloud();
           },
         );
+
+        keepaliveIntervalRef.current = setInterval(async () => {
+          const stale = Date.now() - generationPulseRef.current > CLOUD_STALE_AFTER_MS;
+          if (!stale || generationInFlightRef.current) return;
+
+          generationInFlightRef.current = true;
+          try {
+            await triggerGeneration();
+            generationPulseRef.current = Date.now();
+          } finally {
+            generationInFlightRef.current = false;
+          }
+        }, CLOUD_KEEPALIVE_INTERVAL);
+
         return;
       }
 
@@ -132,6 +154,7 @@ export function useDiscoveryEngine() {
     return () => {
       cancelled = true;
       unsubscribeCloudRef.current?.();
+      if (keepaliveIntervalRef.current) clearInterval(keepaliveIntervalRef.current);
     };
   }, []);
 
