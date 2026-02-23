@@ -78,7 +78,7 @@ const DiscoveryAtlas = () => {
               </button>);
 
           })}
-          {selectedCandidateId &&
+          {selectedCandidate &&
           <button
             onClick={() => setActiveView("detail")}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
@@ -101,7 +101,7 @@ const DiscoveryAtlas = () => {
             <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               <LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} />
             </motion.div>
-          }
+          )}
           {activeView === "atlas" &&
           <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               <AtlasSurface state={state} onSelectCandidate={handleSelectCandidate} />

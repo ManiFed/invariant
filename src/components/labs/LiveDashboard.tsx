@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Crown, Zap, AlertTriangle } from "lucide-react";
+import { Crown, Zap, AlertTriangle, Trophy } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from
@@ -26,7 +26,15 @@ interface LiveDashboardProps {
   onSelectCandidate: (id: string) => void;
 }
 
-function ChampionCard({ regime, champion }: {regime: RegimeId;champion: Candidate | null;}) {
+function ChampionCard({
+  regime,
+  champion,
+  onSelectCandidate
+}: {
+  regime: RegimeId;
+  champion: Candidate | null;
+  onSelectCandidate: (id: string) => void;
+}) {
   if (!champion) {
     return (
       <div className="surface-elevated rounded-xl p-4 border-l-2" style={{ borderLeftColor: REGIME_COLORS[regime] }}>
@@ -44,7 +52,7 @@ function ChampionCard({ regime, champion }: {regime: RegimeId;champion: Candidat
     <div
       className="surface-elevated rounded-xl p-4 border-l-2 cursor-pointer hover:bg-secondary/30 transition-colors"
       style={{ borderLeftColor: REGIME_COLORS[regime] }}
-      onClick={onClick}
+      onClick={() => onSelectCandidate(champion.id)}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -265,7 +273,12 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
         </h3>
         <div className="grid md:grid-cols-3 gap-3">
           {regimeIds.map((r) =>
-          <ChampionCard key={r} regime={r} champion={state.populations[r].champion} />
+          <ChampionCard
+              key={r}
+              regime={r}
+              champion={state.populations[r].champion}
+              onSelectCandidate={onSelectCandidate}
+            />
           )}
         </div>
       </div>
@@ -357,9 +370,9 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
                   Gen {entry.generation}
                 </span>
               </div>
-          )}
+            ))}
           </div>
-        }
+        )}
       </motion.div>
     </div>);
 
