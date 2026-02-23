@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Beaker, FileText, GraduationCap, Heart, Library, Lightbulb, FlaskConical } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import { AsciiCurveHero } from "@/components/AsciiCurveHero";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -15,13 +16,20 @@ const Index = () => {
       </nav>
 
       {/* Hero */}
-      <section className="max-w-4xl mx-auto px-8 pt-16 pb-10">
+      <section className="max-w-4xl mx-auto px-8 pt-16 pb-6">
+        <motion.span
+          className="inline-block rounded-full border border-border px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground mb-6"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}>
+          AMM mechanism design platform
+        </motion.span>
+
         <motion.h1
           className="text-5xl sm:text-7xl font-bold tracking-tight leading-[1.05] mb-6 text-foreground"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}>
-
+          transition={{ duration: 0.5, delay: 0.08 }}>
           Design, simulate, and stress-test AMM invariants.
         </motion.h1>
 
@@ -29,10 +37,19 @@ const Index = () => {
           className="text-lg text-muted-foreground max-w-2xl mb-8 leading-relaxed"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}>
-
+          transition={{ duration: 0.5, delay: 0.16 }}>
           A dual-mode platform for automated market maker mechanism engineering.
         </motion.p>
+      </section>
+
+      {/* ASCII Bonding Curve */}
+      <section className="max-w-4xl mx-auto px-8 pb-12">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.24 }}>
+          <AsciiCurveHero />
+        </motion.div>
       </section>
 
       {/* Navigation Grid */}
@@ -92,7 +109,6 @@ const Index = () => {
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
-
               <Heart className="w-3.5 h-3.5" />
               Support
             </a>
@@ -104,32 +120,44 @@ const Index = () => {
       <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
         <p>Invariant Studio — AMM mechanism design platform</p>
       </footer>
-    </div>);
-
+    </div>
+  );
 };
 
-const NavCard = ({ title, description, icon, badge, badgeColor, onClick
-
-}: {title: string;description: string;icon: React.ReactNode;badge?: string;badgeColor?: string;onClick: () => void;}) =>
-<motion.div
-  className="surface-elevated rounded-xl p-5 cursor-pointer group hover:border-foreground/20 transition-all duration-300"
-  onClick={onClick}
-  whileHover={{ y: -2 }}>
-
+const NavCard = ({
+  title,
+  description,
+  icon,
+  badge,
+  badgeColor,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  badge?: string;
+  badgeColor?: string;
+  onClick: () => void;
+}) => (
+  <motion.div
+    className="surface-elevated rounded-xl p-5 cursor-pointer group hover:border-foreground/20 transition-all duration-300"
+    onClick={onClick}
+    whileHover={{ y: -2 }}>
     <div className="flex items-center justify-between mb-3">
       <div className="text-foreground">{icon}</div>
-      {badge
-
-
-
-    }
+      {badge && (
+        <span
+          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${badgeColor || "border-foreground/20 text-foreground/60"}`}>
+          {badge}
+        </span>
+      )}
     </div>
     <h3 className="text-sm font-semibold text-foreground mb-1">{title}</h3>
     <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
     <div className="mt-3 flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
       Enter <ArrowRight className="w-3 h-3" />
     </div>
-  </motion.div>;
-
+  </motion.div>
+);
 
 export default Index;
