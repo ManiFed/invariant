@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Activity, Map, Fingerprint, Compass, Radio } from "lucide-react";
+import { ArrowLeft, Activity, Map, Fingerprint, Radio } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
 import AtlasSurface from "@/components/labs/AtlasSurface";
@@ -41,7 +41,7 @@ const DiscoveryAtlas = () => {
           <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <Compass className="w-4 h-4 text-chart-3" />
+          
           <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT ATLAS</span>
           
         </div>
