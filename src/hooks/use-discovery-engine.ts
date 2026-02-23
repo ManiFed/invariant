@@ -192,6 +192,35 @@ export function useDiscoveryEngine() {
     });
   }, []);
 
+
+  const ingestExperimentCandidates = useCallback((candidates: Candidate[], note?: string) => {
+    if (candidates.length === 0) return;
+
+    setState(prev => {
+      const archive = [...prev.archive, ...candidates];
+      if (archive.length > LOCAL_ARCHIVE_LIMIT) {
+        archive.splice(0, archive.length - LOCAL_ARCHIVE_LIMIT);
+      }
+
+      const activityLog = [
+        ...prev.activityLog,
+        {
+          timestamp: Date.now(),
+          regime: candidates[0].regime,
+          type: "generation-complete" as const,
+          message: note ?? `Imported ${candidates.length} experiment candidates into archive`,
+          generation: candidates[0].generation,
+        },
+      ].slice(-200);
+
+      return {
+        ...prev,
+        archive,
+        activityLog,
+      };
+    });
+  }, []);
+
   const clearSelection = useCallback(() => {
     setSelectedCandidate(null);
   }, []);
@@ -203,5 +232,6 @@ export function useDiscoveryEngine() {
     clearSelection,
     syncMode,
     togglePersistence,
+    ingestExperimentCandidates,
   };
 }
