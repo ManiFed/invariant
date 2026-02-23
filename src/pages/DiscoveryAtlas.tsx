@@ -153,6 +153,31 @@ const DiscoveryAtlas = () => {
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+        <section className="mb-6 surface-elevated rounded-xl border border-border p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-chart-3/30 text-chart-3">PHASE TWO</span>
+            <h1 className="text-sm sm:text-base font-semibold text-foreground tracking-tight">Interactive experiment discovery is now live in Atlas.</h1>
+          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed mb-4">
+            Atlas now supports user-defined experiment instances that run independently from the global evolutionary process while preserving
+            the exact Phase One simulation and scoring math. Every submitted experiment uses isolated Monte Carlo paths, produces full
+            convergence diagnostics, and contributes discovered candidates back into the global archive with contributor metadata.
+          </p>
+          <div className="grid md:grid-cols-3 gap-3 text-[11px] text-muted-foreground">
+            <div className="rounded-lg border border-border bg-secondary/30 p-3">
+              <p className="text-foreground font-medium mb-1">Experiment Builder</p>
+              <p>Configure mechanism constraints, regime assumptions, and weighted optimization objectives through a guided flow.</p>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/30 p-3">
+              <p className="text-foreground font-medium mb-1">Tracking & Validation</p>
+              <p>Monitor generation progress, parameter dispersion, Pareto fronts, and out-of-sample stability bands as runs evolve.</p>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/30 p-3">
+              <p className="text-foreground font-medium mb-1">Atlas Integration</p>
+              <p>Filter mapped designs by contributor, experiment ID, objective type, and regime to target underexplored regions.</p>
+            </div>
+          </div>
+        </section>
         <AnimatePresence mode="wait">
           {activeView === "dashboard" && (
             <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>

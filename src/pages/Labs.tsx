@@ -62,25 +62,25 @@ const Labs = () => {
                   <h2 className="text-lg font-bold text-foreground">Invariant Atlas</h2>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Continuous evolutionary search over liquidity geometries. The engine generates, evaluates, and
-                  archives AMM designs across stochastic market regimes, exposing the geometric structure of the
-                  explored design space.
+                  Continuous global discovery now paired with user-defined experiment runs. Atlas keeps the Phase One
+                  mathematical core intact while allowing contributors to launch isolated evolutionary searches with
+                  configurable objectives, parameter constraints, and regime assumptions.
                 </p>
                 <div className="grid sm:grid-cols-3 gap-4">
                   <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Discrete liquidity density (64 bins)</li>
-                    <li>• 3 market regimes (GBM + jumps)</li>
-                    <li>• Monte Carlo evaluation paths</li>
+                    <li>• Canonical 64-bin liquidity representation</li>
+                    <li>• Regime controls (vol, jumps, mean reversion)</li>
+                    <li>• Statistically isolated Monte Carlo paths</li>
                   </ul>
                   <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Evolutionary population search</li>
-                    <li>• Multi-dimensional metric vectors</li>
-                    <li>• Cross-path stability estimates</li>
+                    <li>• Per-experiment evolutionary populations</li>
+                    <li>• Single or weighted multi-objective scoring</li>
+                    <li>• Pareto frontier and convergence tracking</li>
                   </ul>
                   <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Live champion dashboard</li>
-                    <li>• 2D feature-space atlas map</li>
-                    <li>• Full design inspection view</li>
+                    <li>• Live queue and active job visibility</li>
+                    <li>• Atlas filters by contributor/experiment</li>
+                    <li>• User discoveries auto-archived globally</li>
                   </ul>
                 </div>
                 <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
