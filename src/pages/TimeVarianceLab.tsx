@@ -351,7 +351,25 @@ const TimeVarianceLab = () => {
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               {activeTab === "invariant" && (
-                <TimeVariancePanel config={tvConfig} onConfigChange={handleTVConfigChange} onOpenFullEditor={openFullEditor} />
+                <TimeVariancePanel
+                  config={tvConfig}
+                  onConfigChange={handleTVConfigChange}
+                  onOpenFullEditor={openFullEditor}
+                  hasActiveInvariant={hasInvariant}
+                  onSaveAsActive={(params) => {
+                    const inv: SavedInvariant = {
+                      expression: params.expression,
+                      presetId: "custom",
+                      weightA: params.weightA,
+                      weightB: params.weightB,
+                      kValue: 10000,
+                      amplification: params.amplification,
+                      rangeLower: 0.5,
+                      rangeUpper: 2.0,
+                    };
+                    handleSaveInvariant(inv);
+                  }}
+                />
               )}
               {activeTab === "fees" && (
                 <div className="space-y-4">
