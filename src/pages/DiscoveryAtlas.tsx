@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Activity, Map, Fingerprint, Radio, Cloud, HardDrive, Loader2 } from "lucide-react";
+import { ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
 import AtlasSurface from "@/components/labs/AtlasSurface";
@@ -10,10 +10,10 @@ import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine"
 
 type View = "dashboard" | "atlas" | "detail";
 
-const SYNC_BADGE: Record<SyncMode, { icon: typeof Cloud; label: string; className: string }> = {
-  cloud: {
-    icon: Cloud,
-    label: "CLOUD SYNC",
+const SYNC_BADGE: Record<SyncMode, { icon: typeof Wifi; label: string; className: string }> = {
+  live: {
+    icon: Wifi,
+    label: "LIVE SYNC",
     className: "bg-chart-1/5 border-chart-1/20 text-chart-1",
   },
   persisted: {
@@ -23,7 +23,7 @@ const SYNC_BADGE: Record<SyncMode, { icon: typeof Cloud; label: string; classNam
   },
   memory: {
     icon: HardDrive,
-    label: "IN-MEMORY",
+    label: "LOCAL",
     className: "bg-secondary border-border text-muted-foreground",
   },
   loading: {
@@ -35,7 +35,7 @@ const SYNC_BADGE: Record<SyncMode, { icon: typeof Cloud; label: string; classNam
 
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, cloudStatus, togglePersistence } = useDiscoveryEngine();
+  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, togglePersistence } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const detailCandidateRef = useRef(selectedCandidate);
   if (selectedCandidate) {
@@ -65,6 +65,8 @@ const DiscoveryAtlas = () => {
   const badge = SYNC_BADGE[syncMode];
   const BadgeIcon = badge.icon;
 
+  const canToggle = syncMode === "persisted" || syncMode === "memory" || syncMode === "live";
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -76,31 +78,24 @@ const DiscoveryAtlas = () => {
           <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT ATLAS</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Sync mode badge — click to toggle persistent/local */}
-          {(syncMode === "persisted" || syncMode === "memory") ? (
+          {/* Sync mode badge */}
+          {canToggle ? (
             <button
               onClick={togglePersistence}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${badge.className}`}
               title={
-                syncMode === "persisted"
-                  ? "Saving to IndexedDB. Click to switch to in-memory (no persistence)."
-                  : "In-memory only. Click to enable IndexedDB persistence."
+                syncMode === "live"
+                  ? "Broadcasting to all viewers via Realtime. Click to switch to local-only."
+                  : syncMode === "persisted"
+                  ? "Saving to IndexedDB. Click to switch to in-memory."
+                  : "In-memory only. Click to enable persistence."
               }
             >
               <BadgeIcon className="w-3 h-3" />
               <span className="text-[9px] font-medium">{badge.label}</span>
             </button>
           ) : (
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${badge.className}`}
-              title={
-                cloudStatus === "no-tables"
-                  ? "Supabase reachable but atlas tables not found. Run the migration SQL in your Supabase dashboard."
-                  : cloudStatus === "unreachable"
-                  ? "Could not reach Supabase. Engine state is saved locally in IndexedDB."
-                  : "Connected to Supabase. Candidates sync across sessions."
-              }
-            >
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${badge.className}`}>
               <BadgeIcon className={`w-3 h-3 ${syncMode === "loading" ? "animate-spin" : ""}`} />
               <span className="text-[9px] font-medium">{badge.label}</span>
             </div>

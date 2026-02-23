@@ -8,24 +8,20 @@ import {
   runGeneration,
 } from "@/lib/discovery-engine";
 import {
-  loadAtlasState,
-  triggerGeneration,
-  subscribeToAtlas,
-  type CloudStatus,
-} from "@/lib/atlas-cloud";
+  AtlasSync,
+  buildPopulationsFromArchive,
+} from "@/lib/atlas-sync";
 import {
   saveAtlasState,
   loadAtlasStateFromDB,
 } from "@/lib/atlas-persistence";
 
 const LOCAL_ARCHIVE_LIMIT = 2000;
-const CLOUD_ARCHIVE_LIMIT = 10000;
-const TICK_INTERVAL = 50; // ms between local generation ticks
-const CLOUD_GENERATION_INTERVAL = 8000; // ms between cloud generation triggers
-const PERSIST_INTERVAL = 3000; // ms between IndexedDB saves
+const TICK_INTERVAL = 50;
+const PERSIST_INTERVAL = 3000;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
 
-export type SyncMode = "cloud" | "persisted" | "memory" | "loading";
+export type SyncMode = "live" | "persisted" | "memory" | "loading";
 
 export function useDiscoveryEngine() {
   const [state, setState] = useState<EngineState>(() => ({
@@ -33,20 +29,15 @@ export function useDiscoveryEngine() {
     running: true,
   }));
   const [syncMode, setSyncMode] = useState<SyncMode>("loading");
-  const [cloudStatus, setCloudStatus] = useState<CloudStatus>("loading");
   const runningRef = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cloudIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const persistIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const initRef = useRef(false);
   const localStartedRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
-
-  // Use a ref for syncMode inside tick so tick never needs to be recreated
-  const syncModeRef = useRef<SyncMode>(syncMode);
-  syncModeRef.current = syncMode;
+  const syncRef = useRef<AtlasSync | null>(null);
 
   // ─── Local engine tick (stable — no deps, uses refs) ───────────────────────
 
@@ -61,10 +52,9 @@ export function useDiscoveryEngine() {
 
       const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig);
 
-      const limit = syncModeRef.current === "cloud" ? CLOUD_ARCHIVE_LIMIT : LOCAL_ARCHIVE_LIMIT;
       const newArchive = [...prev.archive, ...newCandidates];
-      if (newArchive.length > limit) {
-        newArchive.splice(0, newArchive.length - limit);
+      if (newArchive.length > LOCAL_ARCHIVE_LIMIT) {
+        newArchive.splice(0, newArchive.length - LOCAL_ARCHIVE_LIMIT);
       }
 
       return {
@@ -77,9 +67,9 @@ export function useDiscoveryEngine() {
     });
 
     timeoutRef.current = setTimeout(tick, TICK_INTERVAL);
-  }, []); // stable — reads syncMode from ref
+  }, []);
 
-  // ─── Initialization: Cloud → IndexedDB → Memory ────────────────────────────
+  // ─── Initialization: Realtime channel → IndexedDB → Fresh start ────────────
 
   useEffect(() => {
     if (initRef.current) return;
@@ -88,119 +78,68 @@ export function useDiscoveryEngine() {
     let cancelled = false;
 
     (async () => {
-      // 1. Try Supabase cloud
-      const { state: cloudState, cloudStatus: status } = await loadAtlasState();
+      // 1. Try Supabase Realtime broadcast channel (no tables needed)
+      const sync = new AtlasSync(
+        () => stateRef.current,
+        (archive, totalGenerations) => {
+          setState(prev => {
+            if (totalGenerations <= prev.totalGenerations) return prev;
+            const populations = buildPopulationsFromArchive(archive);
+            return {
+              ...prev,
+              archive,
+              populations,
+              totalGenerations,
+            };
+          });
+        },
+      );
+      syncRef.current = sync;
 
-      if (cancelled) return;
-      setCloudStatus(status);
+      const receivedRemoteState = await sync.connect();
+      if (cancelled) { sync.cleanup(); return; }
 
-      if (status === "connected" && cloudState) {
-        setState(cloudState);
-        setSyncMode("cloud");
+      if (sync.connected) {
+        // Connected to Realtime — we're live-syncing with peers
+        // If no peer responded, load from IndexedDB as starting point
+        if (!receivedRemoteState) {
+          const persistedState = await loadAtlasStateFromDB();
+          if (!cancelled && persistedState && persistedState.archive.length > 0) {
+            setState(persistedState);
+          }
+        }
+        setSyncMode("live");
         return;
       }
 
-      // 2. Try IndexedDB
+      // 2. Realtime unavailable — fall back to IndexedDB
       const persistedState = await loadAtlasStateFromDB();
-
-      if (cancelled) return;
-
-      if (persistedState && persistedState.archive.length > 0) {
+      if (!cancelled && persistedState && persistedState.archive.length > 0) {
         setState(persistedState);
       }
-
-      // Always use "persisted" — IndexedDB saves silently fail if unavailable
       setSyncMode("persisted");
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      syncRef.current?.cleanup();
+    };
   }, []);
 
-  // ─── Real-time subscription (cloud mode only) ──────────────────────────────
+  // ─── IndexedDB periodic persistence (always active as backup) ──────────────
 
   useEffect(() => {
-    if (syncMode !== "cloud") return;
-
-    const unsubscribe = subscribeToAtlas(
-      (newCandidates) => {
-        setState(prev => {
-          const newArchive = [...prev.archive, ...newCandidates];
-          if (newArchive.length > CLOUD_ARCHIVE_LIMIT) {
-            newArchive.splice(0, newArchive.length - CLOUD_ARCHIVE_LIMIT);
-          }
-
-          const newPops = { ...prev.populations };
-          for (const c of newCandidates) {
-            const pop = newPops[c.regime];
-            if (!pop.champion || c.score < pop.champion.score) {
-              newPops[c.regime] = {
-                ...pop,
-                champion: c,
-                totalEvaluated: pop.totalEvaluated + 1,
-              };
-            }
-          }
-
-          return {
-            ...prev,
-            populations: newPops,
-            archive: newArchive,
-          };
-        });
-      },
-      (totalGenerations) => {
-        setState(prev => ({
-          ...prev,
-          totalGenerations: Math.max(prev.totalGenerations, totalGenerations),
-        }));
-      }
-    );
-
-    return unsubscribe;
-  }, [syncMode]);
-
-  // ─── Cloud generation trigger (cloud mode only) ────────────────────────────
-
-  useEffect(() => {
-    if (syncMode !== "cloud") return;
-
-    let genIndex = 0;
-    const trigger = async () => {
-      const regime = REGIME_CYCLE[genIndex % REGIME_CYCLE.length];
-      genIndex++;
-      const result = await triggerGeneration(regime);
-      if (result.success && result.generation) {
-        setState(prev => ({
-          ...prev,
-          totalGenerations: Math.max(prev.totalGenerations, result.generation!),
-        }));
-      }
-    };
-
-    trigger();
-    cloudIntervalRef.current = setInterval(trigger, CLOUD_GENERATION_INTERVAL);
-
-    return () => {
-      if (cloudIntervalRef.current) clearInterval(cloudIntervalRef.current);
-    };
-  }, [syncMode]);
-
-  // ─── IndexedDB periodic persistence ────────────────────────────────────────
-
-  useEffect(() => {
-    if (syncMode !== "persisted") return;
+    if (syncMode === "loading" || syncMode === "memory") return;
 
     const persist = () => {
       saveAtlasState(stateRef.current);
     };
 
-    // Save immediately, then periodically
     persist();
     persistIntervalRef.current = setInterval(persist, PERSIST_INTERVAL);
 
     return () => {
       if (persistIntervalRef.current) clearInterval(persistIntervalRef.current);
-      // Final save on unmount
       saveAtlasState(stateRef.current);
     };
   }, [syncMode]);
@@ -215,20 +154,20 @@ export function useDiscoveryEngine() {
     runningRef.current = true;
     tick();
 
-    // Only clean up on unmount (localStartedRef prevents re-entry)
     return () => {
       runningRef.current = false;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [syncMode, tick]);
 
-  // ─── Toggle sync mode (user-facing) ────────────────────────────────────────
+  // ─── Toggle persistence (user-facing) ──────────────────────────────────────
 
   const togglePersistence = useCallback(() => {
     setSyncMode(prev => {
+      if (prev === "live") return "memory";
       if (prev === "persisted") return "memory";
       if (prev === "memory") return "persisted";
-      return prev; // don't toggle cloud or loading
+      return prev;
     });
   }, []);
 
@@ -263,7 +202,6 @@ export function useDiscoveryEngine() {
     selectCandidate,
     clearSelection,
     syncMode,
-    cloudStatus,
     togglePersistence,
   };
 }
