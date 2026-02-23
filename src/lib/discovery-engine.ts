@@ -69,6 +69,10 @@ export interface Candidate {
   stability: number;        // cross-path variance of lpValueVsHodl
   score: number;            // composite ranking score (lower is better rank)
   timestamp: number;
+  source?: "global" | "experiment";
+  contributor?: string;
+  experimentId?: string;
+  objectiveType?: string;
 }
 
 /** Per-metric champion IDs */
