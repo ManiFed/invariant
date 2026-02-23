@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Map as MapIcon, Layers, Eye, ZoomIn, Pause, Play, RotateCcw } from "lucide-react";
+import { Map as MapIcon, Layers, Eye, ZoomIn, Pause, Play, RotateCcw, Radar as RadarIcon } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip,
 } from "recharts";
@@ -201,6 +201,271 @@ function IndividualSpiderGraph({ candidate }: { candidate: Candidate }) {
           <Radar dataKey="value" stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} name="Performance" />
         </RadarChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── Individual AMMs Spider Map ──────────────────────────────────────────────
+
+const SPIDER_AXES = [
+  { key: "fees", label: "Fees" },
+  { key: "utilization", label: "Util" },
+  { key: "lpValue", label: "LP Val" },
+  { key: "lowSlippage", label: "Lo Slip" },
+  { key: "lowArb", label: "Lo Arb" },
+  { key: "stability", label: "Stable" },
+  { key: "lowDrawdown", label: "Lo DD" },
+];
+
+function spiderMetricValue(c: Candidate, key: string): number {
+  const m = c.metrics;
+  switch (key) {
+    case "fees": return Math.min(m.totalFees / 50, 1) * 100;
+    case "utilization": return m.liquidityUtilization * 100;
+    case "lpValue": return Math.min(m.lpValueVsHodl, 1.2) / 1.2 * 100;
+    case "lowSlippage": return Math.max(0, (1 - m.totalSlippage * 10)) * 100;
+    case "lowArb": return Math.max(0, (1 - m.arbLeakage / 50)) * 100;
+    case "stability": return Math.max(0, (1 - c.stability * 5)) * 100;
+    case "lowDrawdown": return Math.max(0, (1 - m.maxDrawdown * 2)) * 100;
+    default: return 0;
+  }
+}
+
+function IndividualAMMsSpiderMap({
+  candidates,
+  filterRegime,
+  onSelectCandidate,
+}: {
+  candidates: Candidate[];
+  filterRegime: RegimeId | "all";
+  onSelectCandidate: (id: string) => void;
+}) {
+  const colors = useChartColors();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [showCount, setShowCount] = useState(30);
+
+  // Sample top candidates by score (lower is better)
+  const sampledCandidates = useMemo(() => {
+    const sorted = [...candidates].sort((a, b) => a.score - b.score);
+    return sorted.slice(0, showCount);
+  }, [candidates, showCount]);
+
+  // SVG dimensions
+  const svgSize = 500;
+  const cx = svgSize / 2;
+  const cy = svgSize / 2;
+  const maxR = svgSize / 2 - 60;
+  const numAxes = SPIDER_AXES.length;
+
+  // Compute angle for each axis
+  const angleStep = (2 * Math.PI) / numAxes;
+
+  // Convert a value (0-100) on axis index to SVG coordinates
+  const toPoint = useCallback((axisIdx: number, value: number) => {
+    const angle = -Math.PI / 2 + axisIdx * angleStep;
+    const r = (value / 100) * maxR;
+    return {
+      x: cx + r * Math.cos(angle),
+      y: cy + r * Math.sin(angle),
+    };
+  }, [cx, cy, maxR, angleStep]);
+
+  // Build polygon points string for a candidate
+  const candidatePolygon = useCallback((c: Candidate) => {
+    return SPIDER_AXES.map((axis, i) => {
+      const val = spiderMetricValue(c, axis.key);
+      const pt = toPoint(i, val);
+      return `${pt.x},${pt.y}`;
+    }).join(" ");
+  }, [toPoint]);
+
+  // Grid rings
+  const gridRings = [20, 40, 60, 80, 100];
+
+  const hoveredCandidate = hoveredId
+    ? sampledCandidates.find(c => c.id === hoveredId) ?? null
+    : null;
+
+  if (candidates.length === 0) {
+    return (
+      <div className="h-64 flex items-center justify-center">
+        <p className="text-[10px] text-muted-foreground">Waiting for candidates...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <RadarIcon className="w-3.5 h-3.5 text-foreground" />
+            <h4 className="text-xs font-semibold text-foreground">Individual AMMs Spider Map</h4>
+          </div>
+          <p className="text-[9px] text-muted-foreground">
+            Top {sampledCandidates.length} candidates by score — click any polygon to view details
+          </p>
+        </div>
+        {hoveredCandidate && (
+          <div className="text-right">
+            <p className="text-[9px] font-mono text-foreground">{hoveredCandidate.id}</p>
+            <p className="text-[8px] text-muted-foreground">
+              Score: {hoveredCandidate.score.toFixed(3)} | {REGIME_LABELS[hoveredCandidate.regime]}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Show count control */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[9px] text-muted-foreground">Show:</span>
+        {[10, 30, 50, 100].map(n => (
+          <button
+            key={n}
+            onClick={() => setShowCount(n)}
+            className={`px-2 py-0.5 rounded text-[9px] font-medium transition-all ${
+              showCount === n
+                ? "bg-foreground/10 text-foreground border border-foreground/20"
+                : "bg-secondary text-muted-foreground border border-transparent hover:text-foreground"
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+
+      <svg
+        viewBox={`0 0 ${svgSize} ${svgSize}`}
+        className="w-full"
+        style={{ maxHeight: 500 }}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {/* Grid rings */}
+        {gridRings.map(ring => {
+          const points = SPIDER_AXES.map((_, i) => {
+            const pt = toPoint(i, ring);
+            return `${pt.x},${pt.y}`;
+          }).join(" ");
+          return (
+            <polygon
+              key={`ring-${ring}`}
+              points={points}
+              fill="none"
+              stroke={colors.grid}
+              strokeWidth={0.5}
+              strokeDasharray={ring === 100 ? "none" : "3 3"}
+            />
+          );
+        })}
+
+        {/* Axis lines */}
+        {SPIDER_AXES.map((_, i) => {
+          const pt = toPoint(i, 100);
+          return (
+            <line
+              key={`axis-${i}`}
+              x1={cx}
+              y1={cy}
+              x2={pt.x}
+              y2={pt.y}
+              stroke={colors.grid}
+              strokeWidth={0.5}
+            />
+          );
+        })}
+
+        {/* Axis labels */}
+        {SPIDER_AXES.map((axis, i) => {
+          const pt = toPoint(i, 115);
+          return (
+            <text
+              key={`label-${i}`}
+              x={pt.x}
+              y={pt.y}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={9}
+              fill={colors.tick}
+            >
+              {axis.label}
+            </text>
+          );
+        })}
+
+        {/* Candidate polygons (rendered back-to-front: worst score first, best on top) */}
+        {[...sampledCandidates].reverse().map(c => {
+          const isHovered = hoveredId === c.id;
+          return (
+            <polygon
+              key={c.id}
+              points={candidatePolygon(c)}
+              fill={REGIME_COLORS[c.regime]}
+              fillOpacity={isHovered ? 0.25 : 0.04}
+              stroke={REGIME_COLORS[c.regime]}
+              strokeWidth={isHovered ? 2 : 0.5}
+              strokeOpacity={isHovered ? 1 : 0.3}
+              className="cursor-pointer transition-all"
+              onMouseEnter={() => setHoveredId(c.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              onClick={() => onSelectCandidate(c.id)}
+            />
+          );
+        })}
+
+        {/* Vertex dots for hovered candidate */}
+        {hoveredCandidate && SPIDER_AXES.map((axis, i) => {
+          const val = spiderMetricValue(hoveredCandidate, axis.key);
+          const pt = toPoint(i, val);
+          return (
+            <circle
+              key={`dot-${i}`}
+              cx={pt.x}
+              cy={pt.y}
+              r={3}
+              fill={REGIME_COLORS[hoveredCandidate.regime]}
+              stroke="hsl(var(--background))"
+              strokeWidth={1}
+            />
+          );
+        })}
+      </svg>
+
+      {/* Legend + hovered info */}
+      <div className="flex items-center justify-center gap-4 mt-2">
+        {(["low-vol", "high-vol", "jump-diffusion"] as const).map(r => {
+          const count = sampledCandidates.filter(c => c.regime === r).length;
+          return (
+            <div key={r} className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: REGIME_COLORS[r] }} />
+              <span className="text-[8px] text-muted-foreground">{REGIME_LABELS[r]} ({count})</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hovered candidate metric values */}
+      {hoveredCandidate && (
+        <div className="mt-3 pt-3 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div className="grid grid-cols-7 gap-2 flex-1">
+              {SPIDER_AXES.map(axis => (
+                <div key={axis.key} className="text-center">
+                  <p className="text-[7px] text-muted-foreground">{axis.label}</p>
+                  <p className="text-[9px] font-mono font-semibold text-foreground">
+                    {spiderMetricValue(hoveredCandidate, axis.key).toFixed(1)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => onSelectCandidate(hoveredCandidate.id)}
+              className="text-[9px] px-2 py-1 rounded bg-secondary text-foreground border border-border hover:bg-accent transition-colors ml-3 shrink-0"
+            >
+              Open Detail
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -613,6 +878,20 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
           </div>
         </motion.div>
       )}
+
+      {/* Individual AMMs Spider Map — all candidates as overlapping spider polygons */}
+      <motion.div
+        className="surface-elevated rounded-xl p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <IndividualAMMsSpiderMap
+          candidates={filteredCandidates}
+          filterRegime={filterRegime}
+          onSelectCandidate={handlePointClick}
+        />
+      </motion.div>
     </div>
   );
 }
