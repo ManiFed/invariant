@@ -209,7 +209,7 @@ export default function LiveDashboard({ state }: LiveDashboardProps) {
       {/* Champions per regime */}
       <div>
         <h3 className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5">
-          <Crown className="w-3.5 h-3.5" /> Current Champions
+           Current Champions
         </h3>
         <div className="grid md:grid-cols-3 gap-3">
           {regimeIds.map((r) =>
