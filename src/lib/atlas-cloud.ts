@@ -1,10 +1,15 @@
 // Atlas Cloud Storage — Supabase integration for the Invariant Atlas
 // Loads candidates from the database and subscribes to real-time updates.
-// Falls back to local-only engine if Supabase is unavailable.
+// Falls back to IndexedDB persistence if Supabase is unavailable.
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Candidate, RegimeId, MetricVector, FeatureDescriptor, EngineState, PopulationState, ChampionMetric, ActivityEntry } from "@/lib/discovery-engine";
-import { scoreCandidate } from "@/lib/discovery-engine";
+import type { Candidate, RegimeId, MetricVector, FeatureDescriptor, EngineState, PopulationState, ChampionMetric } from "@/lib/discovery-engine";
+
+export type CloudStatus =
+  | "connected"       // Supabase tables exist and are reachable
+  | "no-tables"       // Supabase reachable but tables don't exist
+  | "unreachable"     // Can't reach Supabase at all
+  | "loading";        // Still checking
 
 // ─── DB Row → Candidate conversion ──────────────────────────────────────────
 
@@ -37,6 +42,58 @@ export function rowToCandidate(row: CandidateRow): Candidate {
   };
 }
 
+// ─── Table bootstrap: try to create tables via edge function ─────────────────
+
+async function tryBootstrapTables(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke("atlas-engine", {
+      body: { action: "bootstrap" },
+    });
+    if (error) return false;
+    return data?.success === true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Check if Supabase is reachable and tables exist ─────────────────────────
+
+export async function checkCloudStatus(): Promise<CloudStatus> {
+  try {
+    // Try a simple query with a short timeout via AbortController
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const { error } = await supabase
+      .from("atlas_state")
+      .select("id")
+      .limit(1)
+      .abortSignal(controller.signal);
+
+    clearTimeout(timeout);
+
+    if (!error) return "connected";
+
+    // Check if the error is "relation does not exist" (table missing)
+    const msg = (error as any)?.message || error?.code || "";
+    if (msg.includes("42P01") || msg.includes("does not exist") || msg.includes("relation")) {
+      // Tables don't exist — try to bootstrap via edge function
+      const bootstrapped = await tryBootstrapTables();
+      if (bootstrapped) {
+        // Wait a moment for tables to be available
+        await new Promise(r => setTimeout(r, 1000));
+        return "connected";
+      }
+      return "no-tables";
+    }
+
+    // Other errors: probably permission or network issues
+    return "unreachable";
+  } catch {
+    return "unreachable";
+  }
+}
+
 // ─── Load initial state from Supabase ────────────────────────────────────────
 
 const EMPTY_METRIC_CHAMPIONS: Record<ChampionMetric, Candidate | null> = {
@@ -59,9 +116,15 @@ function computeMetricChampionsFromCandidates(candidates: Candidate[]): Record<C
 }
 
 export async function loadAtlasState(): Promise<{
-  state: EngineState;
-  cloudAvailable: boolean;
+  state: EngineState | null;
+  cloudStatus: CloudStatus;
 }> {
+  const status = await checkCloudStatus();
+
+  if (status !== "connected") {
+    return { state: null, cloudStatus: status };
+  }
+
   try {
     // Load global state
     const { data: globalState, error: stateError } = await (supabase as any)
@@ -96,25 +159,21 @@ export async function loadAtlasState(): Promise<{
 
       const candidates = (popRows || []).map(rowToCandidate);
       const champion = candidates.length > 0 ? candidates[0] : null;
-      const metricChampions = candidates.length > 0
-        ? computeMetricChampionsFromCandidates(candidates)
-        : { ...EMPTY_METRIC_CHAMPIONS };
 
-      // Also compute metric champions from archived candidates for this regime
       const regimeArchived = (archivedRows || [])
         .filter((r: CandidateRow) => r.regime === regime)
         .map(rowToCandidate);
 
       const allRegimeCandidates = [...candidates, ...regimeArchived];
-      const fullMetricChampions = allRegimeCandidates.length > 0
+      const metricChampions = allRegimeCandidates.length > 0
         ? computeMetricChampionsFromCandidates(allRegimeCandidates)
-        : metricChampions;
+        : { ...EMPTY_METRIC_CHAMPIONS };
 
       populations[regime] = {
         regime,
         candidates,
         champion,
-        metricChampions: fullMetricChampions,
+        metricChampions,
         generation: champion?.generation || 0,
         totalEvaluated: (popRows?.length || 0) + regimeArchived.length,
       };
@@ -130,24 +189,10 @@ export async function loadAtlasState(): Promise<{
         running: true,
         totalGenerations: (globalState as any)?.total_generations || 0,
       },
-      cloudAvailable: true,
+      cloudStatus: "connected",
     };
   } catch {
-    // Supabase not available or tables don't exist yet
-    return {
-      state: {
-        populations: {
-          "low-vol": { regime: "low-vol", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
-          "high-vol": { regime: "high-vol", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
-          "jump-diffusion": { regime: "jump-diffusion", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
-        },
-        archive: [],
-        activityLog: [],
-        running: true,
-        totalGenerations: 0,
-      },
-      cloudAvailable: false,
-    };
+    return { state: null, cloudStatus: "unreachable" };
   }
 }
 
@@ -176,7 +221,6 @@ export function subscribeToAtlas(
   onNewCandidates: (candidates: Candidate[]) => void,
   onStateUpdate: (totalGenerations: number) => void,
 ) {
-  // Subscribe to new archived candidates
   const candidateChannel = supabase
     .channel("atlas-candidates-realtime")
     .on(
@@ -196,7 +240,6 @@ export function subscribeToAtlas(
     )
     .subscribe();
 
-  // Subscribe to state updates
   const stateChannel = supabase
     .channel("atlas-state-realtime")
     .on(
