@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Activity, Crown, Zap, TrendingUp, AlertTriangle, Hash, Trophy } from "lucide-react";
+import { Crown, Zap, AlertTriangle } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
-  AreaChart, Area, XAxis, YAxis, Tooltip,
-} from "recharts";
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from
+"recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import type { EngineState, RegimeId, Candidate, ChampionMetric } from "@/lib/discovery-engine";
 import { NUM_BINS, binPrice, CHAMPION_METRIC_LABELS } from "@/lib/discovery-engine";
@@ -12,13 +12,13 @@ import { NUM_BINS, binPrice, CHAMPION_METRIC_LABELS } from "@/lib/discovery-engi
 const REGIME_COLORS: Record<RegimeId, string> = {
   "low-vol": "hsl(142, 72%, 45%)",
   "high-vol": "hsl(38, 92%, 50%)",
-  "jump-diffusion": "hsl(0, 72%, 55%)",
+  "jump-diffusion": "hsl(0, 72%, 55%)"
 };
 
 const REGIME_LABELS: Record<RegimeId, string> = {
   "low-vol": "Low Vol",
   "high-vol": "High Vol",
-  "jump-diffusion": "Jump Diff",
+  "jump-diffusion": "Jump Diff"
 };
 
 interface LiveDashboardProps {
@@ -26,7 +26,7 @@ interface LiveDashboardProps {
   onSelectCandidate: (id: string) => void;
 }
 
-function ChampionCard({ regime, champion, onClick }: { regime: RegimeId; champion: Candidate | null; onClick?: () => void }) {
+function ChampionCard({ regime, champion }: {regime: RegimeId;champion: Candidate | null;}) {
   if (!champion) {
     return (
       <div className="surface-elevated rounded-xl p-4 border-l-2" style={{ borderLeftColor: REGIME_COLORS[regime] }}>
@@ -35,8 +35,8 @@ function ChampionCard({ regime, champion, onClick }: { regime: RegimeId; champio
           <span className="text-[10px] font-bold text-foreground">{REGIME_LABELS[regime]}</span>
         </div>
         <p className="text-[10px] text-muted-foreground">Awaiting first generation...</p>
-      </div>
-    );
+      </div>);
+
   }
 
   const m = champion.metrics;
@@ -48,7 +48,7 @@ function ChampionCard({ regime, champion, onClick }: { regime: RegimeId; champio
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Crown className="w-3.5 h-3.5" style={{ color: REGIME_COLORS[regime] }} />
+          
           <span className="text-[10px] font-bold text-foreground">{REGIME_LABELS[regime]} Champion</span>
         </div>
         <span className="text-[9px] font-mono text-muted-foreground">Gen {champion.generation}</span>
@@ -67,17 +67,17 @@ function ChampionCard({ regime, champion, onClick }: { regime: RegimeId; champio
         <span className="text-[9px] text-muted-foreground ml-1">Stability:</span>
         <span className="text-[9px] font-mono text-foreground">{champion.stability.toFixed(4)}</span>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
-function MiniStat({ label, value, positive }: { label: string; value: string; positive?: boolean }) {
+function MiniStat({ label, value, positive }: {label: string;value: string;positive?: boolean;}) {
   return (
     <div>
       <p className="text-[8px] text-muted-foreground">{label}</p>
       <p className={`text-[10px] font-mono font-semibold ${positive === true ? "text-success" : positive === false ? "text-destructive" : "text-foreground"}`}>{value}</p>
-    </div>
-  );
+    </div>);
+
 }
 
 function MetricChampionValue(c: Candidate, metric: ChampionMetric): string {
@@ -96,7 +96,7 @@ function LiquidityDensityChart({ candidate, color }: { candidate: Candidate; col
   const data = useMemo(() => {
     return Array.from({ length: NUM_BINS }, (_, i) => ({
       price: parseFloat(binPrice(i).toFixed(3)),
-      weight: candidate.bins[i],
+      weight: candidate.bins[i]
     }));
   }, [candidate]);
 
@@ -116,41 +116,41 @@ function LiquidityDensityChart({ candidate, color }: { candidate: Candidate; col
           <YAxis tick={{ fontSize: 7, fill: chartColors.tick }} width={30} />
           <Tooltip
             contentStyle={{ background: chartColors.tooltipBg, border: `1px solid ${chartColors.tooltipBorder}`, borderRadius: 8, fontSize: 9, color: chartColors.tooltipText }}
-            wrapperStyle={{ pointerEvents: "none" }}
-          />
+            wrapperStyle={{ pointerEvents: "none" }} />
+
           <Area type="monotone" dataKey="weight" stroke={color} fill={`url(#liqGrad-${candidate.regime})`} strokeWidth={1.5} />
         </AreaChart>
       </ResponsiveContainer>
-    </div>
-  );
+    </div>);
+
 }
 
-function RadarMetrics({ candidates }: { candidates: (Candidate | null)[] }) {
+function RadarMetrics({ candidates }: {candidates: (Candidate | null)[];}) {
   const chartColors = useChartColors();
   const data = useMemo(() => {
     const axes = [
-      { key: "fees", label: "Fees" },
-      { key: "utilization", label: "Utilization" },
-      { key: "lpValue", label: "LP Value" },
-      { key: "lowSlippage", label: "Low Slippage" },
-      { key: "lowArb", label: "Low Arb Leak" },
-      { key: "stability", label: "Stability" },
-    ];
+    { key: "fees", label: "Fees" },
+    { key: "utilization", label: "Utilization" },
+    { key: "lpValue", label: "LP Value" },
+    { key: "lowSlippage", label: "Low Slippage" },
+    { key: "lowArb", label: "Low Arb Leak" },
+    { key: "stability", label: "Stability" }];
 
-    return axes.map(axis => {
+
+    return axes.map((axis) => {
       const point: Record<string, string | number> = { axis: axis.label };
       const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
       regimes.forEach((r, i) => {
         const c = candidates[i];
-        if (!c) { point[r] = 0; return; }
+        if (!c) {point[r] = 0;return;}
         const m = c.metrics;
         switch (axis.key) {
-          case "fees": point[r] = Math.min(m.totalFees / 50, 1) * 100; break;
-          case "utilization": point[r] = m.liquidityUtilization * 100; break;
-          case "lpValue": point[r] = Math.min(m.lpValueVsHodl, 1.2) / 1.2 * 100; break;
-          case "lowSlippage": point[r] = Math.max(0, (1 - m.totalSlippage * 10)) * 100; break;
-          case "lowArb": point[r] = Math.max(0, (1 - m.arbLeakage / 50)) * 100; break;
-          case "stability": point[r] = Math.max(0, (1 - c.stability * 5)) * 100; break;
+          case "fees":point[r] = Math.min(m.totalFees / 50, 1) * 100;break;
+          case "utilization":point[r] = m.liquidityUtilization * 100;break;
+          case "lpValue":point[r] = Math.min(m.lpValueVsHodl, 1.2) / 1.2 * 100;break;
+          case "lowSlippage":point[r] = Math.max(0, 1 - m.totalSlippage * 10) * 100;break;
+          case "lowArb":point[r] = Math.max(0, 1 - m.arbLeakage / 50) * 100;break;
+          case "stability":point[r] = Math.max(0, 1 - c.stability * 5) * 100;break;
         }
       });
       return point;
@@ -168,22 +168,22 @@ function RadarMetrics({ candidates }: { candidates: (Candidate | null)[] }) {
           <Radar name="Jump Diff" dataKey="jump-diffusion" stroke={REGIME_COLORS["jump-diffusion"]} fill={REGIME_COLORS["jump-diffusion"]} fillOpacity={0.1} strokeWidth={1.5} />
         </RadarChart>
       </ResponsiveContainer>
-    </div>
-  );
+    </div>);
+
 }
 
 export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboardProps) {
   const regimeIds: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
-  const champions = regimeIds.map(r => state.populations[r].champion);
+  const champions = regimeIds.map((r) => state.populations[r].champion);
   const totalEvaluated = regimeIds.reduce((sum, r) => sum + state.populations[r].totalEvaluated, 0);
 
   // Activity log (most recent first)
   const recentActivity = useMemo(() =>
-    [...state.activityLog]
-      .filter(e => e.type !== "generation-complete")
-      .reverse()
-      .slice(0, 20),
-    [state.activityLog]
+  [...state.activityLog].
+  filter((e) => e.type !== "generation-complete").
+  reverse().
+  slice(0, 20),
+  [state.activityLog]
   );
 
   // Collect all metric champions across regimes (deduplicated)
@@ -227,28 +227,28 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <div className="flex items-center gap-1.5 mb-1">
-            <Hash className="w-3 h-3 text-muted-foreground" />
+            
             <p className="text-[9px] text-muted-foreground">Total Generations</p>
           </div>
           <p className="text-lg font-bold font-mono text-foreground">{state.totalGenerations}</p>
         </motion.div>
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <div className="flex items-center gap-1.5 mb-1">
-            <Zap className="w-3 h-3 text-muted-foreground" />
+            
             <p className="text-[9px] text-muted-foreground">Candidates Evaluated</p>
           </div>
           <p className="text-lg font-bold font-mono text-foreground">{totalEvaluated.toLocaleString()}</p>
         </motion.div>
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <div className="flex items-center gap-1.5 mb-1">
-            <TrendingUp className="w-3 h-3 text-muted-foreground" />
+            
             <p className="text-[9px] text-muted-foreground">Archive Size</p>
           </div>
           <p className="text-lg font-bold font-mono text-foreground">{state.archive.length.toLocaleString()}</p>
         </motion.div>
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <div className="flex items-center gap-1.5 mb-1">
-            <Activity className="w-3 h-3 text-muted-foreground" />
+            
             <p className="text-[9px] text-muted-foreground">Status</p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -261,17 +261,12 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
       {/* Overall champions per regime */}
       <div>
         <h3 className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5">
-          <Crown className="w-3.5 h-3.5" /> Overall Champions
+           Current Champions
         </h3>
         <div className="grid md:grid-cols-3 gap-3">
-          {regimeIds.map(r => (
-            <ChampionCard
-              key={r}
-              regime={r}
-              champion={state.populations[r].champion}
-              onClick={state.populations[r].champion ? () => onSelectCandidate(state.populations[r].champion!.id) : undefined}
-            />
-          ))}
+          {regimeIds.map((r) =>
+          <ChampionCard key={r} regime={r} champion={state.populations[r].champion} />
+          )}
         </div>
       </div>
 
@@ -308,12 +303,12 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
           <p className="text-[9px] text-muted-foreground mb-2">Champion metrics across regimes (normalized)</p>
           <RadarMetrics candidates={champions} />
           <div className="flex items-center justify-center gap-4 mt-2">
-            {regimeIds.map(r => (
-              <div key={r} className="flex items-center gap-1.5">
+            {regimeIds.map((r) =>
+            <div key={r} className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: REGIME_COLORS[r] }} />
                 <span className="text-[9px] text-muted-foreground">{REGIME_LABELS[r]}</span>
               </div>
-            ))}
+            )}
           </div>
         </motion.div>
 
@@ -321,13 +316,13 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
           <h4 className="text-xs font-semibold text-foreground mb-1">Champion Liquidity Densities</h4>
           <p className="text-[9px] text-muted-foreground mb-2">Bin weights across log-price domain</p>
           <div className="space-y-3">
-            {regimeIds.map(r => {
+            {regimeIds.map((r) => {
               const champ = state.populations[r].champion;
               if (!champ) return (
                 <div key={r} className="h-10 flex items-center justify-center">
                   <span className="text-[9px] text-muted-foreground">No champion yet — {REGIME_LABELS[r]}</span>
-                </div>
-              );
+                </div>);
+
               return (
                 <div key={r}>
                   <div className="flex items-center gap-1.5 mb-1">
@@ -335,8 +330,8 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
                     <span className="text-[8px] text-muted-foreground">{REGIME_LABELS[r]}</span>
                   </div>
                   <LiquidityDensityChart candidate={champ} color={REGIME_COLORS[r]} />
-                </div>
-              );
+                </div>);
+
             })}
           </div>
         </motion.div>
@@ -345,7 +340,7 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
       {/* Activity log */}
       <motion.div className="surface-elevated rounded-xl p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
         <h4 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5" /> Activity Log
+           Activity Log
         </h4>
         {recentActivity.length === 0 ? (
           <p className="text-[10px] text-muted-foreground text-center py-4">No activity yet. Engine is initializing...</p>
@@ -362,10 +357,10 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
                   Gen {entry.generation}
                 </span>
               </div>
-            ))}
+          )}
           </div>
-        )}
+        }
       </motion.div>
-    </div>
-  );
+    </div>);
+
 }

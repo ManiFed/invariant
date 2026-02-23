@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Map, Layers, Eye, ZoomIn, Pause, Play, RotateCcw } from "lucide-react";
+import { Map as MapIcon, Layers, Eye, ZoomIn, Pause, Play, RotateCcw } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip,
 } from "recharts";

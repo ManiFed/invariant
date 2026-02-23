@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Activity, Map, Fingerprint, Compass, Radio } from "lucide-react";
+import { ArrowLeft, Activity, Map, Fingerprint, Radio } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
 import AtlasSurface from "@/components/labs/AtlasSurface";
@@ -26,9 +26,9 @@ const DiscoveryAtlas = () => {
   }, [clearSelection]);
 
   const tabs = [
-    { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
-    { id: "atlas" as const, label: "Atlas Map", icon: Map },
-  ];
+  { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
+  { id: "atlas" as const, label: "Atlas Map", icon: Map }];
+
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -38,9 +38,9 @@ const DiscoveryAtlas = () => {
           <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <Compass className="w-4 h-4 text-chart-3" />
+          
           <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT ATLAS</span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-chart-3/30 text-chart-3">DISCOVERY</span>
+          
         </div>
         <div className="flex items-center gap-2">
           {/* Always-on status */}
@@ -60,7 +60,7 @@ const DiscoveryAtlas = () => {
       {/* Tab navigation */}
       <div className="border-b border-border px-6">
         <div className="flex gap-1">
-          {tabs.map(tab => {
+          {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeView === tab.id;
             return (
@@ -68,29 +68,29 @@ const DiscoveryAtlas = () => {
                 key={tab.id}
                 onClick={() => setActiveView(tab.id)}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                  isActive
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
+                isActive ?
+                "border-foreground text-foreground" :
+                "border-transparent text-muted-foreground hover:text-foreground"}`
+                }>
+
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
-              </button>
-            );
+              </button>);
+
           })}
-          {selectedCandidate && (
-            <button
-              onClick={() => setActiveView("detail")}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                activeView === "detail"
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
+          {selectedCandidateId &&
+          <button
+            onClick={() => setActiveView("detail")}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+            activeView === "detail" ?
+            "border-foreground text-foreground" :
+            "border-transparent text-muted-foreground hover:text-foreground"}`
+            }>
+
               <Fingerprint className="w-3.5 h-3.5" />
               Design Detail
             </button>
-          )}
+          }
         </div>
       </div>
 
@@ -101,33 +101,33 @@ const DiscoveryAtlas = () => {
             <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               <LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} />
             </motion.div>
-          )}
-          {activeView === "atlas" && (
-            <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+          }
+          {activeView === "atlas" &&
+          <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               <AtlasSurface state={state} onSelectCandidate={handleSelectCandidate} />
             </motion.div>
-          )}
-          {activeView === "detail" && selectedCandidate && (
-            <motion.div key="detail" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+          }
+          {activeView === "detail" && selectedCandidate &&
+          <motion.div key="detail" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               <DesignDetail candidate={selectedCandidate} state={state} onBack={handleBackFromDetail} />
             </motion.div>
-          )}
-          {activeView === "detail" && !selectedCandidate && (
-            <motion.div key="no-detail" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20">
+          }
+          {activeView === "detail" && !selectedCandidate &&
+          <motion.div key="no-detail" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20">
               <Fingerprint className="w-8 h-8 text-muted-foreground mb-3" />
               <p className="text-sm text-muted-foreground">Select a candidate from the Atlas Map to view details.</p>
               <button
-                onClick={() => setActiveView("atlas")}
-                className="mt-3 px-4 py-2 rounded-md bg-secondary text-foreground text-xs font-medium border border-border hover:bg-accent transition-colors"
-              >
+              onClick={() => setActiveView("atlas")}
+              className="mt-3 px-4 py-2 rounded-md bg-secondary text-foreground text-xs font-medium border border-border hover:bg-accent transition-colors">
+
                 Go to Atlas Map
               </button>
             </motion.div>
-          )}
+          }
         </AnimatePresence>
       </main>
-    </div>
-  );
+    </div>);
+
 };
 
 export default DiscoveryAtlas;
