@@ -249,14 +249,6 @@ const DiscoveryAtlas = () => {
       </div>
 
       <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
-        <section className="mb-6 surface-elevated rounded-xl border border-border p-4 sm:p-5">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-chart-3/30 text-chart-3">PHASE TWO</span>
-            <h1 className="text-sm sm:text-base font-semibold text-foreground tracking-tight">Build, run, and analyze isolated Atlas experiments.</h1>
-          </div>
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">Use the Experiment Builder to define contributor, regime, and optimization objective. Submitted runs execute separate evolutionary loops and auto-ingest resulting candidates into the global Atlas archive with full experiment metadata.</p>
-        </section>
-
         {activeView === "atlas" && (
           <section className="mb-5 grid sm:grid-cols-4 gap-2">
             <select className="px-2 py-2 rounded-md border border-border bg-background text-xs" value={atlasFilters.contributor} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, contributor: event.target.value }))}>
