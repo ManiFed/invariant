@@ -196,7 +196,7 @@ export default function LiveDashboard({ state }: LiveDashboardProps) {
         </motion.div>
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <div className="flex items-center gap-1.5 mb-1">
-            <Activity className="w-3 h-3 text-muted-foreground" />
+            
             <p className="text-[9px] text-muted-foreground">Status</p>
           </div>
           <div className="flex items-center gap-1.5">
