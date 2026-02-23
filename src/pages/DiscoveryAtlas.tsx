@@ -59,6 +59,18 @@ const SYNC_BADGE: Record<SyncMode, { icon: typeof Wifi; label: string; className
   loading: { icon: Loader2, label: "CONNECTING", className: "bg-secondary border-border text-muted-foreground" },
 };
 
+const RESEARCH_OBJECTIVES = [
+  "fee_revenue",
+  "slippage",
+  "arb_leakage",
+  "tail_drawdown",
+  "utilization",
+  "regime_robustness",
+  "parameter_sensitivity",
+] as const;
+
+const scoreBar = (value: number) => `${Math.max(4, Math.min(100, value * 100))}%`;
+
 const scoreForObjective = (candidate: Candidate, objective: ObjectiveType): number => {
   const m = candidate.metrics;
   if (objective === "lp-value") return 1 / Math.max(m.lpValueVsHodl, 1e-6) + candidate.stability * 0.2;
@@ -356,31 +368,34 @@ const DiscoveryAtlas = () => {
                   <button onClick={handleSubmitExperiment} className="px-3 py-2 rounded-md bg-foreground text-background text-xs font-semibold">Compile experiment</button>
                 </div>
 
+                <div>
+                  <p className="text-[11px] text-muted-foreground mb-2">Objective vector (interactive)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {RESEARCH_OBJECTIVES.map((objective) => {
+                      const active = config.objectiveVector.includes(objective);
+                      return (
+                        <button
+                          key={objective}
+                          type="button"
+                          className={`px-2 py-1 rounded-md border text-[10px] ${active ? "bg-chart-2/10 border-chart-2/40 text-foreground" : "bg-background border-border text-muted-foreground"}`}
+                          onClick={() => setConfig((prev) => ({
+                            ...prev,
+                            objectiveVector: active
+                              ? prev.objectiveVector.filter((entry) => entry !== objective)
+                              : [...prev.objectiveVector, objective],
+                          }))}
+                        >
+                          {objective}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="grid lg:grid-cols-3 gap-3 text-[11px]">
-                  <label className="block">
-                    <p className="text-muted-foreground mb-1">Generations</p>
-                    <input type="number" min={3} max={40} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.generations} onChange={(event) => setConfig((prev) => ({ ...prev, generations: Number(event.target.value) || 8 }))} />
-                  </label>
-                  <label className="block">
-                    <p className="text-muted-foreground mb-1">Population size</p>
-                    <input type="number" min={32} max={512} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.populationSize} onChange={(event) => setConfig((prev) => ({ ...prev, populationSize: Number(event.target.value) || 96 }))} />
-                  </label>
-                  <label className="block">
-                    <p className="text-muted-foreground mb-1">Mutation strength</p>
-                    <input type="number" min={0.01} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.mutationStrength} onChange={(event) => setConfig((prev) => ({ ...prev, mutationStrength: Number(event.target.value) || 0.35 }))} />
-                  </label>
-                  <label className="block">
-                    <p className="text-muted-foreground mb-1">Structural mutation probability</p>
-                    <input type="number" min={0} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.structuralMutationProbability} onChange={(event) => setConfig((prev) => ({ ...prev, structuralMutationProbability: Number(event.target.value) || 0.24 }))} />
-                  </label>
-                  <label className="block">
-                    <p className="text-muted-foreground mb-1">Invariant mutation probability</p>
-                    <input type="number" min={0} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.invariantMutationProbability} onChange={(event) => setConfig((prev) => ({ ...prev, invariantMutationProbability: Number(event.target.value) || 0.18 }))} />
-                  </label>
-                  <label className="block">
-                    <p className="text-muted-foreground mb-1">Topology mutation probability</p>
-                    <input type="number" min={0} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.topologyMutationProbability} onChange={(event) => setConfig((prev) => ({ ...prev, topologyMutationProbability: Number(event.target.value) || 0.1 }))} />
-                  </label>
+                  <label className="block"><p className="text-muted-foreground mb-1">Generations</p><input type="number" min={3} max={40} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.generations} onChange={(event) => setConfig((prev) => ({ ...prev, generations: Number(event.target.value) || 8 }))} /></label>
+                  <label className="block"><p className="text-muted-foreground mb-1">Population size</p><input type="number" min={32} max={512} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.populationSize} onChange={(event) => setConfig((prev) => ({ ...prev, populationSize: Number(event.target.value) || 96 }))} /></label>
+                  <label className="block"><p className="text-muted-foreground mb-1">Mutation strength</p><input type="number" min={0.01} max={1} step={0.01} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.mutationStrength} onChange={(event) => setConfig((prev) => ({ ...prev, mutationStrength: Number(event.target.value) || 0.35 }))} /></label>
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-3 text-[11px]">
@@ -393,10 +408,7 @@ const DiscoveryAtlas = () => {
                       <option value="distribution-weighted">Distribution-weighted Monte Carlo</option>
                     </select>
                   </label>
-                  <label className="block">
-                    <p className="text-muted-foreground mb-1">Objective vector</p>
-                    <input className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.objectiveVector.join(", ")} onChange={(event) => setConfig((prev) => ({ ...prev, objectiveVector: event.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))} />
-                  </label>
+                  <label className="block"><p className="text-muted-foreground mb-1">Composition plan</p><input className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs" value={config.compositionPlan} onChange={(event) => setConfig((prev) => ({ ...prev, compositionPlan: event.target.value }))} /></label>
                 </div>
 
                 <div className="grid sm:grid-cols-4 gap-2 text-[11px]">
@@ -407,39 +419,61 @@ const DiscoveryAtlas = () => {
                     </label>
                   ))}
                 </div>
-
-                <label className="block text-[11px]">
-                  <p className="text-muted-foreground mb-1">Hierarchical composition plan</p>
-                  <textarea className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-16" value={config.compositionPlan} onChange={(event) => setConfig((prev) => ({ ...prev, compositionPlan: event.target.value }))} />
-                </label>
               </section>
 
-              {experiments.map((experiment) => (
-                <section key={experiment.id} className="surface-elevated rounded-xl border border-border p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <p className="text-sm font-semibold">{experiment.id} · {experiment.config.contributor}</p>
-                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${experiment.status === "completed" ? "border-success/30 text-success" : "border-warning/30 text-warning"}`}>{experiment.status.toUpperCase()}</span>
-                  </div>
-                  <div className="grid sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground">
-                    <div>Gen {experiment.currentGeneration}/{experiment.config.generations}</div>
-                    <div>Strategy: {experiment.config.searchStrategy}</div>
-                    <div>Objective: {experiment.config.objectiveComposer}</div>
-                    <div>Pareto set: {experiment.paretoCount}</div>
-                    <div>Δ score: {experiment.convergenceRate.toFixed(4)}</div>
-                    <div>Dispersion: {experiment.parameterDispersion.toFixed(2)}</div>
-                    <div>Variance: {experiment.performanceVariance.toFixed(5)}</div>
-                    <div>Fragility: {experiment.structuralFragility.toFixed(4)}</div>
-                    <div>Robustness: {experiment.robustnessScore.toFixed(4)}</div>
-                    <div>Stress mode: {experiment.config.stressMode}</div>
-                  </div>
-                  <p className="mt-3 text-[11px] text-muted-foreground">Plan: {experiment.config.compositionPlan}</p>
-                  {experiment.bestCandidate && (
-                    <button className="mt-3 text-xs text-chart-3 underline" onClick={() => handleSelectCandidate(experiment.bestCandidate!.id)}>
-                      Open champion · LP/HODL {experiment.bestCandidate.metrics.lpValueVsHodl.toFixed(3)} · Slippage {(experiment.bestCandidate.metrics.totalSlippage * 100).toFixed(2)}%
-                    </button>
-                  )}
-                </section>
-              ))}
+              {experiments.map((experiment) => {
+                const progress = experiment.currentGeneration / Math.max(1, experiment.config.generations);
+                const stabilityVisual = Math.max(0.05, experiment.robustnessScore);
+                const fragilityVisual = Math.max(0.05, experiment.structuralFragility);
+                const varianceVisual = Math.max(0.05, experiment.performanceVariance * 8);
+
+                return (
+                  <section key={experiment.id} className="surface-elevated rounded-xl border border-border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <p className="text-sm font-semibold">{experiment.id} · {experiment.config.contributor}</p>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${experiment.status === "completed" ? "border-success/30 text-success" : "border-warning/30 text-warning"}`}>{experiment.status.toUpperCase()}</span>
+                    </div>
+
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-[11px] mb-1"><span>Generation progress</span><span className="font-mono">{experiment.currentGeneration}/{experiment.config.generations}</span></div>
+                      <div className="h-2 rounded bg-secondary"><div className="h-full rounded bg-chart-2" style={{ width: `${Math.min(100, progress * 100)}%` }} /></div>
+                    </div>
+
+                    <div className="grid lg:grid-cols-3 gap-3 text-[11px]">
+                      <div className="rounded border border-border p-2">
+                        <p className="text-muted-foreground mb-1">Search diagnostics</p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between"><span>Strategy</span><span className="font-mono">{experiment.config.searchStrategy}</span></div>
+                          <div className="flex justify-between"><span>Pareto set</span><span className="font-mono">{experiment.paretoCount}</span></div>
+                          <div className="flex justify-between"><span>Δ score</span><span className="font-mono">{experiment.convergenceRate.toFixed(4)}</span></div>
+                        </div>
+                      </div>
+                      <div className="rounded border border-border p-2">
+                        <p className="text-muted-foreground mb-1">Risk profile bars</p>
+                        <div className="space-y-1">
+                          <div><div className="flex justify-between"><span>Robustness</span><span className="font-mono">{experiment.robustnessScore.toFixed(3)}</span></div><div className="h-1.5 rounded bg-secondary"><div className="h-full rounded bg-success" style={{ width: scoreBar(stabilityVisual) }} /></div></div>
+                          <div><div className="flex justify-between"><span>Fragility</span><span className="font-mono">{experiment.structuralFragility.toFixed(3)}</span></div><div className="h-1.5 rounded bg-secondary"><div className="h-full rounded bg-warning" style={{ width: scoreBar(fragilityVisual) }} /></div></div>
+                          <div><div className="flex justify-between"><span>Variance</span><span className="font-mono">{experiment.performanceVariance.toFixed(5)}</span></div><div className="h-1.5 rounded bg-secondary"><div className="h-full rounded bg-chart-4" style={{ width: scoreBar(varianceVisual) }} /></div></div>
+                        </div>
+                      </div>
+                      <div className="rounded border border-border p-2">
+                        <p className="text-muted-foreground mb-1">Objectives + regime</p>
+                        <p className="text-[10px] mb-2">{experiment.config.objectiveComposer} · {experiment.config.stressMode}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {experiment.config.objectiveVector.slice(0, 6).map((objective) => <span key={objective} className="px-1.5 py-0.5 rounded bg-secondary border border-border text-[10px]">{objective}</span>)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-[11px] text-muted-foreground">Plan: {experiment.config.compositionPlan}</p>
+                    {experiment.bestCandidate && (
+                      <button className="mt-3 text-xs text-chart-3 underline" onClick={() => handleSelectCandidate(experiment.bestCandidate!.id)}>
+                        Open champion · LP/HODL {experiment.bestCandidate.metrics.lpValueVsHodl.toFixed(3)} · Slippage {(experiment.bestCandidate.metrics.totalSlippage * 100).toFixed(2)}%
+                      </button>
+                    )}
+                  </section>
+                );
+              })}
             </motion.div>
           )}
           {activeView === "detail" && detailCandidate && <motion.div key="detail" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><DesignDetail candidate={detailCandidate} state={state} onBack={handleBackFromDetail} /></motion.div>}
