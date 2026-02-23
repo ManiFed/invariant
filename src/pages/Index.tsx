@@ -59,7 +59,6 @@ const Index = () => {
             title="Teaching Lab"
             description="Guided course that teaches AMM mechanics from scratch"
             icon={<GraduationCap className="w-5 h-5" />}
-            badge="Start Here"
             badgeColor="border-success/30 text-success"
             onClick={() => navigate("/learn")}
           />
@@ -75,7 +74,6 @@ const Index = () => {
             title="Advanced Mode"
             description="Invariant editor, Monte Carlo, arbitrage engine, stability analysis"
             icon={<Lightbulb className="w-5 h-5" />}
-            badge="Pro"
             onClick={() => navigate("/advanced")}
           />
 
@@ -101,22 +99,22 @@ const Index = () => {
             icon={<FileText className="w-5 h-5" />}
             onClick={() => navigate("/docs")}
           />
-
-          <div className="rounded-xl border border-border p-5 text-center items-center justify-center flex flex-row">
-            <h3 className="text-sm font-semibold text-foreground mb-2">Support the Project</h3>
-            <p className="text-[11px] text-muted-foreground mb-3">Free and open. Consider supporting development.</p>
-            <a
-              href="https://buy.stripe.com/test_placeholder"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
-            >
-              <Heart className="w-3.5 h-3.5" />
-              Support
-            </a>
-          </div>
         </motion.div>
       </section>
+
+      <div className="rounded-xl border border-border p-5 text-center items-center justify-center flex flex-row">
+        <h3 className="text-sm font-semibold text-foreground mb-2">Support the Project</h3>
+        <p className="text-[11px] text-muted-foreground mb-3">Free and open. Consider supporting development.</p>
+        <a
+          href="https://buy.stripe.com/test_placeholder"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+        >
+          <Heart className="w-3.5 h-3.5" />
+          Support
+        </a>
+      </div>
 
       {/* Footer */}
       <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
