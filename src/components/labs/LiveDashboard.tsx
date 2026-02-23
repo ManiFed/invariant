@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Activity, Crown, Zap, TrendingUp, AlertTriangle } from "lucide-react";
+import { Activity, Crown, Zap, AlertTriangle } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area } from
@@ -189,7 +189,7 @@ export default function LiveDashboard({ state }: LiveDashboardProps) {
         </motion.div>
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <div className="flex items-center gap-1.5 mb-1">
-            <TrendingUp className="w-3 h-3 text-muted-foreground" />
+            
             <p className="text-[9px] text-muted-foreground">Archive Size</p>
           </div>
           <p className="text-lg font-bold font-mono text-foreground">{state.archive.length.toLocaleString()}</p>
