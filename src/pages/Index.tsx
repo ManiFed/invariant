@@ -17,13 +17,13 @@ const Index = () => {
 
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-8 pt-16 pb-6">
-        <motion.span
-          className="inline-block rounded-full border border-border px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground mb-6"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}>
-          AMM mechanism design platform
-        </motion.span>
+        
+
+
+
+
+
+
 
         <motion.h1
           className="text-5xl sm:text-7xl font-bold tracking-tight leading-[1.05] mb-6 text-foreground"
@@ -101,7 +101,7 @@ const Index = () => {
             icon={<FileText className="w-5 h-5" />}
             onClick={() => navigate("/docs")} />
 
-          <div className="rounded-xl border border-border p-5 flex flex-col items-center justify-center text-center">
+          <div className="rounded-xl border border-border p-5 text-center items-center justify-center flex flex-row">
             <h3 className="text-sm font-semibold text-foreground mb-2">Support the Project</h3>
             <p className="text-[11px] text-muted-foreground mb-3">Free and open. Consider supporting development.</p>
             <a
@@ -120,8 +120,8 @@ const Index = () => {
       <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
         <p>Invariant Studio — AMM mechanism design platform</p>
       </footer>
-    </div>
-  );
+    </div>);
+
 };
 
 const NavCard = ({
@@ -130,34 +130,34 @@ const NavCard = ({
   icon,
   badge,
   badgeColor,
-  onClick,
-}: {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  badge?: string;
-  badgeColor?: string;
-  onClick: () => void;
-}) => (
-  <motion.div
-    className="surface-elevated rounded-xl p-5 cursor-pointer group hover:border-foreground/20 transition-all duration-300"
-    onClick={onClick}
-    whileHover={{ y: -2 }}>
+  onClick
+
+
+
+
+
+
+
+}: {title: string;description: string;icon: React.ReactNode;badge?: string;badgeColor?: string;onClick: () => void;}) =>
+<motion.div
+  className="surface-elevated rounded-xl p-5 cursor-pointer group hover:border-foreground/20 transition-all duration-300"
+  onClick={onClick}
+  whileHover={{ y: -2 }}>
     <div className="flex items-center justify-between mb-3">
       <div className="text-foreground">{icon}</div>
-      {badge && (
-        <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${badgeColor || "border-foreground/20 text-foreground/60"}`}>
+      {badge &&
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${badgeColor || "border-foreground/20 text-foreground/60"}`}>
           {badge}
         </span>
-      )}
+    }
     </div>
     <h3 className="text-sm font-semibold text-foreground mb-1">{title}</h3>
     <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
     <div className="mt-3 flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
       Enter <ArrowRight className="w-3 h-3" />
     </div>
-  </motion.div>
-);
+  </motion.div>;
+
 
 export default Index;
