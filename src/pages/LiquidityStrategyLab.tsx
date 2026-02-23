@@ -1,34 +1,31 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, ChevronUp, ChevronDown, GitCompare, Layers, Play, TrendingUp } from "lucide-react";
+import { ArrowLeft, Code2, DollarSign, AlertTriangle, Upload, BookOpen, ChevronUp, ChevronDown, GitCompare, Layers, Play, TrendingUp, Shield, Rocket, Puzzle } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
-import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
-import ArbitrageEngine from "@/components/advanced/ArbitrageEngine";
-import LiquidityAnalyzer from "@/components/advanced/LiquidityAnalyzer";
-import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import DeploymentExport from "@/components/advanced/DeploymentExport";
 import FeeStructureEditor from "@/components/advanced/FeeStructureEditor";
 import AMMComparison from "@/components/advanced/AMMComparison";
 import StrategyEditor from "@/components/labs/StrategyEditor";
+import StrategyBlockEditor from "@/components/labs/StrategyBlockEditor";
 import StrategyBacktest from "@/components/labs/StrategyBacktest";
 import StrategyResults from "@/components/labs/StrategyResults";
+import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import { type StrategyConfig, type BacktestResult } from "@/lib/strategy-engine";
+import { type CustomStrategy } from "@/lib/strategy-blocks";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
   { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your AMM curve formula", step: 1 },
   { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution across the curve", step: 2 },
-  { id: "strategy", label: "Strategy Editor", icon: Layers, desc: "Design LP management strategies", step: 3 },
-  { id: "compare", label: "Compare", icon: GitCompare, desc: "Import an AMM to compare against", step: 4 },
-  { id: "backtest", label: "Backtest", icon: Play, desc: "Run Monte Carlo strategy simulation", step: 5 },
-  { id: "results", label: "Results", icon: TrendingUp, desc: "Strategy performance dashboard", step: 6 },
-  { id: "montecarlo", label: "Monte Carlo", icon: Cpu, desc: "Stress-test with simulated price paths", step: 7 },
-  { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Model toxic flow and MEV extraction", step: 8 },
-  { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Compare depth, efficiency, slippage", step: 9 },
-  { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 10 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 11 },
+  { id: "strategy", label: "Strategy Presets", icon: Layers, desc: "Preset LP management strategies", step: 3 },
+  { id: "blocks", label: "Block Editor", icon: Puzzle, desc: "Build custom strategies with blocks", step: 4 },
+  { id: "compare", label: "Compare", icon: GitCompare, desc: "Import an AMM to compare against", step: 5 },
+  { id: "backtest", label: "Backtest", icon: Play, desc: "Run Monte Carlo strategy simulation", step: 6 },
+  { id: "results", label: "Results", icon: TrendingUp, desc: "Strategy performance dashboard", step: 7 },
+  { id: "stability", label: "Stability", icon: Shield, desc: "Strategy stability diagnostics", step: 8 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 9 },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -63,6 +60,7 @@ const LIBRARY_AMMS: LibraryAMM[] = [
 const SESSION_KEY = "strategy_lab_invariant";
 const FEE_SESSION_KEY = "strategy_lab_fees";
 const STRATEGY_SESSION_KEY = "strategy_lab_config";
+const CUSTOM_STRATEGY_SESSION_KEY = "strategy_lab_custom_blocks";
 
 function loadInvariant(): SavedInvariant | null {
   try { const raw = sessionStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
@@ -73,6 +71,9 @@ function loadFees(): number[] | null {
 function loadStrategies(): StrategyConfig[] {
   try { const raw = sessionStorage.getItem(STRATEGY_SESSION_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
 }
+function loadCustomStrategies(): CustomStrategy[] {
+  try { const raw = sessionStorage.getItem(CUSTOM_STRATEGY_SESSION_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
+}
 
 const LiquidityStrategyLab = () => {
   const navigate = useNavigate();
@@ -81,6 +82,7 @@ const LiquidityStrategyLab = () => {
   const [savedInvariant, setSavedInvariant] = useState<SavedInvariant | null>(loadInvariant);
   const [savedFees, setSavedFees] = useState<number[] | null>(loadFees);
   const [strategies, setStrategies] = useState<StrategyConfig[]>(loadStrategies);
+  const [customStrategies, setCustomStrategies] = useState<CustomStrategy[]>(loadCustomStrategies);
   const [results, setResults] = useState<BacktestResult[]>([]);
   const [showImport, setShowImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +104,11 @@ const LiquidityStrategyLab = () => {
   const handleStrategiesChange = useCallback((s: StrategyConfig[]) => {
     setStrategies(s);
     sessionStorage.setItem(STRATEGY_SESSION_KEY, JSON.stringify(s));
+  }, []);
+
+  const handleCustomStrategiesChange = useCallback((s: CustomStrategy[]) => {
+    setCustomStrategies(s);
+    sessionStorage.setItem(CUSTOM_STRATEGY_SESSION_KEY, JSON.stringify(s));
   }, []);
 
   const handleResults = useCallback((r: BacktestResult[]) => {
@@ -152,7 +159,6 @@ const LiquidityStrategyLab = () => {
   const goPrev = () => { if (canGoPrev) setActiveTab(tabs[currentTabIndex - 1].id); };
   const goNext = () => { if (canGoNext) setActiveTab(tabs[currentTabIndex + 1].id); };
 
-  // Strategy context banner for analytical tabs
   const strategyBanner = hasStrategies ? (
     <div className="surface-elevated rounded-xl p-4 mb-4">
       <div className="flex items-center gap-2 mb-2">
@@ -196,7 +202,6 @@ const LiquidityStrategyLab = () => {
         </div>
       </header>
 
-      {/* Import Dialog */}
       <Dialog open={showImport} onOpenChange={setShowImport}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle className="text-sm font-bold">Import AMM</DialogTitle></DialogHeader>
@@ -221,7 +226,6 @@ const LiquidityStrategyLab = () => {
       </Dialog>
 
       <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
         <aside className={`border-r border-border shrink-0 transition-all duration-200 flex flex-col sticky top-0 h-screen ${hovered ? "w-56" : "w-14"}`} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
           <nav className="flex-1 py-2">
             {tabs.map(tab => {
@@ -266,7 +270,6 @@ const LiquidityStrategyLab = () => {
           </div>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6 max-w-7xl">
           {!hasInvariant && activeTab === "invariant" && (
             <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/20 flex items-center gap-2">
@@ -280,6 +283,14 @@ const LiquidityStrategyLab = () => {
               {activeTab === "invariant" && <InvariantEditor onSaveInvariant={handleSaveInvariant} savedInvariant={savedInvariant} />}
               {activeTab === "fees" && <FeeStructureEditor onSaveFees={handleSaveFees} savedFees={savedFees} />}
               {activeTab === "strategy" && <StrategyEditor strategies={strategies} onStrategiesChange={handleStrategiesChange} />}
+              {activeTab === "blocks" && (
+                <StrategyBlockEditor
+                  strategies={strategies}
+                  onStrategiesChange={handleStrategiesChange}
+                  customStrategies={customStrategies}
+                  onCustomStrategiesChange={handleCustomStrategiesChange}
+                />
+              )}
               {activeTab === "compare" && <AMMComparison savedInvariant={savedInvariant} />}
               {activeTab === "backtest" && (
                 <div>
@@ -293,28 +304,10 @@ const LiquidityStrategyLab = () => {
                   <StrategyResults results={results} />
                 </div>
               )}
-              {activeTab === "montecarlo" && (
-                <div>
-                  {strategyBanner}
-                  <MonteCarloEngine savedInvariant={savedInvariant} savedFees={savedFees} />
-                </div>
-              )}
-              {activeTab === "arbitrage" && (
-                <div>
-                  {strategyBanner}
-                  <ArbitrageEngine savedInvariant={savedInvariant} savedFees={savedFees} />
-                </div>
-              )}
-              {activeTab === "liquidity" && (
-                <div>
-                  {strategyBanner}
-                  <LiquidityAnalyzer savedInvariant={savedInvariant} />
-                </div>
-              )}
               {activeTab === "stability" && (
                 <div>
                   {strategyBanner}
-                  <StabilityAnalysis savedInvariant={savedInvariant} savedFees={savedFees} />
+                  <StabilityAnalysis savedInvariant={savedInvariant} savedFees={savedFees} strategies={strategies} backtestResults={results} />
                 </div>
               )}
               {activeTab === "deploy" && (

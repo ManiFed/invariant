@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Shield, AlertTriangle, CheckCircle, HelpCircle, Info } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Shield, AlertTriangle, CheckCircle, HelpCircle, Info, Layers } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, Legend } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { type StrategyConfig, type BacktestResult } from "@/lib/strategy-engine";
 
 type InvariantType = "cp" | "ss" | "wt" | "cl" | "custom";
 
@@ -18,6 +19,7 @@ const HELP: Record<string, { title: string; desc: string }> = {
   reflexivity: { title: "Reflexivity Loops", desc: "Checks for feedback loops where pool mechanics amplify external price movements." },
   stressChart: { title: "Stress Response", desc: "Shows how the pool behaves under a range of extreme scenarios." },
   customExpr: { title: "Custom Invariant", desc: "Define your own invariant formula. Use 'x' and 'y' for reserves." },
+  strategyRisk: { title: "Strategy Risk", desc: "Evaluates rebalancing frequency, drawdown risk, and hedging effectiveness from backtest data." },
 };
 
 function HelpBtn({ id }: { id: string }) {
@@ -57,7 +59,13 @@ interface SavedInvariant {
   rangeUpper: number;
 }
 
-const StabilityAnalysis = ({ assets, savedInvariant, savedFees }: { assets?: Asset[]; savedInvariant?: SavedInvariant | null; savedFees?: number[] | null }) => {
+const StabilityAnalysis = ({ assets, savedInvariant, savedFees, strategies, backtestResults }: {
+  assets?: Asset[];
+  savedInvariant?: SavedInvariant | null;
+  savedFees?: number[] | null;
+  strategies?: StrategyConfig[];
+  backtestResults?: BacktestResult[];
+}) => {
   const colors = useChartColors();
   const [invariant, setInvariant] = useState<InvariantType>("cp");
   const [feeRate, setFeeRate] = useState(0.3);
@@ -86,6 +94,65 @@ const StabilityAnalysis = ({ assets, savedInvariant, savedFees }: { assets?: Ass
 
   const effectiveInvariant = invariant === "custom" ? "wt" : invariant;
 
+  const strategyChecks = useMemo(() => {
+    if (!strategies?.length || !backtestResults?.length) return [];
+    const checks: { id: string; label: string; status: "pass" | "warn" | "fail"; detail: string; helpId: string }[] = [];
+
+    for (const result of backtestResults) {
+      const strat = strategies.find(s => s.id === result.strategyId);
+      const name = result.strategyName;
+
+      // Drawdown check
+      checks.push({
+        id: `dd_${result.strategyId}`,
+        label: `${name} — Max Drawdown`,
+        helpId: "strategyRisk",
+        status: result.maxDrawdown > 40 ? "fail" : result.maxDrawdown > 20 ? "warn" : "pass",
+        detail: result.maxDrawdown > 40 ? `Max drawdown of ${result.maxDrawdown.toFixed(1)}% exceeds danger threshold — high risk of capital loss` : result.maxDrawdown > 20 ? `Max drawdown of ${result.maxDrawdown.toFixed(1)}% is elevated — consider tighter stop-loss` : `Max drawdown of ${result.maxDrawdown.toFixed(1)}% is within acceptable bounds`,
+      });
+
+      // Sharpe check
+      checks.push({
+        id: `sharpe_${result.strategyId}`,
+        label: `${name} — Risk-Adjusted Return`,
+        helpId: "strategyRisk",
+        status: result.sharpe < 0 ? "fail" : result.sharpe < 0.5 ? "warn" : "pass",
+        detail: result.sharpe < 0 ? `Negative Sharpe ratio (${result.sharpe.toFixed(2)}) — strategy destroys value on risk-adjusted basis` : result.sharpe < 0.5 ? `Low Sharpe (${result.sharpe.toFixed(2)}) — returns don't adequately compensate for risk` : `Sharpe of ${result.sharpe.toFixed(2)} indicates acceptable risk-adjusted performance`,
+      });
+
+      // Win rate check
+      checks.push({
+        id: `wr_${result.strategyId}`,
+        label: `${name} — Win Rate`,
+        helpId: "strategyRisk",
+        status: result.winRate < 30 ? "fail" : result.winRate < 50 ? "warn" : "pass",
+        detail: result.winRate < 30 ? `Win rate of ${result.winRate.toFixed(0)}% — strategy loses money in majority of scenarios` : result.winRate < 50 ? `Win rate of ${result.winRate.toFixed(0)}% — slightly negative expectation` : `Win rate of ${result.winRate.toFixed(0)}% across simulated paths`,
+      });
+
+      // Rebalance frequency check
+      if (strat && strat.rangeWidth < 10) {
+        checks.push({
+          id: `rebal_${result.strategyId}`,
+          label: `${name} — Rebalance Frequency`,
+          helpId: "strategyRisk",
+          status: result.avgRebalances > 20 ? "warn" : "pass",
+          detail: result.avgRebalances > 20 ? `${result.avgRebalances.toFixed(1)} avg rebalances — high gas costs and slippage erosion` : `${result.avgRebalances.toFixed(1)} avg rebalances — manageable transaction costs`,
+        });
+      }
+
+      // IL vs Fees check
+      const ilExceedsFees = Math.abs(result.totalILAvg) > result.totalFeesAvg;
+      checks.push({
+        id: `il_fee_${result.strategyId}`,
+        label: `${name} — IL vs Fee Income`,
+        helpId: "strategyRisk",
+        status: ilExceedsFees && result.netPnlAvg < 0 ? "fail" : ilExceedsFees ? "warn" : "pass",
+        detail: ilExceedsFees ? `Impermanent loss ($${Math.abs(result.totalILAvg).toFixed(0)}) exceeds fee income ($${result.totalFeesAvg.toFixed(0)}) — net negative` : `Fee income ($${result.totalFeesAvg.toFixed(0)}) covers IL ($${Math.abs(result.totalILAvg).toFixed(0)})`,
+      });
+    }
+    return checks;
+  }, [strategies, backtestResults]);
+
   const checks = useMemo(() => {
     const numAssets = assets?.length ?? 2;
     const isMultiAsset = numAssets > 2;
@@ -100,8 +167,10 @@ const StabilityAnalysis = ({ assets, savedInvariant, savedFees }: { assets?: Ass
       base.push({ id: "weight_balance", label: "Weight Balance Risk", helpId: "invariantType", status: assets!.some(a => a.weight > 0.6) ? "warn" : "pass", detail: assets!.some(a => a.weight > 0.6) ? `Dominant weight (${assets!.find(a => a.weight > 0.6)?.symbol} at ${(assets!.find(a => a.weight > 0.6)!.weight * 100).toFixed(0)}%) creates concentration risk` : "Weights are reasonably distributed across assets" });
       base.push({ id: "pair_correlation", label: "Cross-Pair Correlation", helpId: "invariantType", status: numAssets > 4 ? "warn" : "pass", detail: numAssets > 4 ? `${numAssets * (numAssets - 1) / 2} pairs create complex correlation dynamics — monitor closely` : "Pair correlations are manageable" });
     }
+    // Append strategy checks
+    base.push(...strategyChecks);
     return base;
-  }, [effectiveInvariant, feeRate, volatility, assets]);
+  }, [effectiveInvariant, feeRate, volatility, assets, strategyChecks]);
 
   const stressData = useMemo(() => {
     const data = [];
@@ -258,6 +327,37 @@ const StabilityAnalysis = ({ assets, savedInvariant, savedFees }: { assets?: Ass
           </ResponsiveContainer>
         </div>
       </motion.div>
+
+      {/* Strategy Performance Comparison */}
+      {backtestResults && backtestResults.length > 0 && (
+        <motion.div className="surface-elevated rounded-xl p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+          <div className="flex items-center gap-2 mb-1">
+            <Layers className="w-3.5 h-3.5 text-foreground" />
+            <h4 className="text-xs font-semibold text-foreground">Strategy Risk Comparison</h4>
+            <HelpBtn id="strategyRisk" />
+          </div>
+          <p className="text-[10px] text-muted-foreground mb-3">Key risk metrics across backtested strategies</p>
+          <div className="h-56" onWheel={e => e.stopPropagation()}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={backtestResults.map(r => ({
+                name: r.strategyName,
+                maxDrawdown: parseFloat(r.maxDrawdown.toFixed(1)),
+                sharpe: parseFloat((r.sharpe * 10).toFixed(1)), // scale for visibility
+                winRate: parseFloat(r.winRate.toFixed(1)),
+              }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                <XAxis dataKey="name" tick={{ fontSize: 9, fill: colors.tick }} />
+                <YAxis tick={{ fontSize: 9, fill: colors.tick }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="maxDrawdown" name="Max Drawdown %" fill={colors.red} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="sharpe" name="Sharpe ×10" fill={colors.line} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="winRate" name="Win Rate %" fill={colors.green} radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };
