@@ -69,7 +69,7 @@ const binDispersion = (candidate: Candidate): number => {
 
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, togglePersistence, ingestExperimentCandidates } = useDiscoveryEngine();
+  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [config, setConfig] = useState<ExperimentConfig>({ contributor: "guest", regime: "low-vol", objective: "balanced", generations: 8 });
@@ -183,6 +183,15 @@ const DiscoveryAtlas = () => {
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
   ];
 
+  const detailCandidate = activeView === "detail"
+    ? (selectedCandidate || detailCandidateRef.current)
+    : selectedCandidate;
+
+  const badge = SYNC_BADGE[syncMode];
+  const BadgeIcon = badge.icon;
+
+  const canToggle = syncMode === "persisted" || syncMode === "memory";
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
@@ -194,7 +203,17 @@ const DiscoveryAtlas = () => {
         </div>
         <div className="flex items-center gap-2">
           {canToggle ? (
-            <button onClick={togglePersistence} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${badge.className}`}>
+            <button
+              onClick={togglePersistence}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${badge.className}`}
+              title={
+                syncMode === "live"
+                  ? "Cloud stream is shared globally and updates in real time."
+                  : syncMode === "persisted"
+                  ? "Saving to IndexedDB. Click to switch to in-memory."
+                  : "In-memory only. Click to enable persistence."
+              }
+            >
               <BadgeIcon className="w-3 h-3" />
               <span className="text-[9px] font-medium">{badge.label}</span>
             </button>
@@ -209,7 +228,9 @@ const DiscoveryAtlas = () => {
             <span className="text-[9px] font-medium text-success">LIVE</span>
           </div>
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary border border-border">
-            <span className="text-[9px] font-mono text-muted-foreground">Gen {state.totalGenerations} | {state.archive.length.toLocaleString()} archived</span>
+            <span className="text-[9px] font-mono text-muted-foreground">
+              Gen {state.totalGenerations} | {(state.archiveSize ?? state.archive.length).toLocaleString()} archived
+            </span>
           </div>
           <ThemeToggle />
         </div>

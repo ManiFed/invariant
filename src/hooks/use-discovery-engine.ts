@@ -8,8 +8,14 @@ import {
   runGeneration,
 } from "@/lib/discovery-engine";
 import {
-  AtlasSync,
+  loadAtlasState,
+  subscribeToAtlas,
+  triggerGeneration,
+} from "@/lib/atlas-cloud";
+import {
   buildPopulationsFromArchive,
+  type SyncRole,
+  type RemoteStateExtras,
 } from "@/lib/atlas-sync";
 import {
   saveAtlasState,
@@ -17,8 +23,11 @@ import {
 } from "@/lib/atlas-persistence";
 
 const LOCAL_ARCHIVE_LIMIT = 2000;
+const CLOUD_ARCHIVE_LIMIT = 10000;
 const TICK_INTERVAL = 50;
 const PERSIST_INTERVAL = 3000;
+const CLOUD_KEEPALIVE_INTERVAL = 45000;
+const CLOUD_STALE_AFTER_MS = 90000;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
 
 export type SyncMode = "live" | "persisted" | "memory" | "loading";
@@ -29,20 +38,27 @@ export function useDiscoveryEngine() {
     running: true,
   }));
   const [syncMode, setSyncMode] = useState<SyncMode>("loading");
+  const [role, setRole] = useState<SyncRole>("leader");
   const runningRef = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unsubscribeCloudRef = useRef<(() => void) | null>(null);
+  const keepaliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const generationPulseRef = useRef<number>(Date.now());
+  const generationInFlightRef = useRef(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const initRef = useRef(false);
-  const localStartedRef = useRef(false);
+  const tickActiveRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
   const syncRef = useRef<AtlasSync | null>(null);
+  const roleRef = useRef(role);
+  roleRef.current = role;
 
-  // ─── Local engine tick (stable — no deps, uses refs) ───────────────────────
+  // ─── Local engine tick (only runs when role === "leader") ─────────────────
 
   const tick = useCallback(() => {
-    if (!runningRef.current) return;
+    if (!runningRef.current || roleRef.current !== "leader") return;
 
     setState(prev => {
       const regimeIdx = prev.totalGenerations % REGIME_CYCLE.length;
@@ -63,10 +79,30 @@ export function useDiscoveryEngine() {
         archive: newArchive,
         activityLog: [...prev.activityLog, ...events].slice(-200),
         totalGenerations: prev.totalGenerations + 1,
+        // Leader always shows own archive.length
+        archiveSize: undefined,
       };
     });
 
     timeoutRef.current = setTimeout(tick, TICK_INTERVAL);
+  }, []);
+
+  // ─── Tick start/stop helpers ──────────────────────────────────────────────
+
+  const startTick = useCallback(() => {
+    if (tickActiveRef.current) return;
+    tickActiveRef.current = true;
+    runningRef.current = true;
+    tick();
+  }, [tick]);
+
+  const stopTick = useCallback(() => {
+    tickActiveRef.current = false;
+    runningRef.current = false;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
   }, []);
 
   // ─── Initialization: Realtime channel → IndexedDB → Fresh start ────────────
@@ -77,42 +113,56 @@ export function useDiscoveryEngine() {
 
     let cancelled = false;
 
+    const refreshFromCloud = async () => {
+      const { state: cloudState } = await loadAtlasState();
+      if (cancelled || !cloudState) return;
+      setState(cloudState);
+    };
+
     (async () => {
-      // 1. Try Supabase Realtime broadcast channel (no tables needed)
+      // 1. Try Supabase Realtime broadcast channel
       const sync = new AtlasSync(
         () => stateRef.current,
-        (archive, totalGenerations) => {
+        // onRemoteState: adopt the leader's state
+        (archive, totalGenerations, extras: RemoteStateExtras) => {
           setState(prev => {
-            if (totalGenerations <= prev.totalGenerations) return prev;
-            const populations = buildPopulationsFromArchive(archive);
+            const populations = buildPopulationsFromArchive(archive, extras.populationInfo);
             return {
               ...prev,
               archive,
               populations,
               totalGenerations,
+              activityLog: extras.activityLog,
+              archiveSize: extras.archiveSize,
             };
           });
+        },
+        // onRoleChange: sync layer detected a role transition
+        (newRole: SyncRole) => {
+          setRole(newRole);
         },
       );
       syncRef.current = sync;
 
-      const receivedRemoteState = await sync.connect();
+      const { receivedState, role: initialRole } = await sync.connect();
       if (cancelled) { sync.cleanup(); return; }
 
       if (sync.connected) {
-        // Connected to Realtime — we're live-syncing with peers
+        setRole(initialRole);
+
         // If no peer responded, load from IndexedDB as starting point
-        if (!receivedRemoteState) {
+        if (!receivedState) {
           const persistedState = await loadAtlasStateFromDB();
           if (!cancelled && persistedState && persistedState.archive.length > 0) {
             setState(persistedState);
           }
-        }
-        setSyncMode("live");
+        }, CLOUD_KEEPALIVE_INTERVAL);
+
         return;
       }
 
-      // 2. Realtime unavailable — fall back to IndexedDB
+      // 2. Realtime unavailable — fall back to IndexedDB (always leader locally)
+      setRole("leader");
       const persistedState = await loadAtlasStateFromDB();
       if (!cancelled && persistedState && persistedState.archive.length > 0) {
         setState(persistedState);
@@ -122,11 +172,10 @@ export function useDiscoveryEngine() {
 
     return () => {
       cancelled = true;
-      syncRef.current?.cleanup();
+      unsubscribeCloudRef.current?.();
+      if (keepaliveIntervalRef.current) clearInterval(keepaliveIntervalRef.current);
     };
   }, []);
-
-  // ─── IndexedDB periodic persistence (always active as backup) ──────────────
 
   useEffect(() => {
     if (syncMode === "loading" || syncMode === "memory") return;
@@ -144,34 +193,30 @@ export function useDiscoveryEngine() {
     };
   }, [syncMode]);
 
-  // ─── Start local engine (runs once after init completes) ───────────────────
+  // ─── Start/stop engine based on sync mode and role ────────────────────────
 
   useEffect(() => {
     if (syncMode === "loading") return;
-    if (localStartedRef.current) return;
-    localStartedRef.current = true;
 
-    runningRef.current = true;
-    tick();
+    if (role === "leader") {
+      startTick();
+    } else {
+      stopTick();
+    }
 
     return () => {
-      runningRef.current = false;
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      stopTick();
     };
-  }, [syncMode, tick]);
-
-  // ─── Toggle persistence (user-facing) ──────────────────────────────────────
+  }, [syncMode, role, startTick, stopTick]);
 
   const togglePersistence = useCallback(() => {
+    if (syncMode === "live") return;
     setSyncMode(prev => {
-      if (prev === "live") return "memory";
       if (prev === "persisted") return "memory";
       if (prev === "memory") return "persisted";
       return prev;
     });
-  }, []);
-
-  // ─── Selection (snapshot-based, survives archive churn) ────────────────────
+  }, [syncMode]);
 
   const selectCandidate = useCallback((id: string) => {
     setState(currentState => {
@@ -231,6 +276,7 @@ export function useDiscoveryEngine() {
     selectCandidate,
     clearSelection,
     syncMode,
+    role,
     togglePersistence,
     ingestExperimentCandidates,
   };
