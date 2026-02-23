@@ -12,6 +12,7 @@ import Library from "./pages/Library";
 import Labs from "./pages/Labs";
 import MultiAssetLab from "./pages/MultiAssetLab";
 import TimeVarianceLab from "./pages/TimeVarianceLab";
+import DiscoveryAtlas from "./pages/DiscoveryAtlas";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
 
@@ -33,6 +34,7 @@ const App = () => (
           <Route path="/labs" element={<Labs />} />
           <Route path="/labs/multi-asset" element={<MultiAssetLab />} />
           <Route path="/labs/time-variance" element={<TimeVarianceLab />} />
+          <Route path="/labs/discovery" element={<DiscoveryAtlas />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <FloatingAIChat />

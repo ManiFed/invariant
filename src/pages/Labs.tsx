@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Boxes, Clock } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Clock, Compass } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Labs = () => {
@@ -36,11 +36,60 @@ const Labs = () => {
           Extend beyond two-asset constant-product AMMs. Design multi-asset pools and time-varying mechanisms.
         </motion.p>
 
+        {/* Featured: Discovery Atlas */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <motion.div
+            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-3"
+            onClick={() => navigate("/labs/discovery")}
+            whileHover={{ y: -3 }}
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-chart-3/10 border border-chart-3/20 flex items-center justify-center shrink-0">
+                <Compass className="w-6 h-6 text-chart-3" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="text-lg font-bold text-foreground">Invariant Atlas</h2>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-chart-3/30 text-chart-3">DISCOVERY ENGINE</span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                  Continuous evolutionary search over liquidity geometries. The engine generates, evaluates, and archives AMM designs across stochastic market regimes, exposing the geometric structure of the explored design space.
+                </p>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Discrete liquidity density (64 bins)</li>
+                    <li>• 3 market regimes (GBM + jumps)</li>
+                    <li>• Monte Carlo evaluation paths</li>
+                  </ul>
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Evolutionary population search</li>
+                    <li>• Multi-dimensional metric vectors</li>
+                    <li>• Cross-path stability estimates</li>
+                  </ul>
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Live champion dashboard</li>
+                    <li>• 2D feature-space atlas map</li>
+                    <li>• Full design inspection view</li>
+                  </ul>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
+                  Enter Atlas <ArrowRight className="w-3 h-3" />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+
         <motion.div
           className="grid sm:grid-cols-2 gap-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.3 }}
         >
           <motion.div
             className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all"
