@@ -10,11 +10,16 @@ const Labs = () => {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            onClick={() => navigate("/")}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-bold text-foreground tracking-tight">LABS</span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
+            EXPERIMENTAL
+          </span>
         </div>
         <ThemeToggle />
       </header>
@@ -33,7 +38,7 @@ const Labs = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          Extend beyond two-asset constant-product AMMs. Design multi-asset pools and time-varying mechanisms.
+          Not guaranteed to work. Quite cool.
         </motion.p>
 
         {/* Featured: Discovery Atlas */}
@@ -55,10 +60,11 @@ const Labs = () => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <h2 className="text-lg font-bold text-foreground">Invariant Atlas</h2>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-chart-3/30 text-chart-3">DISCOVERY ENGINE</span>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Continuous evolutionary search over liquidity geometries. The engine generates, evaluates, and archives AMM designs across stochastic market regimes, exposing the geometric structure of the explored design space.
+                  Continuous evolutionary search over liquidity geometries. The engine generates, evaluates, and
+                  archives AMM designs across stochastic market regimes, exposing the geometric structure of the
+                  explored design space.
                 </p>
                 <div className="grid sm:grid-cols-3 gap-4">
                   <ul className="space-y-1 text-[11px] text-muted-foreground">
@@ -104,10 +110,13 @@ const Labs = () => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <h2 className="text-lg font-bold text-foreground">Liquidity Strategy Lab</h2>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-chart-4/30 text-chart-4">BACKTEST ENGINE</span>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-chart-4/30 text-chart-4">
+                    BACKTEST ENGINE
+                  </span>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Design, backtest, and compare LP strategies over Monte Carlo price simulations. Evaluate active management rules — range rebalancing, volatility tracking, hedging — against passive LPing.
+                  Design, backtest, and compare LP strategies over Monte Carlo price simulations. Evaluate active
+                  management rules — range rebalancing, volatility tracking, hedging — against passive LPing.
                 </p>
                 <div className="grid sm:grid-cols-3 gap-4">
                   <ul className="space-y-1 text-[11px] text-muted-foreground">
@@ -150,7 +159,8 @@ const Labs = () => {
             </div>
             <h2 className="text-lg font-bold text-foreground mb-2">Multi-Asset AMMs</h2>
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              Design invariants across 3+ tokens. Asset table, 3D surface plots, pairwise slicing, price matrix heatmaps, and multi-asset optimization.
+              Design invariants across 3+ tokens. Asset table, 3D surface plots, pairwise slicing, price matrix
+              heatmaps, and multi-asset optimization.
             </p>
             <ul className="space-y-1 text-[11px] text-muted-foreground mb-4">
               <li>• Spreadsheet-style asset configuration</li>
@@ -174,7 +184,8 @@ const Labs = () => {
             </div>
             <h2 className="text-lg font-bold text-foreground mb-2">Time-Variance AMMs</h2>
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              Design AMMs that evolve over time. Animate the invariant curve, adjust parameters at keyframes, and build time-dependent fee and weight functions.
+              Design AMMs that evolve over time. Animate the invariant curve, adjust parameters at keyframes, and build
+              time-dependent fee and weight functions.
             </p>
             <ul className="space-y-1 text-[11px] text-muted-foreground mb-4">
               <li>• Continuous playback with pause/edit points</li>
