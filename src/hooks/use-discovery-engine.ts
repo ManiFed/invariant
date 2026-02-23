@@ -3,7 +3,6 @@ import {
   type EngineState,
   type RegimeId,
   type Candidate,
-  type ActivityEntry,
   REGIMES,
   createInitialState,
   runGeneration,
@@ -19,6 +18,8 @@ export function useDiscoveryEngine() {
   }));
   const runningRef = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Snapshot storage: selected candidates live here, immune to archive churn
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
   const tick = useCallback(() => {
     if (!runningRef.current) return;
@@ -33,7 +34,7 @@ export function useDiscoveryEngine() {
 
       const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig);
 
-      // Archive all evaluated candidates (cap at limit)
+      // Archive top candidates (cap at limit)
       const newArchive = [...prev.archive, ...newCandidates];
       if (newArchive.length > ARCHIVE_LIMIT) {
         newArchive.splice(0, newArchive.length - ARCHIVE_LIMIT);
@@ -61,12 +62,33 @@ export function useDiscoveryEngine() {
     };
   }, [tick]);
 
-  const getCandidate = useCallback((id: string): Candidate | undefined => {
-    return state.archive.find(c => c.id === id);
-  }, [state.archive]);
+  /** Select a candidate by snapshotting it — this survives archive churn */
+  const selectCandidate = useCallback((id: string) => {
+    // Look through archive first
+    const found = state.archive.find(c => c.id === id);
+    if (found) {
+      setSelectedCandidate(found);
+      return;
+    }
+    // Also check current population candidates and metric champions
+    for (const pop of Object.values(state.populations)) {
+      if (pop.champion?.id === id) { setSelectedCandidate(pop.champion); return; }
+      const inPop = pop.candidates.find(c => c.id === id);
+      if (inPop) { setSelectedCandidate(inPop); return; }
+      for (const mc of Object.values(pop.metricChampions)) {
+        if (mc?.id === id) { setSelectedCandidate(mc); return; }
+      }
+    }
+  }, [state.archive, state.populations]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedCandidate(null);
+  }, []);
 
   return {
     state,
-    getCandidate,
+    selectedCandidate,
+    selectCandidate,
+    clearSelection,
   };
 }
