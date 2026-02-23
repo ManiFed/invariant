@@ -249,10 +249,10 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
         </motion.div>
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <div className="flex items-center gap-1.5 mb-1">
-            
+
             <p className="text-[9px] text-muted-foreground">Archive Size</p>
           </div>
-          <p className="text-lg font-bold font-mono text-foreground">{state.archive.length.toLocaleString()}</p>
+          <p className="text-lg font-bold font-mono text-foreground">{(state.archiveSize ?? state.archive.length).toLocaleString()}</p>
         </motion.div>
         <motion.div className="surface-elevated rounded-xl p-3" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <div className="flex items-center gap-1.5 mb-1">

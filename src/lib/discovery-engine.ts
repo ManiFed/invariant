@@ -110,6 +110,9 @@ export interface EngineState {
   activityLog: ActivityEntry[];
   running: boolean;
   totalGenerations: number;
+  /** Display hint for followers: the leader's actual archive.length.
+   *  Use `state.archiveSize ?? state.archive.length` for display. */
+  archiveSize?: number;
 }
 
 // ─── Candidate Representation ───────────────────────────────────────────────
