@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Play, Pause, SkipBack, SkipForward, Plus, Trash2, Code2, Layers, Maximize2 } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Plus, Trash2, Code2, Layers, Maximize2, Check } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid,
@@ -247,10 +247,12 @@ export function TimelineEditor({ keyframes, onChange, currentTime, mode, onModeC
 }
 
 /* ─── Time-Variance Visualization Panel ─── */
-export function TimeVariancePanel({ config, onConfigChange, onOpenFullEditor }: {
+export function TimeVariancePanel({ config, onConfigChange, onOpenFullEditor, onSaveAsActive, hasActiveInvariant }: {
   config: TimeVarianceConfig;
   onConfigChange: (config: TimeVarianceConfig) => void;
   onOpenFullEditor: (keyframeId?: string) => void;
+  onSaveAsActive?: (params: { expression: string; weightA: number; weightB: number; amplification: number; feeRate: number }) => void;
+  hasActiveInvariant?: boolean;
 }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -279,8 +281,36 @@ export function TimeVariancePanel({ config, onConfigChange, onOpenFullEditor }: 
 
   const tooltipStyle = { backgroundColor: "hsl(var(--background))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "10px", color: "hsl(var(--foreground))" };
 
+  const handleSaveAsActive = useCallback(() => {
+    if (onSaveAsActive) {
+      onSaveAsActive({
+        expression: currentParams.expression,
+        weightA: currentParams.weightA,
+        weightB: currentParams.weightB,
+        amplification: currentParams.amplification,
+        feeRate: currentParams.feeRate,
+      });
+    }
+  }, [onSaveAsActive, currentParams]);
+
   return (
     <div className="space-y-6">
+      {/* Set as Active button */}
+      {onSaveAsActive && (
+        <div className="flex items-center justify-between p-3 rounded-lg bg-secondary border border-border">
+          <div>
+            <p className="text-xs font-semibold text-foreground">Current Expression at t={Math.round(currentTime)}</p>
+            <p className="text-[10px] font-mono text-muted-foreground">{currentParams.expression} — wA={currentParams.weightA.toFixed(3)}, wB={currentParams.weightB.toFixed(3)}, A={currentParams.amplification.toFixed(1)}</p>
+          </div>
+          <button
+            onClick={handleSaveAsActive}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+          >
+            <Check className="w-3 h-3" /> {hasActiveInvariant ? "Update Active Invariant" : "Set as Active Invariant"}
+          </button>
+        </div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-4">
           <PlaybackControls time={currentTime} isPlaying={isPlaying} speed={speed} onTimeChange={setCurrentTime} onTogglePlay={() => setIsPlaying(p => !p)} onSpeedChange={setSpeed} onReset={() => { setCurrentTime(0); setIsPlaying(false); }} onStepForward={() => setCurrentTime(prev => Math.min(100, prev + 5))} />
