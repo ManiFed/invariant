@@ -19,6 +19,7 @@ import {
   Layers,
   Play,
   TrendingUp,
+  Puzzle,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
@@ -32,6 +33,8 @@ import AMMComparison from "@/components/advanced/AMMComparison";
 import StrategyEditor from "@/components/labs/StrategyEditor";
 import StrategyBacktest from "@/components/labs/StrategyBacktest";
 import StrategyResults from "@/components/labs/StrategyResults";
+import StrategyBlockEditor from "@/components/labs/StrategyBlockEditor";
+import { type CustomStrategy } from "@/lib/strategy-blocks";
 import { type StrategyConfig, type BacktestResult } from "@/lib/strategy-engine";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -39,10 +42,11 @@ const tabs = [
   { id: "invariant", label: "Invariant Editor", icon: Code2, desc: "Design your AMM curve formula", step: 1 },
   { id: "fees", label: "Fee Structure", icon: DollarSign, desc: "Custom fee distribution across the curve", step: 2 },
   { id: "strategy", label: "Strategy Editor", icon: Layers, desc: "Design LP management strategies", step: 3 },
-  { id: "backtest", label: "Backtest", icon: Play, desc: "Run Monte Carlo strategy simulation", step: 4 },
-  { id: "results", label: "Results", icon: TrendingUp, desc: "Strategy performance dashboard", step: 5 },
-  { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 6 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 7 },
+  { id: "blocks", label: "Block Editor", icon: Puzzle, desc: "Visual block-based strategy design", step: 4 },
+  { id: "backtest", label: "Backtest", icon: Play, desc: "Run Monte Carlo strategy simulation", step: 5 },
+  { id: "results", label: "Results", icon: TrendingUp, desc: "Strategy performance dashboard", step: 6 },
+  { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 7 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 8 },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -97,6 +101,7 @@ const LIBRARY_AMMS: LibraryAMM[] = [
 const SESSION_KEY = "strategy_lab_invariant";
 const FEE_SESSION_KEY = "strategy_lab_fees";
 const STRATEGY_SESSION_KEY = "strategy_lab_config";
+const BLOCKS_SESSION_KEY = "strategy_lab_custom_blocks";
 
 function loadInvariant(): SavedInvariant | null {
   try {
@@ -131,6 +136,9 @@ const LiquidityStrategyLab = () => {
   const [savedFees, setSavedFees] = useState<number[] | null>(loadFees);
   const [strategies, setStrategies] = useState<StrategyConfig[]>(loadStrategies);
   const [results, setResults] = useState<BacktestResult[]>([]);
+  const [customStrategies, setCustomStrategies] = useState<CustomStrategy[]>(() => {
+    try { const r = sessionStorage.getItem(BLOCKS_SESSION_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
+  });
   const [showImport, setShowImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,6 +158,11 @@ const LiquidityStrategyLab = () => {
   const handleStrategiesChange = useCallback((s: StrategyConfig[]) => {
     setStrategies(s);
     sessionStorage.setItem(STRATEGY_SESSION_KEY, JSON.stringify(s));
+  }, []);
+
+  const handleCustomStrategiesChange = useCallback((s: CustomStrategy[]) => {
+    setCustomStrategies(s);
+    sessionStorage.setItem(BLOCKS_SESSION_KEY, JSON.stringify(s));
   }, []);
 
   const handleResults = useCallback((r: BacktestResult[]) => {
@@ -334,7 +347,7 @@ const LiquidityStrategyLab = () => {
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          <nav className="flex-1 py-2">
+          <nav className="flex-1 py-2 overflow-y-auto min-h-0">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -424,6 +437,9 @@ const LiquidityStrategyLab = () => {
               {activeTab === "fees" && <FeeStructureEditor onSaveFees={handleSaveFees} savedFees={savedFees} />}
               {activeTab === "strategy" && (
                 <StrategyEditor strategies={strategies} onStrategiesChange={handleStrategiesChange} />
+              )}
+              {activeTab === "blocks" && (
+                <StrategyBlockEditor strategies={strategies} onStrategiesChange={handleStrategiesChange} customStrategies={customStrategies} onCustomStrategiesChange={handleCustomStrategiesChange} />
               )}
               {activeTab === "backtest" && (
                 <div>
