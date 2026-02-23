@@ -115,14 +115,6 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-border bg-gradient-to-r from-primary/10 via-background to-accent/20">
-        <div className="flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wider">Ammy Assistant</span>
-        </div>
-      </div>
-
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
         {messages.length === 0 &&
         <div className="text-[10px] text-muted-foreground text-center py-4 space-y-1">
