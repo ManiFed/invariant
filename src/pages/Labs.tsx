@@ -110,9 +110,6 @@ const Labs = () => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <h2 className="text-lg font-bold text-foreground">Liquidity Strategy Lab</h2>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-chart-4/30 text-chart-4">
-                    BACKTEST ENGINE
-                  </span>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-3">
                   Design, backtest, and compare LP strategies over Monte Carlo price simulations. Evaluate active
