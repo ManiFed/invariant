@@ -246,6 +246,7 @@ export default function GeometryObservatory() {
             <Button size="sm" onClick={runAutoBranchSelection} className="gap-1"><WandSparkles className="w-3.5 h-3.5" /> Allocate next generation</Button>
             <Button size="sm" variant="outline" onClick={runExplorationSprint}>Run exploration sprint</Button>
           </div>
+          <Button size="sm" onClick={runAutoBranchSelection}>Run Bayesian branch allocation</Button>
         </div>
       </div>
 
@@ -368,6 +369,46 @@ export default function GeometryObservatory() {
             <label className="block"><p className="text-[11px] text-muted-foreground mb-1">Fee function</p><textarea value={feeExpr} onChange={(event) => setFeeExpr(event.target.value)} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-20" /></label>
             <label className="block"><p className="text-[11px] text-muted-foreground mb-1">Control policy definition</p><textarea value={controlExpr} onChange={(event) => setControlExpr(event.target.value)} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-20" /></label>
           </div>
+        </div>
+      </div>
+
+      <div className="surface-elevated rounded-xl border border-border p-4">
+        <p className="text-xs font-semibold flex items-center gap-1 mb-3"><Network className="w-3.5 h-3.5" /> Automatic branch selection (multi-armed bandit)</p>
+        <div className="grid md:grid-cols-3 gap-3">
+          {rankedBranches.map((branch) => (
+            <motion.div key={branch.id} initial={{ opacity: 0.5 }} animate={{ opacity: 1 }} className="rounded-lg border border-border p-3 space-y-1.5">
+              <p className="text-[11px] font-semibold">{branch.id}</p>
+              <div className="text-[10px] text-muted-foreground space-y-0.5">
+                <div className="flex justify-between"><span>Posterior mean</span><span className="font-mono">{branch.posteriorMean.toFixed(3)}</span></div>
+                <div className="flex justify-between"><span>Variance</span><span className="font-mono">{branch.variance.toFixed(3)}</span></div>
+                <div className="flex justify-between"><span>Expected improvement</span><span className="font-mono">{branch.expectedImprovement.toFixed(3)}</span></div>
+                <div className="flex justify-between"><span>Priority score</span><span className="font-mono">{branch.score.toFixed(3)}</span></div>
+                <div className="flex justify-between"><span>Samples</span><span className="font-mono">{branch.tested}</span></div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      <div className="surface-elevated rounded-xl border border-border p-4 space-y-3">
+        <p className="text-xs font-semibold flex items-center gap-1"><Target className="w-3.5 h-3.5" /> Structural editor (live symbolic definitions)</p>
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="block">
+            <p className="text-[11px] text-muted-foreground mb-1">Invariant expression</p>
+            <textarea value={invariantExpr} onChange={(event) => setInvariantExpr(event.target.value)} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-20" />
+          </label>
+          <label className="block">
+            <p className="text-[11px] text-muted-foreground mb-1">Liquidity density function</p>
+            <textarea value={liquidityExpr} onChange={(event) => setLiquidityExpr(event.target.value)} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-20" />
+          </label>
+          <label className="block">
+            <p className="text-[11px] text-muted-foreground mb-1">Fee function</p>
+            <textarea value={feeExpr} onChange={(event) => setFeeExpr(event.target.value)} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-20" />
+          </label>
+          <label className="block">
+            <p className="text-[11px] text-muted-foreground mb-1">Control policy definition</p>
+            <textarea value={controlExpr} onChange={(event) => setControlExpr(event.target.value)} className="w-full px-2 py-2 rounded-md border border-border bg-background text-xs min-h-20" />
+          </label>
         </div>
       </div>
     </section>
