@@ -12,8 +12,8 @@ const Labs = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/")}
-            className="text-muted-foreground hover:text-foreground transition-colors">
-
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-bold text-foreground tracking-tight">LABS</span>
@@ -28,16 +28,16 @@ const Labs = () => {
         <motion.h1
           className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight mb-4 text-foreground"
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}>
-
+          animate={{ opacity: 1, y: 0 }}
+        >
           Experimental AMM Labs
         </motion.h1>
         <motion.p
           className="text-base text-muted-foreground max-w-xl mb-12 leading-relaxed"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}>
-
+          transition={{ delay: 0.1 }}
+        >
           Not guaranteed to work. Quite cool.
         </motion.p>
 
@@ -46,17 +46,17 @@ const Labs = () => {
           className="mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}>
-
+          transition={{ delay: 0.2 }}
+        >
           <motion.div
             className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-3"
             onClick={() => navigate("/labs/discovery")}
-            whileHover={{ y: -3 }}>
-
+            whileHover={{ y: -3 }}
+          >
             <div className="flex items-start gap-4">
-              
-
-
+              <div className="w-12 h-12 rounded-xl bg-chart-3/10 border border-chart-3/20 flex items-center justify-center shrink-0">
+                <Compass className="w-6 h-6 text-chart-3" />
+              </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <h2 className="text-lg font-bold text-foreground">Invariant Atlas</h2>
@@ -96,13 +96,13 @@ const Labs = () => {
           className="mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}>
-
+          transition={{ delay: 0.25 }}
+        >
           <motion.div
             className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-4"
             onClick={() => navigate("/labs/strategy")}
-            whileHover={{ y: -3 }}>
-
+            whileHover={{ y: -3 }}
+          >
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-xl bg-chart-4/10 border border-chart-4/20 flex items-center justify-center shrink-0">
                 <Layers className="w-6 h-6 text-chart-4" />
@@ -144,13 +144,13 @@ const Labs = () => {
           className="grid sm:grid-cols-2 gap-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}>
-
+          transition={{ delay: 0.35 }}
+        >
           <motion.div
             className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all"
             onClick={() => navigate("/labs/multi-asset")}
-            whileHover={{ y: -3 }}>
-
+            whileHover={{ y: -3 }}
+          >
             <div className="w-12 h-12 rounded-xl bg-chart-1/10 border border-chart-1/20 flex items-center justify-center mb-4">
               <Boxes className="w-6 h-6 text-chart-1" />
             </div>
@@ -174,8 +174,8 @@ const Labs = () => {
           <motion.div
             className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all"
             onClick={() => navigate("/labs/time-variance")}
-            whileHover={{ y: -3 }}>
-
+            whileHover={{ y: -3 }}
+          >
             <div className="w-12 h-12 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center mb-4">
               <Clock className="w-6 h-6 text-chart-2" />
             </div>
@@ -197,8 +197,8 @@ const Labs = () => {
           </motion.div>
         </motion.div>
       </div>
-    </div>);
-
+    </div>
+  );
 };
 
 export default Labs;
