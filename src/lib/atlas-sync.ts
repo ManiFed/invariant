@@ -47,6 +47,72 @@ interface SyncSnapshot {
   ts: number;
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeSnapshot(payload: unknown): SyncSnapshot | null {
+  if (!isObject(payload)) return null;
+
+  const totalGenerations = typeof payload.totalGenerations === "number" ? payload.totalGenerations : null;
+  const archiveSize = typeof payload.archiveSize === "number" ? payload.archiveSize : null;
+  const ts = typeof payload.ts === "number" ? payload.ts : Date.now();
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates : null;
+
+  if (totalGenerations === null || archiveSize === null || !candidates) return null;
+
+  const safeCandidates: SyncCandidate[] = candidates.filter((c): c is SyncCandidate => {
+    if (!isObject(c)) return false;
+    return (
+      typeof c.id === "string" &&
+      Array.isArray(c.bins) &&
+      typeof c.regime === "string" &&
+      typeof c.generation === "number" &&
+      isObject(c.metrics) &&
+      isObject(c.features) &&
+      typeof c.stability === "number" &&
+      typeof c.score === "number" &&
+      typeof c.timestamp === "number"
+    );
+  });
+
+  const safePopulations = isObject(payload.populations)
+    ? payload.populations as Record<RegimeId, SyncPopulationInfo>
+    : EMPTY_SYNC_POPULATION_INFO;
+
+  const activityLog = Array.isArray(payload.activityLog) ? payload.activityLog as ActivityEntry[] : [];
+
+  return {
+    totalGenerations,
+    archiveSize,
+    ts,
+    candidates: safeCandidates,
+    populations: safePopulations,
+    activityLog,
+  };
+}
+
+const EMPTY_SYNC_POPULATION_INFO: Record<RegimeId, SyncPopulationInfo> = {
+  "low-vol": {
+    generation: 0,
+    totalEvaluated: 0,
+    championId: null,
+    metricChampionIds: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
+  },
+  "high-vol": {
+    generation: 0,
+    totalEvaluated: 0,
+    championId: null,
+    metricChampionIds: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
+  },
+  "jump-diffusion": {
+    generation: 0,
+    totalEvaluated: 0,
+    championId: null,
+    metricChampionIds: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
+  },
+};
+
 export interface RemoteStateExtras {
   archiveSize: number;
   populationInfo: Record<RegimeId, SyncPopulationInfo>;
@@ -86,7 +152,7 @@ function buildPopulationsFromArchive(
   populationInfo?: Record<RegimeId, SyncPopulationInfo>,
 ): Record<RegimeId, PopulationState> {
   const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
-  const pops: Record<RegimeId, PopulationState> = {} as any;
+  const pops = {} as Record<RegimeId, PopulationState>;
   const candidateMap = new Map(archive.map(c => [c.id, c]));
 
   for (const regime of regimes) {
@@ -200,7 +266,7 @@ export class AtlasSync {
           // Another client is asking for state — respond immediately
           this.broadcastState();
         })
-        .on("broadcast", { event: "state-snapshot" }, ({ payload }: { payload: SyncSnapshot }) => {
+        .on("broadcast", { event: "state-snapshot" }, ({ payload }: { payload: unknown }) => {
           this.handleSnapshot(payload);
           if (!resolved) {
             clearTimeout(timeout);
@@ -225,26 +291,29 @@ export class AtlasSync {
     });
   }
 
-  private handleSnapshot(payload: SyncSnapshot) {
+  private handleSnapshot(payload: unknown) {
+    const snapshot = normalizeSnapshot(payload);
+    if (!snapshot) return;
+
     this._lastReceivedTs = Date.now();
-    const archive = payload.candidates.map(deserializeCandidate);
+    const archive = snapshot.candidates.map(deserializeCandidate);
     const extras: RemoteStateExtras = {
-      archiveSize: payload.archiveSize,
-      populationInfo: payload.populations,
-      activityLog: payload.activityLog,
+      archiveSize: snapshot.archiveSize,
+      populationInfo: snapshot.populations,
+      activityLog: snapshot.activityLog,
     };
 
     if (this._role === "follower") {
       // Followers always adopt the latest state from the leader
-      this.onRemoteState(archive, payload.totalGenerations, extras);
+      this.onRemoteState(archive, snapshot.totalGenerations, extras);
     } else {
       // Leader: demote to follower if a remote peer is strictly ahead
       const current = this.getState();
-      if (payload.totalGenerations > current.totalGenerations) {
+      if (snapshot.totalGenerations > current.totalGenerations) {
         this._role = "follower";
         this.onRoleChange("follower");
         this.startFailoverCheck();
-        this.onRemoteState(archive, payload.totalGenerations, extras);
+        this.onRemoteState(archive, snapshot.totalGenerations, extras);
       }
     }
   }
@@ -258,7 +327,7 @@ export class AtlasSync {
     // These MUST be included in the snapshot so followers display identical data
     const importantIds = new Set<string>();
     const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
-    const populationSnapshots: Record<RegimeId, SyncPopulationInfo> = {} as any;
+    const populationSnapshots = {} as Record<RegimeId, SyncPopulationInfo>;
 
     for (const rid of regimes) {
       const pop = state.populations[rid];
