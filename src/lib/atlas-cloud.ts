@@ -64,7 +64,7 @@ export async function loadAtlasState(): Promise<{
 }> {
   try {
     // Load global state
-    const { data: globalState, error: stateError } = await supabase
+    const { data: globalState, error: stateError } = await (supabase as any)
       .from("atlas_state")
       .select("*")
       .eq("id", "global")
@@ -73,7 +73,7 @@ export async function loadAtlasState(): Promise<{
     if (stateError) throw stateError;
 
     // Load all archived candidates (these are the ones shown on the map)
-    const { data: archivedRows, error: archiveError } = await supabase
+    const { data: archivedRows, error: archiveError } = await (supabase as any)
       .from("atlas_candidates")
       .select("*")
       .eq("is_archived", true)
@@ -87,7 +87,7 @@ export async function loadAtlasState(): Promise<{
     const populations: Record<RegimeId, PopulationState> = {} as Record<RegimeId, PopulationState>;
 
     for (const regime of regimes) {
-      const { data: popRows } = await supabase
+      const { data: popRows } = await (supabase as any)
         .from("atlas_candidates")
         .select("*")
         .eq("regime", regime)
@@ -128,7 +128,7 @@ export async function loadAtlasState(): Promise<{
         archive,
         activityLog: [],
         running: true,
-        totalGenerations: globalState?.total_generations || 0,
+        totalGenerations: (globalState as any)?.total_generations || 0,
       },
       cloudAvailable: true,
     };
