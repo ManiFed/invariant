@@ -5,7 +5,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
-import type { EngineState, RegimeId, Candidate } from "@/lib/discovery-engine";
+import type { EngineState, RegimeId, Candidate, InvariantFamilyId } from "@/lib/discovery-engine";
 import { embedCandidates, computeCoverage } from "@/lib/discovery-engine";
 
 const REGIME_COLORS: Record<RegimeId, string> = {
@@ -18,6 +18,18 @@ const REGIME_LABELS: Record<RegimeId, string> = {
   "low-vol": "Low Vol",
   "high-vol": "High Vol",
   "jump-diffusion": "Jump Diff",
+};
+
+const FAMILY_COLORS: Record<InvariantFamilyId, string> = {
+  "piecewise-bands": "hsl(205, 85%, 56%)",
+  "amplified-hybrid": "hsl(284, 76%, 60%)",
+  "tail-shielded": "hsl(162, 72%, 42%)",
+};
+
+const FAMILY_LABELS: Record<InvariantFamilyId, string> = {
+  "piecewise-bands": "Piecewise",
+  "amplified-hybrid": "Amplified",
+  "tail-shielded": "Tail Shielded",
 };
 
 interface AtlasSurfaceProps {
@@ -475,6 +487,7 @@ function IndividualAMMsSpiderMap({
 export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceProps) {
   const [filterRegime, setFilterRegime] = useState<RegimeId | "all">("all");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [colorBy, setColorBy] = useState<"regime" | "family">("family");
 
   // Freeze state: when frozen, we snapshot the data and allow zoom/pan
   const [frozen, setFrozen] = useState(false);
@@ -655,6 +668,21 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
           )}
           <div className="w-px h-4 bg-border" />
           <span className="text-[9px] text-muted-foreground">Filter:</span>
+          <div className="w-px h-4 bg-border" />
+          <span className="text-[9px] text-muted-foreground">Color:</span>
+          {(["family", "regime"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setColorBy(mode)}
+              className={`px-2 py-1 rounded-md text-[9px] font-medium transition-all ${
+                colorBy === mode
+                  ? "bg-foreground/10 text-foreground border border-foreground/20"
+                  : "bg-secondary text-muted-foreground border border-transparent hover:text-foreground"
+              }`}
+            >
+              {mode === "family" ? "Family" : "Regime"}
+            </button>
+          ))}
           {(["all", "low-vol", "high-vol", "jump-diffusion"] as const).map(r => (
             <button
               key={r}
@@ -732,7 +760,7 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
               <div className="text-right">
                 <p className="text-[9px] font-mono text-foreground">{hoveredCandidate.id}</p>
                 <p className="text-[8px] text-muted-foreground">
-                  Score: {hoveredCandidate.score.toFixed(3)} | Gen {hoveredCandidate.generation}
+                  Score: {hoveredCandidate.score.toFixed(3)} | {hoveredCandidate.familyId} | Gen {hoveredCandidate.generation}
                 </p>
               </div>
             )}
@@ -831,7 +859,7 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
                     cx={cx}
                     cy={cy}
                     r={r}
-                    fill={REGIME_COLORS[c.regime]}
+                    fill={colorBy === "regime" ? REGIME_COLORS[c.regime] : FAMILY_COLORS[c.familyId]}
                     fillOpacity={isChampion ? 0.9 : 0.5}
                     stroke={isChampion ? "hsl(var(--foreground))" : "none"}
                     strokeWidth={isChampion ? 1.5 : 0}
@@ -851,6 +879,12 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
               <div key={r} className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: REGIME_COLORS[r] }} />
                 <span className="text-[9px] text-muted-foreground">{REGIME_LABELS[r]}</span>
+              </div>
+            ))}
+            {colorBy === "family" && (["piecewise-bands", "amplified-hybrid", "tail-shielded"] as const).map((family) => (
+              <div key={family} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: FAMILY_COLORS[family] }} />
+                <span className="text-[9px] text-muted-foreground">{FAMILY_LABELS[family]}</span>
               </div>
             ))}
             <div className="flex items-center gap-1.5">
