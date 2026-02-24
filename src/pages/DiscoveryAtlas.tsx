@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2,
-  FlaskConical, Radar, Zap,
+  FlaskConical, Radar, Zap, Layers,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -11,10 +11,11 @@ import AtlasSurface from "@/components/labs/AtlasSurface";
 import DesignDetail from "@/components/labs/DesignDetail";
 import GeometryObservatory from "@/components/labs/GeometryObservatory";
 import ExperimentsTab from "@/components/labs/ExperimentsTab";
+import FamilyDirectory from "@/components/labs/FamilyDirectory";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "observatory" | "experiments" | "detail";
+type View = "dashboard" | "atlas" | "directory" | "observatory" | "experiments" | "detail";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
 type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
@@ -252,6 +253,7 @@ const DiscoveryAtlas = () => {
   const tabs = [
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
+    { id: "directory" as const, label: "Family Directory", icon: Layers },
     { id: "observatory" as const, label: "Geometry Observatory", icon: Radar },
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
   ];
@@ -349,6 +351,7 @@ const DiscoveryAtlas = () => {
         <AnimatePresence mode="wait">
           {activeView === "dashboard" && <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
           {activeView === "atlas" && <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} /></motion.div>}
+          {activeView === "directory" && <motion.div key="directory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><FamilyDirectory state={{ ...state, archive: filteredArchive }} /></motion.div>}
           {activeView === "observatory" && <motion.div key="observatory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} /></motion.div>}
           {activeView === "experiments" && (
             <ExperimentsTab

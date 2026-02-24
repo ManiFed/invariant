@@ -66,6 +66,8 @@ export interface FeatureDescriptor {
 export interface Candidate {
   id: string;
   bins: Float64Array;       // non-negative bin weights, sums to TOTAL_LIQUIDITY
+  familyId: InvariantFamilyId;
+  familyParams: Record<string, number>;
   regime: RegimeId;
   generation: number;
   metrics: MetricVector;
@@ -106,10 +108,92 @@ export interface PopulationState {
 export interface ActivityEntry {
   timestamp: number;
   regime: RegimeId;
-  type: "champion-replaced" | "generation-complete" | "convergence-plateau" | "exploration-spike";
+  type: "champion-replaced" | "generation-complete" | "convergence-plateau" | "exploration-spike" | "family-frontier-entry" | "family-regime-dominance";
   message: string;
   generation: number;
 }
+
+export type InvariantFamilyId = "piecewise-bands" | "amplified-hybrid" | "tail-shielded";
+
+export interface InvariantFamilyDefinition {
+  id: InvariantFamilyId;
+  label: string;
+  parameterRanges: Record<string, { min: number; max: number }>;
+  sampleParams: () => Record<string, number>;
+  mutateParams: (params: Record<string, number>) => Record<string, number>;
+  generateBins: (params: Record<string, number>) => Float64Array;
+}
+
+export const INVARIANT_FAMILIES: InvariantFamilyDefinition[] = [
+  {
+    id: "piecewise-bands",
+    label: "Piecewise Bands",
+    parameterRanges: { centerMass: { min: 0.2, max: 0.85 }, shoulder: { min: 0.05, max: 0.4 }, skew: { min: -0.45, max: 0.45 } },
+    sampleParams: () => ({ centerMass: 0.2 + Math.random() * 0.65, shoulder: 0.05 + Math.random() * 0.35, skew: -0.45 + Math.random() * 0.9 }),
+    mutateParams: (params) => ({
+      centerMass: Math.min(0.85, Math.max(0.2, params.centerMass + randn() * 0.06)),
+      shoulder: Math.min(0.4, Math.max(0.05, params.shoulder + randn() * 0.04)),
+      skew: Math.min(0.45, Math.max(-0.45, params.skew + randn() * 0.08)),
+    }),
+    generateBins: (params) => {
+      const bins = new Float64Array(NUM_BINS);
+      const center = Math.floor(NUM_BINS / 2 + params.skew * NUM_BINS * 0.22);
+      for (let i = 0; i < NUM_BINS; i++) {
+        const distance = Math.abs(i - center) / NUM_BINS;
+        const core = Math.max(0, params.centerMass - distance * (1 + params.shoulder * 2));
+        const shoulder = params.shoulder * Math.exp(-distance * 12);
+        bins[i] = Math.max(0, core + shoulder * (0.8 + Math.random() * 0.4));
+      }
+      normalizeBins(bins);
+      return bins;
+    }
+  },
+  {
+    id: "amplified-hybrid",
+    label: "Amplified Hybrid",
+    parameterRanges: { amplification: { min: 1, max: 12 }, decay: { min: 0.8, max: 4 }, bias: { min: -0.35, max: 0.35 } },
+    sampleParams: () => ({ amplification: 1 + Math.random() * 11, decay: 0.8 + Math.random() * 3.2, bias: -0.35 + Math.random() * 0.7 }),
+    mutateParams: (params) => ({
+      amplification: Math.min(12, Math.max(1, params.amplification + randn() * 1.1)),
+      decay: Math.min(4, Math.max(0.8, params.decay + randn() * 0.25)),
+      bias: Math.min(0.35, Math.max(-0.35, params.bias + randn() * 0.05)),
+    }),
+    generateBins: (params) => {
+      const bins = new Float64Array(NUM_BINS);
+      const center = (NUM_BINS - 1) / 2 + params.bias * NUM_BINS * 0.2;
+      for (let i = 0; i < NUM_BINS; i++) {
+        const x = Math.abs(i - center) / (NUM_BINS / 2);
+        bins[i] = 1 / Math.pow(1 + params.decay * x * x, params.amplification / 3);
+      }
+      normalizeBins(bins);
+      return bins;
+    }
+  },
+  {
+    id: "tail-shielded",
+    label: "Tail Shielded",
+    parameterRanges: { tailWeight: { min: 0.05, max: 0.45 }, moatWidth: { min: 0.02, max: 0.25 }, centerBias: { min: 0.2, max: 0.8 } },
+    sampleParams: () => ({ tailWeight: 0.05 + Math.random() * 0.4, moatWidth: 0.02 + Math.random() * 0.23, centerBias: 0.2 + Math.random() * 0.6 }),
+    mutateParams: (params) => ({
+      tailWeight: Math.min(0.45, Math.max(0.05, params.tailWeight + randn() * 0.05)),
+      moatWidth: Math.min(0.25, Math.max(0.02, params.moatWidth + randn() * 0.04)),
+      centerBias: Math.min(0.8, Math.max(0.2, params.centerBias + randn() * 0.06)),
+    }),
+    generateBins: (params) => {
+      const bins = new Float64Array(NUM_BINS);
+      const center = (NUM_BINS - 1) / 2;
+      for (let i = 0; i < NUM_BINS; i++) {
+        const x = Math.abs(i - center) / (NUM_BINS / 2);
+        const moatPenalty = Math.exp(-Math.pow((x - params.moatWidth) * 6, 2));
+        const centerMass = params.centerBias * Math.exp(-x * 8);
+        const tails = params.tailWeight * Math.pow(x, 1.4);
+        bins[i] = Math.max(0, centerMass + tails - moatPenalty * 0.15);
+      }
+      normalizeBins(bins);
+      return bins;
+    }
+  }
+];
 
 /** Full engine state */
 export interface EngineState {
@@ -131,13 +215,36 @@ function nextId(): string {
 }
 
 /** Create a random candidate with normalized bin weights */
-export function createRandomCandidate(regime: RegimeId, generation: number): { bins: Float64Array } {
-  const bins = new Float64Array(NUM_BINS);
-  for (let i = 0; i < NUM_BINS; i++) {
-    bins[i] = Math.random() * Math.random(); // bias toward lower values for diversity
+export function createRandomCandidate(
+  regime: RegimeId,
+  generation: number,
+  familyId?: InvariantFamilyId
+): { bins: Float64Array; familyId: InvariantFamilyId; familyParams: Record<string, number> } {
+  const family = familyId
+    ? INVARIANT_FAMILIES.find((f) => f.id === familyId) ?? INVARIANT_FAMILIES[0]
+    : INVARIANT_FAMILIES[Math.floor(Math.random() * INVARIANT_FAMILIES.length)];
+  const familyParams = family.sampleParams();
+  const bins = family.generateBins(familyParams);
+  return { bins, familyId: family.id, familyParams };
+}
+
+export function validateInvariantFamily(candidate: { familyId: InvariantFamilyId; familyParams: Record<string, number>; bins: Float64Array }): boolean {
+  const family = INVARIANT_FAMILIES.find((f) => f.id === candidate.familyId);
+  if (!family) return false;
+
+  for (const [key, range] of Object.entries(family.parameterRanges)) {
+    const value = candidate.familyParams[key];
+    if (!Number.isFinite(value) || value < range.min || value > range.max) return false;
   }
-  normalizeBins(bins);
-  return { bins };
+
+  const total = candidate.bins.reduce((acc, value) => acc + value, 0);
+  if (total <= 0) return false;
+
+  const left = candidate.bins.slice(0, Math.floor(NUM_BINS / 2)).reduce((acc, value) => acc + value, 0);
+  const right = candidate.bins.slice(Math.floor(NUM_BINS / 2)).reduce((acc, value) => acc + value, 0);
+  if (Math.abs(left - right) / total > 0.9) return false;
+
+  return true;
 }
 
 /** Normalize bin weights to sum to TOTAL_LIQUIDITY */
@@ -626,12 +733,15 @@ export function runGeneration(
   // If first generation, create initial population
   if (population.candidates.length === 0) {
     for (let i = 0; i < POPULATION_SIZE; i++) {
-      const { bins } = createRandomCandidate(regimeConfig.id, gen);
+      const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
+      if (!validateInvariantFamily({ familyId, familyParams, bins })) continue;
       const { metrics, stability, equityCurve } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
       const features = computeFeatures(bins);
       const score = scoreCandidate(metrics, stability);
       const candidate: Candidate = {
         id: nextId(), bins, regime: regimeConfig.id, generation: gen,
+        familyId,
+        familyParams,
         metrics, features, stability, score, timestamp: Date.now(),
       };
       allCandidates.push(candidate);
@@ -646,29 +756,35 @@ export function runGeneration(
     const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
     for (let i = 0; i < numChildren; i++) {
       const parent = elites[i % eliteCount];
-      const childBins = mutateBins(parent.bins, 0.1 + 0.05 * Math.random());
+      const childFamily = INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0];
+      const childParams = childFamily.mutateParams(parent.familyParams);
+      const childBins = childFamily.generateBins(childParams);
       const { metrics, stability } = evaluateCandidate(childBins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
       const features = computeFeatures(childBins);
       const score = scoreCandidate(metrics, stability);
       const candidate: Candidate = {
         id: nextId(), bins: childBins, regime: regimeConfig.id, generation: gen,
+        familyId: childFamily.id,
+        familyParams: childParams,
         metrics, features, stability, score, timestamp: Date.now(),
       };
-      allCandidates.push(candidate);
+      if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
     }
 
     // Inject random exploratory candidates
     const numExplore = POPULATION_SIZE - numChildren;
     for (let i = 0; i < numExplore; i++) {
-      const { bins } = createRandomCandidate(regimeConfig.id, gen);
+      const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
       const { metrics, stability } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
       const features = computeFeatures(bins);
       const score = scoreCandidate(metrics, stability);
       const candidate: Candidate = {
         id: nextId(), bins, regime: regimeConfig.id, generation: gen,
+        familyId,
+        familyParams,
         metrics, features, stability, score, timestamp: Date.now(),
       };
-      allCandidates.push(candidate);
+      if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
     }
   }
 
@@ -689,6 +805,14 @@ export function runGeneration(
       message: `New champion in ${regimeConfig.label}: score ${newChampion.score.toFixed(3)} (prev: ${prevChampionScore === Infinity ? "none" : prevChampionScore.toFixed(3)})`,
       generation: gen,
     });
+    if (population.champion?.familyId && population.champion.familyId !== newChampion.familyId) {
+      events.push({
+        timestamp: Date.now(), regime: regimeConfig.id,
+        type: "family-frontier-entry",
+        message: `Family ${newChampion.familyId} entered the top frontier in ${regimeConfig.label}`,
+        generation: gen,
+      });
+    }
   }
 
   // Check for convergence plateau
@@ -707,6 +831,21 @@ export function runGeneration(
     message: `Generation ${gen} complete for ${regimeConfig.label}: ${allCandidates.length} candidates evaluated`,
     generation: gen,
   });
+
+  const familyWinners = Object.values(newPop.reduce((acc, candidate) => {
+    const previous = acc[candidate.familyId];
+    if (!previous || candidate.score < previous.score) acc[candidate.familyId] = candidate;
+    return acc;
+  }, {} as Record<string, Candidate>));
+  if (familyWinners.length > 0) {
+    const bestFamily = familyWinners.sort((a, b) => a.score - b.score)[0];
+    events.push({
+      timestamp: Date.now(), regime: regimeConfig.id,
+      type: "family-regime-dominance",
+      message: `Family ${bestFamily.familyId} currently dominates ${regimeConfig.label}`,
+      generation: gen,
+    });
+  }
 
   // Only archive top 5% of candidates (by score) to save memory
   const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
@@ -1100,4 +1239,41 @@ export function createInitialState(): EngineState {
     "jump-diffusion": { regime: "jump-diffusion", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
   };
   return { populations, archive: [], activityLog: [], running: false, totalGenerations: 0 };
+}
+
+export interface FamilySummary {
+  familyId: InvariantFamilyId;
+  count: number;
+  avgScore: number;
+  avgStability: number;
+  avgCurvature: number;
+  regimeCoverage: number;
+  dominanceFrequency: number;
+}
+
+export function computeFamilySummaries(candidates: Candidate[]): FamilySummary[] {
+  const grouped = new Map<InvariantFamilyId, Candidate[]>();
+  for (const family of INVARIANT_FAMILIES) grouped.set(family.id, []);
+  for (const candidate of candidates) grouped.get(candidate.familyId)?.push(candidate);
+
+  const bestByRegime = new Map<RegimeId, Candidate>();
+  for (const regime of REGIMES) {
+    const top = candidates.filter((candidate) => candidate.regime === regime.id).sort((a, b) => a.score - b.score)[0];
+    if (top) bestByRegime.set(regime.id, top);
+  }
+
+  return INVARIANT_FAMILIES.map((family) => {
+    const items = grouped.get(family.id) ?? [];
+    const regimes = new Set(items.map((candidate) => candidate.regime));
+    const dominance = Array.from(bestByRegime.values()).filter((candidate) => candidate.familyId === family.id).length;
+    return {
+      familyId: family.id,
+      count: items.length,
+      avgScore: items.length ? items.reduce((acc, candidate) => acc + candidate.score, 0) / items.length : Infinity,
+      avgStability: items.length ? items.reduce((acc, candidate) => acc + candidate.stability, 0) / items.length : 0,
+      avgCurvature: items.length ? items.reduce((acc, candidate) => acc + candidate.features.curvature, 0) / items.length : 0,
+      regimeCoverage: items.length ? regimes.size / REGIMES.length : 0,
+      dominanceFrequency: REGIMES.length ? dominance / REGIMES.length : 0,
+    };
+  });
 }

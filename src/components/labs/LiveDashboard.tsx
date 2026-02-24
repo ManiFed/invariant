@@ -591,6 +591,8 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
                 {entry.type === "champion-replaced" && <Crown className="w-3 h-3 text-success shrink-0" />}
                 {entry.type === "convergence-plateau" && <AlertTriangle className="w-3 h-3 text-warning shrink-0" />}
                 {entry.type === "exploration-spike" && <Zap className="w-3 h-3 text-chart-1 shrink-0" />}
+                {entry.type === "family-frontier-entry" && <Trophy className="w-3 h-3 text-chart-2 shrink-0" />}
+                {entry.type === "family-regime-dominance" && <Users className="w-3 h-3 text-chart-4 shrink-0" />}
                 <span className="text-[9px] text-foreground flex-1">{entry.message}</span>
                 <span className="text-[8px] font-mono text-muted-foreground shrink-0">
                   Gen {entry.generation}
