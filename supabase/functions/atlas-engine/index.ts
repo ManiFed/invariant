@@ -573,6 +573,7 @@ Deno.serve(async (req) => {
           id TEXT PRIMARY KEY DEFAULT 'global',
           total_generations INTEGER NOT NULL DEFAULT 0,
           last_regime TEXT,
+          branch_data JSONB,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         INSERT INTO atlas_state (id, total_generations) VALUES ('global', 0) ON CONFLICT DO NOTHING;
@@ -622,6 +623,231 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, message: "Tables created successfully" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "bayesian-allocate") {
+      // ─── Autonomous Bayesian Branch Allocation ──────────────────────
+      // Runs multiple generations using Thompson sampling to choose which
+      // regime + structural family to explore. This is the serverless
+      // version of the client-side GeometryObservatory — no tab required.
+      const steps = Math.min(body.steps || 5, 20); // max 20 steps per invocation
+      const results: { step: number; regime: string; score: number; archived: number }[] = [];
+
+      // Load branch state from atlas_state (stored as JSON in a dedicated row)
+      const { data: branchStateRow } = await supabase
+        .from("atlas_state")
+        .select("*")
+        .eq("id", "bayesian-branches")
+        .single();
+
+      type BranchState = {
+        posteriorMean: number;
+        variance: number;
+        tested: number;
+        bestScore: number;
+      };
+
+      let branchMap: Record<string, BranchState> = {};
+      if (branchStateRow && (branchStateRow as any).branch_data) {
+        branchMap = (branchStateRow as any).branch_data;
+      }
+
+      for (let step = 0; step < steps; step++) {
+        // Thompson sampling: pick regime with highest sampled value
+        const regimeSamples = REGIMES.map(r => {
+          const state = branchMap[r.id] || { posteriorMean: 0.5, variance: 0.5, tested: 0, bestScore: Infinity };
+          const noise = (Math.random() - 0.5) * Math.sqrt(Math.max(state.variance, 0.01)) * 2;
+          const explorationBonus = state.tested === 0 ? 0.5 : 0;
+          return { regime: r, sample: state.posteriorMean + noise + explorationBonus };
+        });
+        regimeSamples.sort((a, b) => b.sample - a.sample);
+        const selectedRegime = regimeSamples[0].regime;
+
+        // Fetch current population for the selected regime
+        const { data: existingPop } = await supabase
+          .from("atlas_candidates")
+          .select("*")
+          .eq("regime", selectedRegime.id)
+          .eq("is_population", true)
+          .order("score", { ascending: true })
+          .limit(POPULATION_SIZE);
+
+        // Get global gen count
+        const { data: genRow } = await supabase
+          .from("atlas_state")
+          .select("total_generations")
+          .eq("id", "global")
+          .single();
+
+        const gen = ((genRow as any)?.total_generations || 0) + 1;
+        const allCandidates: CandidateRow[] = [];
+
+        const parentBins = (existingPop || []).map((row: any) => new Float64Array(row.bins));
+
+        if (parentBins.length === 0) {
+          for (let i = 0; i < POPULATION_SIZE; i++) {
+            const bins = new Float64Array(NUM_BINS);
+            for (let j = 0; j < NUM_BINS; j++) bins[j] = Math.random() * Math.random();
+            normalizeBins(bins);
+            const { metrics, stability } = evaluateCandidate(bins, selectedRegime);
+            const features = computeFeatures(bins);
+            const score = scoreCandidate(metrics, stability);
+            allCandidates.push({ id: nextId(), regime: selectedRegime.id, generation: gen, bins: Array.from(bins), metrics, features, stability, score });
+          }
+        } else {
+          const sorted = [...(existingPop || [])].sort((a: any, b: any) => a.score - b.score);
+          const eliteCount = Math.max(2, Math.floor(POPULATION_SIZE * ELITE_FRACTION));
+          const elites = sorted.slice(0, eliteCount);
+
+          const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
+          for (let i = 0; i < numChildren; i++) {
+            const parent = elites[i % eliteCount];
+            const childBins = mutateBins(new Float64Array(parent.bins), 0.1 + 0.05 * Math.random());
+            const { metrics, stability } = evaluateCandidate(childBins, selectedRegime);
+            const features = computeFeatures(childBins);
+            const score = scoreCandidate(metrics, stability);
+            allCandidates.push({ id: nextId(), regime: selectedRegime.id, generation: gen, bins: Array.from(childBins), metrics, features, stability, score });
+          }
+          for (let i = 0; i < POPULATION_SIZE - numChildren; i++) {
+            const bins = new Float64Array(NUM_BINS);
+            for (let j = 0; j < NUM_BINS; j++) bins[j] = Math.random() * Math.random();
+            normalizeBins(bins);
+            const { metrics, stability } = evaluateCandidate(bins, selectedRegime);
+            const features = computeFeatures(bins);
+            const score = scoreCandidate(metrics, stability);
+            allCandidates.push({ id: nextId(), regime: selectedRegime.id, generation: gen, bins: Array.from(bins), metrics, features, stability, score });
+          }
+        }
+
+        allCandidates.sort((a, b) => a.score - b.score);
+        const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
+        const archiveCandidates = allCandidates.slice(0, archiveCount);
+        const newPopulation = allCandidates.slice(0, POPULATION_SIZE);
+
+        // DB operations
+        await supabase.from("atlas_candidates").delete().eq("regime", selectedRegime.id).eq("is_population", true);
+        await supabase.from("atlas_candidates").insert(
+          newPopulation.map(c => ({ candidate_id: c.id, regime: c.regime, generation: c.generation, bins: c.bins, metrics: c.metrics, features: c.features, stability: c.stability, score: c.score, is_population: true, is_archived: false }))
+        );
+        await supabase.from("atlas_candidates").insert(
+          archiveCandidates.map(c => ({ candidate_id: c.id, regime: c.regime, generation: c.generation, bins: c.bins, metrics: c.metrics, features: c.features, stability: c.stability, score: c.score, is_population: false, is_archived: true }))
+        );
+        await supabase.from("atlas_state").upsert({ id: "global", total_generations: gen, last_regime: selectedRegime.id, updated_at: new Date().toISOString() });
+
+        // Update branch posteriors
+        const bestScore = allCandidates[0].score;
+        const avgScore = allCandidates.reduce((a, c) => a + c.score, 0) / allCandidates.length;
+        const prev = branchMap[selectedRegime.id] || { posteriorMean: 0.5, variance: 0.5, tested: 0, bestScore: Infinity };
+        branchMap[selectedRegime.id] = {
+          posteriorMean: prev.posteriorMean * 0.7 + (1 - avgScore / 10) * 0.3,
+          variance: Math.max(0.01, prev.variance * 0.8 + 0.2 * allCandidates.reduce((a, c) => a + (c.score - avgScore) ** 2, 0) / allCandidates.length),
+          tested: prev.tested + allCandidates.length,
+          bestScore: Math.min(prev.bestScore, bestScore),
+        };
+
+        results.push({ step: step + 1, regime: selectedRegime.id, score: bestScore, archived: archiveCount });
+      }
+
+      // Persist branch state
+      await supabase.from("atlas_state").upsert({
+        id: "bayesian-branches",
+        total_generations: 0,
+        last_regime: null,
+        updated_at: new Date().toISOString(),
+        branch_data: branchMap,
+      } as any);
+
+      return new Response(
+        JSON.stringify({ success: true, steps: results, branchState: branchMap }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "run-loop") {
+      // ─── Autonomous Run Loop ──────────────────────────────────────
+      // Runs N generations cycling through all regimes.
+      // Designed to be called by a cron job or external scheduler.
+      // No browser tab required.
+      const totalSteps = Math.min(body.steps || 9, 30); // max 30 per invocation
+      const results: { step: number; regime: string; generation: number; bestScore: number }[] = [];
+
+      for (let step = 0; step < totalSteps; step++) {
+        // Cycle through regimes round-robin
+        const regimeConfig = REGIMES[step % REGIMES.length];
+
+        const { data: existingPop } = await supabase
+          .from("atlas_candidates")
+          .select("*")
+          .eq("regime", regimeConfig.id)
+          .eq("is_population", true)
+          .order("score", { ascending: true })
+          .limit(POPULATION_SIZE);
+
+        const { data: genRow } = await supabase
+          .from("atlas_state")
+          .select("total_generations")
+          .eq("id", "global")
+          .single();
+
+        const gen = ((genRow as any)?.total_generations || 0) + 1;
+        const allCandidates: CandidateRow[] = [];
+        const parentBins = (existingPop || []).map((row: any) => new Float64Array(row.bins));
+
+        if (parentBins.length === 0) {
+          for (let i = 0; i < POPULATION_SIZE; i++) {
+            const bins = new Float64Array(NUM_BINS);
+            for (let j = 0; j < NUM_BINS; j++) bins[j] = Math.random() * Math.random();
+            normalizeBins(bins);
+            const { metrics, stability } = evaluateCandidate(bins, regimeConfig);
+            const features = computeFeatures(bins);
+            const score = scoreCandidate(metrics, stability);
+            allCandidates.push({ id: nextId(), regime: regimeConfig.id, generation: gen, bins: Array.from(bins), metrics, features, stability, score });
+          }
+        } else {
+          const sorted = [...(existingPop || [])].sort((a: any, b: any) => a.score - b.score);
+          const eliteCount = Math.max(2, Math.floor(POPULATION_SIZE * ELITE_FRACTION));
+          const elites = sorted.slice(0, eliteCount);
+          const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
+          for (let i = 0; i < numChildren; i++) {
+            const parent = elites[i % eliteCount];
+            const childBins = mutateBins(new Float64Array(parent.bins), 0.1 + 0.05 * Math.random());
+            const { metrics, stability } = evaluateCandidate(childBins, regimeConfig);
+            const features = computeFeatures(childBins);
+            const score = scoreCandidate(metrics, stability);
+            allCandidates.push({ id: nextId(), regime: regimeConfig.id, generation: gen, bins: Array.from(childBins), metrics, features, stability, score });
+          }
+          for (let i = 0; i < POPULATION_SIZE - numChildren; i++) {
+            const bins = new Float64Array(NUM_BINS);
+            for (let j = 0; j < NUM_BINS; j++) bins[j] = Math.random() * Math.random();
+            normalizeBins(bins);
+            const { metrics, stability } = evaluateCandidate(bins, regimeConfig);
+            const features = computeFeatures(bins);
+            const score = scoreCandidate(metrics, stability);
+            allCandidates.push({ id: nextId(), regime: regimeConfig.id, generation: gen, bins: Array.from(bins), metrics, features, stability, score });
+          }
+        }
+
+        allCandidates.sort((a, b) => a.score - b.score);
+        const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
+        const archiveCandidates = allCandidates.slice(0, archiveCount);
+        const newPopulation = allCandidates.slice(0, POPULATION_SIZE);
+
+        await supabase.from("atlas_candidates").delete().eq("regime", regimeConfig.id).eq("is_population", true);
+        await supabase.from("atlas_candidates").insert(
+          newPopulation.map(c => ({ candidate_id: c.id, regime: c.regime, generation: c.generation, bins: c.bins, metrics: c.metrics, features: c.features, stability: c.stability, score: c.score, is_population: true, is_archived: false }))
+        );
+        await supabase.from("atlas_candidates").insert(
+          archiveCandidates.map(c => ({ candidate_id: c.id, regime: c.regime, generation: c.generation, bins: c.bins, metrics: c.metrics, features: c.features, stability: c.stability, score: c.score, is_population: false, is_archived: true }))
+        );
+        await supabase.from("atlas_state").upsert({ id: "global", total_generations: gen, last_regime: regimeConfig.id, updated_at: new Date().toISOString() });
+
+        results.push({ step: step + 1, regime: regimeConfig.id, generation: gen, bestScore: allCandidates[0].score });
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, stepsCompleted: results.length, results }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
