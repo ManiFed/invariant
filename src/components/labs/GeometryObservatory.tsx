@@ -1559,8 +1559,8 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
               <div key={inv} className="contents">
                 <div className="text-[9px] text-muted-foreground p-1 truncate">{inv.split(" ").slice(0, 2).join(" ")}</div>
                 {coverageGrid.liqFamilies.map((liq, col) => {
-                  const cell = coverageGrid.data[row][col];
-                  const maxCount = Math.max(1, ...coverageGrid.data.flat().map(c => c.count));
+                  const cell = coverageGrid.data[row]?.[col] ?? { count: 0, bestScore: Infinity };
+                  const maxCount = Math.max(1, ...coverageGrid.data.flat().map(c => c?.count ?? 0));
                   const intensity = cell.count / maxCount;
                   const hasData = cell.count > 0;
                   return (
