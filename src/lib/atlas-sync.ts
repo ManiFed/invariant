@@ -22,6 +22,8 @@ export type SyncRole = "leader" | "follower";
 interface SyncCandidate {
   id: string;
   bins: number[];
+  familyId?: Candidate["familyId"];
+  familyParams?: Candidate["familyParams"];
   regime: RegimeId;
   generation: number;
   metrics: Candidate["metrics"];
@@ -29,6 +31,10 @@ interface SyncCandidate {
   stability: number;
   score: number;
   timestamp: number;
+  source?: Candidate["source"];
+  poolType?: Candidate["poolType"];
+  assetCount?: Candidate["assetCount"];
+  adaptiveProfile?: Candidate["adaptiveProfile"];
 }
 
 interface SyncPopulationInfo {
@@ -123,6 +129,8 @@ function serializeCandidate(c: Candidate): SyncCandidate {
   return {
     id: c.id,
     bins: Array.from(c.bins),
+    familyId: c.familyId,
+    familyParams: c.familyParams,
     regime: c.regime,
     generation: c.generation,
     metrics: c.metrics,
@@ -130,12 +138,21 @@ function serializeCandidate(c: Candidate): SyncCandidate {
     stability: c.stability,
     score: c.score,
     timestamp: c.timestamp,
+    source: c.source,
+    poolType: c.poolType,
+    assetCount: c.assetCount,
+    adaptiveProfile: c.adaptiveProfile,
   };
 }
 
 function deserializeCandidate(s: SyncCandidate): Candidate {
   return {
     ...s,
+    familyId: s.familyId ?? "piecewise-bands",
+    familyParams: s.familyParams ?? {},
+    source: s.source ?? "global",
+    poolType: s.poolType ?? "two-asset",
+    assetCount: s.assetCount ?? 2,
     bins: new Float64Array(s.bins),
   };
 }

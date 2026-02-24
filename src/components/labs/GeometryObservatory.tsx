@@ -638,6 +638,8 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         bins,
         regime: regime.id,
         generation: totalAllocations + 1,
+        familyId: "piecewise-bands",
+        familyParams: {},
         metrics,
         features,
         stability,
