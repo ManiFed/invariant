@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
-  BarChart, Bar, Cell, ScatterChart, Scatter, ZAxis,
+  BarChart, Bar, Cell,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import type { EngineState, Candidate, RegimeId } from "@/lib/discovery-engine";
@@ -68,6 +68,14 @@ type Branch = {
   bestScore: number;
   bestCandidate: BranchCandidate | null;
   lastExploredAt: number;
+  // Learning-from-mistakes fields
+  failureStreak: number;         // consecutive steps without improvement
+  stagnationPenalty: number;     // accumulated penalty for stagnation
+  mutationIntensity: number;     // adaptive mutation strength
+  improvementVelocity: number;   // moving average of improvement rate
+  recentScores: number[];        // last N scores for trend detection
+  parentBranchId: string | null; // track lineage for cross-branch learning
+  explorationPhase: "explore" | "exploit" | "intensify"; // adaptive phase
 };
 
 type BranchCandidate = {
@@ -97,16 +105,72 @@ type ExplorationEvent = {
 
 const clamp = (v: number, min = 0, max = 1) => Math.max(min, Math.min(max, v));
 
-const scoreBranch = (b: Branch) =>
-  b.expectedImprovement * 0.35 +
-  (b.variance > 0 ? Math.sqrt(b.variance) : 0) * 0.25 +
-  b.novelty * 0.2 +
-  b.robustness * 0.15 +
-  (b.tested === 0 ? 0.3 : 0); // Bonus for unexplored
+// Enhanced branch scoring that learns from mistakes
+const scoreBranch = (b: Branch) => {
+  // Base acquisition function: UCB-style with expected improvement
+  const ucb = b.posteriorMean + Math.sqrt(2 * Math.log(Math.max(b.tested + 1, 1)) / Math.max(b.tested, 1)) * 0.2;
 
+  // Expected improvement weighted by variance (high variance = more potential)
+  const eiWeight = b.expectedImprovement * 0.3;
+
+  // Uncertainty bonus (explore high-variance branches)
+  const uncertaintyBonus = (b.variance > 0 ? Math.sqrt(b.variance) : 0) * 0.2;
+
+  // Novelty component (decays as branch is explored)
+  const noveltyWeight = b.novelty * 0.15;
+
+  // Robustness bonus (prefer branches that show consistent improvement)
+  const robustnessWeight = b.robustness * 0.1;
+
+  // LEARNING FROM MISTAKES: penalize stagnant branches
+  const stagnationDiscount = 1 - b.stagnationPenalty * 0.4;
+
+  // Improvement velocity: reward branches that are improving quickly
+  const velocityBonus = b.improvementVelocity > 0 ? b.improvementVelocity * 0.25 : 0;
+
+  // Phase-specific bonuses
+  const phaseBonus = b.explorationPhase === "explore" ? 0.15
+    : b.explorationPhase === "intensify" ? 0.1
+    : 0;
+
+  // Unexplored bonus (strong initial draw)
+  const unexploredBonus = b.tested === 0 ? 0.35 : 0;
+
+  return (ucb + eiWeight + uncertaintyBonus + noveltyWeight + robustnessWeight + velocityBonus + phaseBonus + unexploredBonus) * stagnationDiscount;
+};
+
+// Thompson sampling with adaptive noise based on branch history
 const thompsonSample = (b: Branch) => {
-  const noise = (Math.random() - 0.5) * Math.sqrt(Math.max(b.variance, 0.01)) * 2;
+  // Scale noise by branch phase: explore=wide, exploit=narrow, intensify=tight
+  const phaseScale = b.explorationPhase === "explore" ? 2.5
+    : b.explorationPhase === "intensify" ? 0.5
+    : 1.5;
+
+  const noise = (Math.random() - 0.5) * Math.sqrt(Math.max(b.variance, 0.01)) * phaseScale;
   return b.posteriorMean + noise;
+};
+
+// Detect improvement trend from recent scores
+const detectTrend = (scores: number[]): "improving" | "plateau" | "degrading" => {
+  if (scores.length < 3) return "improving";
+  const recent = scores.slice(-5);
+  const firstHalf = recent.slice(0, Math.ceil(recent.length / 2));
+  const secondHalf = recent.slice(Math.ceil(recent.length / 2));
+  const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+  const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+  const delta = avgFirst - avgSecond; // lower scores = better
+  if (delta > 0.01) return "improving";
+  if (delta < -0.01) return "degrading";
+  return "plateau";
+};
+
+// Compute structural similarity between two branches (for cross-branch learning)
+const branchSimilarity = (a: Branch, b: Branch): number => {
+  let sim = 0;
+  if (a.invariant === b.invariant) sim += 0.4;
+  if (a.liquidity === b.liquidity) sim += 0.35;
+  if (a.fee === b.fee) sim += 0.25;
+  return sim;
 };
 
 // Generate candidate bins shaped by the structural coordinates
@@ -159,23 +223,19 @@ function generateStructuredBins(
 
   // Modify based on invariant family
   if (invariant.includes("stableswap") || invariant.includes("Constant sum")) {
-    // Flatten the distribution (stableswap-like)
     const mean = bins.reduce((a, b) => a + b, 0) / NUM_BINS;
     for (let i = 0; i < NUM_BINS; i++) bins[i] = bins[i] * 0.4 + mean * 0.6;
   } else if (invariant.includes("Weighted")) {
-    // Asymmetric
     for (let i = 0; i < NUM_BINS; i++) {
       const weight = i < center ? 0.7 : 1.3;
       bins[i] *= weight;
     }
   } else if (invariant.includes("Piecewise")) {
-    // Add discontinuities
     const breakpoints = [Math.floor(NUM_BINS * 0.33), Math.floor(NUM_BINS * 0.66)];
     for (const bp of breakpoints) {
       if (bp < NUM_BINS) bins[bp] *= 0.3;
     }
   } else if (invariant.includes("Dynamic") || invariant.includes("Oracle")) {
-    // Add noise to simulate adaptive behavior
     for (let i = 0; i < NUM_BINS; i++) bins[i] *= (0.8 + Math.random() * 0.4);
   }
 
@@ -183,6 +243,113 @@ function generateStructuredBins(
   for (let i = 0; i < NUM_BINS; i++) bins[i] = Math.max(0, bins[i] + (Math.random() - 0.5) * 0.3);
   normalizeBins(bins);
   return bins;
+}
+
+// ─── Universe Graph Layout ──────────────────────────────────────────────────
+
+type NodeLayout = {
+  x: number;
+  y: number;
+  branch: Branch;
+  radius: number;
+  color: string;
+  opacity: number;
+};
+
+type Edge = {
+  from: number;
+  to: number;
+  strength: number; // 0-1 similarity
+  type: "invariant" | "liquidity" | "fee";
+};
+
+function computeUniverseLayout(
+  branches: Branch[],
+  width: number,
+  height: number,
+): { nodes: NodeLayout[]; edges: Edge[] } {
+  if (branches.length === 0) return { nodes: [], edges: [] };
+
+  // Group branches by invariant family for cluster layout
+  const invGroups = new Map<string, number[]>();
+  branches.forEach((b, i) => {
+    const group = invGroups.get(b.invariant) ?? [];
+    group.push(i);
+    invGroups.set(b.invariant, group);
+  });
+
+  const groupKeys = [...invGroups.keys()];
+  const cx = width / 2;
+  const cy = height / 2;
+  const outerRadius = Math.min(width, height) * 0.38;
+
+  // Position nodes in a clustered radial layout
+  const nodes: NodeLayout[] = branches.map((branch, i) => {
+    const groupIdx = groupKeys.indexOf(branch.invariant);
+    const groupMembers = invGroups.get(branch.invariant)!;
+    const memberIdx = groupMembers.indexOf(i);
+
+    // Cluster angle for this invariant family
+    const groupAngle = (groupIdx / groupKeys.length) * Math.PI * 2 - Math.PI / 2;
+
+    // Spread members within the cluster
+    const spread = Math.min(0.4, 1.2 / Math.max(groupMembers.length, 1));
+    const memberAngle = groupAngle + (memberIdx - groupMembers.length / 2) * spread * 0.3;
+
+    // Distance from center based on performance (better = closer to center)
+    const performanceRatio = branch.tested > 0
+      ? clamp(1 - (branch.bestScore === Infinity ? 1 : branch.posteriorMean), 0.3, 1)
+      : 0.85;
+    const dist = outerRadius * (0.3 + performanceRatio * 0.65);
+
+    // Add sub-cluster offset based on liquidity family
+    const liqIdx = LIQUIDITY_FAMILIES.indexOf(branch.liquidity as any);
+    const liqOffset = liqIdx >= 0 ? (liqIdx / LIQUIDITY_FAMILIES.length - 0.5) * 20 : 0;
+
+    const x = cx + Math.cos(memberAngle) * dist + liqOffset * Math.cos(groupAngle + Math.PI / 2);
+    const y = cy + Math.sin(memberAngle) * dist + liqOffset * Math.sin(groupAngle + Math.PI / 2);
+
+    // Node size based on testing depth
+    const baseRadius = 3;
+    const testScale = Math.min(Math.sqrt(branch.tested + 1), 6);
+    const radius = baseRadius + testScale;
+
+    // Color based on performance
+    let color: string;
+    if (branch.tested === 0) {
+      color = "hsl(220, 15%, 45%)"; // unexplored: dim gray-blue
+    } else if (branch.bestScore !== Infinity && branch.bestScore < -2) {
+      color = "hsl(142, 72%, 50%)"; // excellent: green
+    } else if (branch.bestScore !== Infinity && branch.bestScore < 0) {
+      color = "hsl(172, 66%, 45%)"; // good: teal
+    } else if (branch.posteriorMean > 0.6) {
+      color = "hsl(38, 92%, 55%)"; // promising: amber
+    } else {
+      color = "hsl(0, 60%, 55%)"; // poor: red
+    }
+
+    const opacity = branch.tested === 0 ? 0.35 : clamp(0.5 + branch.posteriorMean * 0.5, 0.4, 1);
+
+    return { x, y, branch, radius, color, opacity };
+  });
+
+  // Compute edges between structurally similar branches
+  const edges: Edge[] = [];
+  for (let i = 0; i < branches.length; i++) {
+    for (let j = i + 1; j < branches.length; j++) {
+      // Only draw edges between explored branches with shared structural coordinates
+      if (branches[i].tested === 0 && branches[j].tested === 0) continue;
+      const sim = branchSimilarity(branches[i], branches[j]);
+      if (sim >= 0.35) {
+        const type = branches[i].invariant === branches[j].invariant ? "invariant"
+          : branches[i].liquidity === branches[j].liquidity ? "liquidity"
+          : "fee";
+        edges.push({ from: i, to: j, strength: sim, type });
+      }
+    }
+  }
+
+  return { nodes, edges };
 }
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -206,24 +373,24 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
   const [expandedBranch, setExpandedBranch] = useState<string | null>(null);
   const [convergenceData, setConvergenceData] = useState<{ step: number; best: number; avg: number; explored: number }[]>([]);
   const [explorationSpeed, setExplorationSpeed] = useState<"fast" | "normal" | "thorough">("normal");
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const runningRef = useRef(false);
   const autoRunRef = useRef(false);
+  const hasAutoStarted = useRef(false);
   autoRunRef.current = autoRun;
 
   // Initialize branches from structural combinations
   useEffect(() => {
     if (branches.length > 0) return;
 
-    // Create branches for a curated set of promising structural combinations
     const combos: { inv: string; liq: string; fee: string }[] = [];
-    // Full cross product would be huge - pick representative combos
     const keyInvariants = ["Hybrid stableswap", "Dynamic invariant", "Oracle-anchored invariant", "Piecewise invariant", "Constant product", "Weighted geometric mean"];
     const keyLiquidity = ["Concentrated (bounded)", "Adaptive", "Multi-band", "Continuous parametric curve", "Uniform", "Learned distribution"];
     const keyFees = ["Volatility dependent", "Dynamic multi-factor", "MEV-adaptive", "Flat", "Jump-sensitive"];
 
     for (const inv of keyInvariants) {
       for (const liq of keyLiquidity) {
-        // Pair each with 1-2 fee structures for manageability
         const fees = keyFees.slice(0, 2 + Math.floor(Math.random() * 2));
         for (const fee of fees) {
           combos.push({ inv, liq, fee });
@@ -231,7 +398,6 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       }
     }
 
-    // Shuffle and take a manageable number
     const shuffled = combos.sort(() => Math.random() - 0.5).slice(0, 80);
 
     const initial: Branch[] = shuffled.map((combo, i) => ({
@@ -250,45 +416,112 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       bestScore: Infinity,
       bestCandidate: null,
       lastExploredAt: 0,
+      failureStreak: 0,
+      stagnationPenalty: 0,
+      mutationIntensity: 0.15,
+      improvementVelocity: 0,
+      recentScores: [],
+      parentBranchId: null,
+      explorationPhase: "explore" as const,
     }));
 
     setBranches(initial);
   }, [branches.length]);
 
-  // ─── Core: Run one Bayesian allocation step ────────────────────────────
+  // ─── Auto-start exploration on mount ─────────────────────────────────
+  useEffect(() => {
+    if (hasAutoStarted.current) return;
+    if (branches.length === 0) return;
+    hasAutoStarted.current = true;
+    // Auto-start exploration after a brief delay so user sees the initial state
+    const timer = setTimeout(() => {
+      setAutoRun(true);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [branches.length]);
+
+  // ─── Core: Run one Bayesian allocation step (with learning) ───────────
 
   const runAllocationStep = useCallback(async () => {
     if (branches.length === 0) return;
 
     setIsRunning(true);
 
-    // Thompson sampling + priority scoring to select branch
-    const scored = branches.map(b => ({
-      branch: b,
-      draw: thompsonSample(b) + scoreBranch(b) * 0.3,
-    }));
+    // ENHANCED SELECTION: Thompson sampling + UCB + cross-branch learning
+    // Find top-performing branches to guide cross-branch learning
+    const testedBranches = branches.filter(b => b.tested > 0);
+    const topPerformers = [...testedBranches]
+      .sort((a, b) => a.bestScore - b.bestScore)
+      .slice(0, 5);
+
+    const scored = branches.map(b => {
+      let draw = thompsonSample(b) + scoreBranch(b) * 0.3;
+
+      // Cross-branch learning: boost branches similar to top performers
+      if (topPerformers.length > 0 && b.tested < 5) {
+        const similarityBoost = topPerformers.reduce((acc, top) => {
+          const sim = branchSimilarity(b, top);
+          return acc + sim * (1 - top.bestScore / 10) * 0.1;
+        }, 0);
+        draw += similarityBoost;
+      }
+
+      // Anti-stagnation: if a branch has been stuck, reduce its priority
+      if (b.failureStreak > 3) {
+        draw *= Math.max(0.3, 1 - b.failureStreak * 0.08);
+      }
+
+      return { branch: b, draw };
+    });
     scored.sort((a, b) => b.draw - a.draw);
     const selected = scored[0].branch;
 
-    // Cycle through regimes
-    const regimeIdx = totalAllocations % REGIMES.length;
-    const regime = REGIMES[regimeIdx];
+    // Set the active node for visual feedback
+    setActiveNodeId(selected.id);
 
-    // Generate and evaluate candidates for this branch
-    const candidatesPerStep = explorationSpeed === "fast" ? 4 : explorationSpeed === "thorough" ? 12 : 6;
+    // Intelligent regime selection: choose the regime where this branch is weakest
+    const regimeScores = REGIMES.map(r => {
+      const regimeCandidates = selected.candidates.filter(c => c.regime === r.id);
+      const avgScore = regimeCandidates.length > 0
+        ? regimeCandidates.reduce((a, c) => a + c.score, 0) / regimeCandidates.length
+        : Infinity;
+      return { regime: r, avgScore };
+    });
+    // Prefer the regime where this branch performs worst (or hasn't been tested)
+    regimeScores.sort((a, b) => b.avgScore - a.avgScore);
+    const regime = regimeScores[0].regime;
+
+    // Adaptive candidate count based on branch phase
+    const baseCandidates = explorationSpeed === "fast" ? 4 : explorationSpeed === "thorough" ? 12 : 6;
+    const candidatesPerStep = selected.explorationPhase === "intensify"
+      ? Math.ceil(baseCandidates * 1.5)
+      : baseCandidates;
+
     const newCandidates: BranchCandidate[] = [];
     const realCandidates: Candidate[] = [];
+
+    // Adaptive mutation intensity based on branch history
+    const adaptiveMutationIntensity = selected.mutationIntensity;
 
     for (let i = 0; i < candidatesPerStep; i++) {
       let bins: Float64Array;
 
       if (selected.bestCandidate && selected.candidates.length > 0 && Math.random() > 0.3) {
-        // Mutate from best known candidate in this branch
-        // We need to regenerate bins since we don't store them in BranchCandidate
         const base = generateStructuredBins(selected.invariant, selected.liquidity);
-        bins = mutateBins(base, 0.15 + Math.random() * 0.1);
+
+        // Use cross-branch learning: blend with bins from top similar branches
+        if (topPerformers.length > 0 && Math.random() < 0.2) {
+          const donor = topPerformers[Math.floor(Math.random() * topPerformers.length)];
+          const donorBins = generateStructuredBins(donor.invariant, donor.liquidity);
+          const blendRatio = 0.2 + Math.random() * 0.3;
+          for (let j = 0; j < NUM_BINS; j++) {
+            base[j] = base[j] * (1 - blendRatio) + donorBins[j] * blendRatio;
+          }
+          normalizeBins(base);
+        }
+
+        bins = mutateBins(base, adaptiveMutationIntensity);
       } else {
-        // Fresh candidate from structural template
         bins = generateStructuredBins(selected.invariant, selected.liquidity);
       }
 
@@ -313,7 +546,6 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       };
       newCandidates.push(bc);
 
-      // Also create a full Candidate for the archive
       realCandidates.push({
         id: bc.id,
         bins,
@@ -331,7 +563,7 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       });
     }
 
-    // Update branch posterior
+    // Update branch posterior with enhanced learning
     const avgScore = newCandidates.reduce((a, c) => a + c.score, 0) / newCandidates.length;
     const variance = newCandidates.reduce((a, c) => a + (c.score - avgScore) ** 2, 0) / newCandidates.length;
     const bestNew = newCandidates.reduce((best, c) => c.score < best.score ? c : best, newCandidates[0]);
@@ -346,9 +578,47 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         };
       }
 
+      const improved = bestNew.score < b.bestScore;
       const improvement = b.bestScore === Infinity ? 0.5 : clamp(b.bestScore - bestNew.score, -0.1, 0.5);
-      const allCandidates = [...b.candidates, ...newCandidates].slice(-50); // Keep last 50
+      const allCandidates = [...b.candidates, ...newCandidates].slice(-50);
       const newBestCandidate = bestNew.score < (b.bestCandidate?.score ?? Infinity) ? bestNew : b.bestCandidate;
+
+      // Update recent scores for trend detection
+      const updatedRecentScores = [...b.recentScores, avgScore].slice(-10);
+      const trend = detectTrend(updatedRecentScores);
+
+      // Update failure streak
+      const newFailureStreak = improved ? 0 : b.failureStreak + 1;
+
+      // Update stagnation penalty (accumulates when stuck, decays when improving)
+      const newStagnationPenalty = improved
+        ? clamp(b.stagnationPenalty * 0.5) // Fast decay on improvement
+        : clamp(b.stagnationPenalty + 0.05 * Math.min(newFailureStreak, 10)); // Slow accumulation
+
+      // Adaptive mutation intensity: increase when stagnating, decrease when improving
+      let newMutationIntensity = b.mutationIntensity;
+      if (trend === "improving") {
+        newMutationIntensity = clamp(b.mutationIntensity * 0.9, 0.05, 0.5); // Tighten search
+      } else if (trend === "plateau") {
+        newMutationIntensity = clamp(b.mutationIntensity * 1.15, 0.05, 0.5); // Widen search
+      } else if (trend === "degrading") {
+        newMutationIntensity = clamp(b.mutationIntensity * 1.3, 0.05, 0.5); // Much wider search
+      }
+
+      // Improvement velocity (exponential moving average)
+      const newVelocity = b.improvementVelocity * 0.7 + improvement * 0.3;
+
+      // Determine exploration phase
+      let newPhase: Branch["explorationPhase"] = b.explorationPhase;
+      if (b.tested < 10) {
+        newPhase = "explore";
+      } else if (trend === "improving" && newFailureStreak === 0) {
+        newPhase = "intensify"; // Double down on winning branches
+      } else if (newFailureStreak > 5 || trend === "degrading") {
+        newPhase = "explore"; // Reset to broad exploration
+      } else {
+        newPhase = "exploit";
+      }
 
       return {
         ...b,
@@ -363,6 +633,12 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         novelty: clamp(b.novelty * 0.9 + (newCandidates.filter(c => c.score < (b.bestScore * 0.95)).length / newCandidates.length) * 0.1),
         robustness: clamp(b.robustness * 0.8 + (1 - Math.sqrt(variance)) * 0.2),
         lastExploredAt: Date.now(),
+        failureStreak: newFailureStreak,
+        stagnationPenalty: newStagnationPenalty,
+        mutationIntensity: newMutationIntensity,
+        improvementVelocity: newVelocity,
+        recentScores: updatedRecentScores,
+        explorationPhase: newPhase,
       };
     }));
 
@@ -390,7 +666,6 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
 
     setTotalAllocations(prev => prev + 1);
 
-    // Ingest into the main engine archive
     onIngestCandidates(realCandidates, `Bayesian allocation step ${totalAllocations + 1}: explored ${selected.invariant} + ${selected.liquidity} (${regime.label})`);
 
     setIsRunning(false);
@@ -443,6 +718,14 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     return { explored, total: branches.length, totalCandidates, coverageRatio };
   }, [branches]);
 
+  // Universe graph layout
+  const graphWidth = 700;
+  const graphHeight = 500;
+  const universeGraph = useMemo(
+    () => computeUniverseLayout(branches, graphWidth, graphHeight),
+    [branches]
+  );
+
   const coverageGrid = useMemo(() => {
     const map = new Map<string, { count: number; bestScore: number }>();
     for (const b of branches) {
@@ -467,19 +750,6 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       ),
     };
   }, [branches]);
-
-  const branchScatterData = useMemo(() =>
-    branches
-      .filter(b => b.tested > 0)
-      .map(b => ({
-        x: b.posteriorMean,
-        y: Math.sqrt(b.variance),
-        z: b.tested,
-        name: `${b.invariant.split(" ")[0]}+${b.liquidity.split(" ")[0]}`,
-        score: b.bestScore,
-      })),
-    [branches]
-  );
 
   const recentEvents = explorationLog.slice(0, 8);
 
@@ -585,6 +855,235 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         )}
       </div>
 
+      {/* AMM Universe Graph */}
+      <div className="surface-elevated rounded-xl border border-border p-4">
+        <p className="text-xs font-semibold flex items-center gap-2 mb-1">
+          <GitBranch className="w-3.5 h-3.5" /> AMM Universe Map
+        </p>
+        <p className="text-[9px] text-muted-foreground mb-3">
+          Each node is a structural AMM combination. Size = exploration depth, color = performance.
+          Edges connect branches sharing invariant, liquidity, or fee families.
+          {activeNodeId && <span className="ml-1 text-chart-1 font-medium">Exploring...</span>}
+        </p>
+        <div className="relative overflow-hidden rounded-lg border border-border bg-background/50" style={{ height: graphHeight }}>
+          <svg width="100%" height="100%" viewBox={`0 0 ${graphWidth} ${graphHeight}`} className="select-none">
+            {/* Background grid */}
+            <defs>
+              <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity="0.03" />
+                <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+              </radialGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="activeGlow">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* Center glow */}
+            <circle cx={graphWidth / 2} cy={graphHeight / 2} r={Math.min(graphWidth, graphHeight) * 0.45} fill="url(#centerGlow)" />
+
+            {/* Edges */}
+            {universeGraph.edges.map((edge, i) => {
+              const from = universeGraph.nodes[edge.from];
+              const to = universeGraph.nodes[edge.to];
+              if (!from || !to) return null;
+
+              const isHighlighted = hoveredNode === from.branch.id || hoveredNode === to.branch.id;
+              const isActive = activeNodeId === from.branch.id || activeNodeId === to.branch.id;
+
+              return (
+                <line
+                  key={`edge-${i}`}
+                  x1={from.x}
+                  y1={from.y}
+                  x2={to.x}
+                  y2={to.y}
+                  stroke={
+                    isActive ? "hsl(var(--chart-1))"
+                    : isHighlighted ? "hsl(var(--chart-2))"
+                    : edge.type === "invariant" ? "hsl(220, 50%, 50%)"
+                    : edge.type === "liquidity" ? "hsl(172, 50%, 45%)"
+                    : "hsl(280, 40%, 50%)"
+                  }
+                  strokeWidth={isActive ? 1.5 : isHighlighted ? 1 : 0.5}
+                  strokeOpacity={isActive ? 0.6 : isHighlighted ? 0.5 : edge.strength * 0.15}
+                  strokeDasharray={edge.type === "fee" ? "2 3" : undefined}
+                />
+              );
+            })}
+
+            {/* Nodes */}
+            {universeGraph.nodes.map((node, i) => {
+              const isHovered = hoveredNode === node.branch.id;
+              const isActive = activeNodeId === node.branch.id;
+              const isRecent = Date.now() - node.branch.lastExploredAt < 3000;
+
+              return (
+                <g
+                  key={node.branch.id}
+                  onMouseEnter={() => setHoveredNode(node.branch.id)}
+                  onMouseLeave={() => setHoveredNode(null)}
+                  onClick={() => setExpandedBranch(
+                    expandedBranch === node.branch.id ? null : node.branch.id
+                  )}
+                  className="cursor-pointer"
+                >
+                  {/* Active pulse ring */}
+                  {(isActive || isRecent) && (
+                    <>
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={node.radius + 8}
+                        fill="none"
+                        stroke={node.color}
+                        strokeWidth={0.8}
+                        strokeOpacity={0.3}
+                      >
+                        <animate
+                          attributeName="r"
+                          values={`${node.radius + 4};${node.radius + 14};${node.radius + 4}`}
+                          dur="2s"
+                          repeatCount="indefinite"
+                        />
+                        <animate
+                          attributeName="stroke-opacity"
+                          values="0.4;0.1;0.4"
+                          dur="2s"
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={node.radius + 4}
+                        fill="none"
+                        stroke={node.color}
+                        strokeWidth={1}
+                        strokeOpacity={0.5}
+                      >
+                        <animate
+                          attributeName="r"
+                          values={`${node.radius + 2};${node.radius + 10};${node.radius + 2}`}
+                          dur="1.5s"
+                          repeatCount="indefinite"
+                        />
+                        <animate
+                          attributeName="stroke-opacity"
+                          values="0.6;0.15;0.6"
+                          dur="1.5s"
+                          repeatCount="indefinite"
+                        />
+                      </circle>
+                    </>
+                  )}
+
+                  {/* Main node */}
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={isHovered ? node.radius + 2 : node.radius}
+                    fill={node.color}
+                    fillOpacity={node.opacity}
+                    stroke={isHovered ? "hsl(var(--foreground))" : node.color}
+                    strokeWidth={isHovered ? 1.5 : 0.5}
+                    strokeOpacity={isHovered ? 0.8 : 0.3}
+                    filter={isActive ? "url(#activeGlow)" : isHovered ? "url(#glow)" : undefined}
+                  />
+
+                  {/* Phase indicator (tiny inner dot) */}
+                  {node.branch.tested > 0 && (
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={Math.max(1.5, node.radius * 0.3)}
+                      fill={
+                        node.branch.explorationPhase === "intensify" ? "hsl(45, 100%, 70%)"
+                        : node.branch.explorationPhase === "explore" ? "hsl(200, 80%, 65%)"
+                        : "hsl(0, 0%, 90%)"
+                      }
+                      fillOpacity={0.9}
+                    />
+                  )}
+
+                  {/* Hover tooltip */}
+                  {isHovered && (
+                    <g>
+                      <rect
+                        x={node.x + node.radius + 6}
+                        y={node.y - 28}
+                        width={180}
+                        height={56}
+                        rx={6}
+                        fill="hsl(var(--popover))"
+                        stroke="hsl(var(--border))"
+                        strokeWidth={1}
+                        fillOpacity={0.95}
+                      />
+                      <text
+                        x={node.x + node.radius + 12}
+                        y={node.y - 14}
+                        fontSize={9}
+                        fontWeight={600}
+                        fill="hsl(var(--foreground))"
+                      >
+                        {node.branch.invariant.split(" ")[0]} + {node.branch.liquidity.split(" ")[0]}
+                      </text>
+                      <text
+                        x={node.x + node.radius + 12}
+                        y={node.y}
+                        fontSize={8}
+                        fill="hsl(var(--muted-foreground))"
+                      >
+                        {node.branch.fee} | n={node.branch.tested}
+                      </text>
+                      <text
+                        x={node.x + node.radius + 12}
+                        y={node.y + 14}
+                        fontSize={8}
+                        fill={node.branch.bestScore < 0 ? "hsl(142, 72%, 50%)" : "hsl(var(--muted-foreground))"}
+                      >
+                        {node.branch.bestScore === Infinity
+                          ? "Not tested"
+                          : `Best: ${node.branch.bestScore.toFixed(3)} | ${node.branch.explorationPhase}`}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Legend */}
+            <g transform={`translate(12, ${graphHeight - 65})`}>
+              <rect x={0} y={0} width={160} height={58} rx={6} fill="hsl(var(--popover))" fillOpacity={0.8} stroke="hsl(var(--border))" strokeWidth={0.5} />
+              <circle cx={14} cy={12} r={4} fill="hsl(142, 72%, 50%)" />
+              <text x={24} y={15} fontSize={8} fill="hsl(var(--muted-foreground))">Excellent score</text>
+              <circle cx={14} cy={26} r={4} fill="hsl(38, 92%, 55%)" />
+              <text x={24} y={29} fontSize={8} fill="hsl(var(--muted-foreground))">Promising</text>
+              <circle cx={14} cy={40} r={4} fill="hsl(220, 15%, 45%)" fillOpacity={0.4} />
+              <text x={24} y={43} fontSize={8} fill="hsl(var(--muted-foreground))">Unexplored</text>
+              <line x1={80} y1={12} x2={100} y2={12} stroke="hsl(220, 50%, 50%)" strokeWidth={1} />
+              <text x={105} y={15} fontSize={7} fill="hsl(var(--muted-foreground))">Same invariant</text>
+              <line x1={80} y1={26} x2={100} y2={26} stroke="hsl(172, 50%, 45%)" strokeWidth={1} />
+              <text x={105} y={29} fontSize={7} fill="hsl(var(--muted-foreground))">Same liquidity</text>
+              <line x1={80} y1={40} x2={100} y2={40} stroke="hsl(280, 40%, 50%)" strokeWidth={1} strokeDasharray="2 3" />
+              <text x={105} y={43} fontSize={7} fill="hsl(var(--muted-foreground))">Same fee</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+
       {/* Best Discovered AMM + Convergence */}
       <div className="grid xl:grid-cols-3 gap-4">
         {/* Best AMM Card */}
@@ -612,15 +1111,19 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
                 <StatCell label="Drawdown" value={`${(bestOverall.bestCandidate.drawdown * 100).toFixed(1)}%`} />
                 <StatCell label="Stability" value={bestOverall.bestCandidate.stability.toFixed(3)} />
               </div>
-              <p className="text-[9px] text-muted-foreground">
-                Branch tested {bestOverall.tested} times across {bestOverall.scoreHistory.length} allocations
-              </p>
+              <div className="flex items-center gap-2 text-[9px] text-muted-foreground">
+                <span>Phase: <span className="font-medium text-foreground">{bestOverall.explorationPhase}</span></span>
+                <span>|</span>
+                <span>Mutation: <span className="font-mono">{bestOverall.mutationIntensity.toFixed(3)}</span></span>
+                <span>|</span>
+                <span>Tested {bestOverall.tested}x</span>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <WandSparkles className="w-8 h-8 text-muted-foreground/30 mb-2" />
               <p className="text-[11px] text-muted-foreground">
-                Click "Allocate next branch" or "Auto-explore" to begin mapping the AMM universe.
+                Auto-exploration starting...
               </p>
             </div>
           )}
@@ -648,7 +1151,6 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
                   />
                   <Line type="monotone" dataKey="best" stroke="hsl(142, 72%, 45%)" strokeWidth={2} dot={false} name="Best Score" />
                   <Line type="monotone" dataKey="avg" stroke="hsl(38, 92%, 50%)" strokeWidth={1.5} dot={false} name="Avg Explored" strokeDasharray="4 4" />
-                  <Line type="monotone" dataKey="explored" stroke="hsl(220, 70%, 55%)" strokeWidth={1} dot={false} name="Branches Explored" yAxisId="right" hide />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -660,12 +1162,12 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         </div>
       </div>
 
-      {/* Branch Priority Engine + Exploration Map */}
+      {/* Branch Priority Engine + Activity Feed */}
       <div className="grid xl:grid-cols-2 gap-4">
         {/* Top Branches by Priority */}
         <div className="surface-elevated rounded-xl border border-border p-4">
           <p className="text-xs font-semibold flex items-center gap-1 mb-3">
-            <Network className="w-3.5 h-3.5" /> Branch Priority Engine (Thompson Sampling)
+            <Network className="w-3.5 h-3.5" /> Branch Priority Engine (UCB + Thompson)
           </p>
           <div className="space-y-1.5">
             {topBranches.map((branch, idx) => {
@@ -699,7 +1201,12 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
                         <p className="text-[10px] font-semibold truncate">
                           {branch.invariant.split(" ")[0]} + {branch.liquidity.split("(")[0].trim()}
                         </p>
-                        <p className="text-[9px] text-muted-foreground truncate">{branch.fee}</p>
+                        <p className="text-[9px] text-muted-foreground truncate">
+                          {branch.fee}
+                          <span className="ml-1.5 px-1 py-0.5 rounded text-[8px] bg-secondary">
+                            {branch.explorationPhase}
+                          </span>
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
@@ -733,6 +1240,12 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
                             <StatCell label="E[I]" value={branch.expectedImprovement.toFixed(3)} />
                             <StatCell label="Novelty" value={branch.novelty.toFixed(3)} />
                             <StatCell label="Robust" value={branch.robustness.toFixed(3)} />
+                          </div>
+                          <div className="grid grid-cols-4 gap-1.5 text-[9px]">
+                            <StatCell label="Fail Streak" value={`${branch.failureStreak}`} />
+                            <StatCell label="Stagnation" value={branch.stagnationPenalty.toFixed(3)} />
+                            <StatCell label="Mutation" value={branch.mutationIntensity.toFixed(3)} />
+                            <StatCell label="Velocity" value={branch.improvementVelocity.toFixed(3)} />
                           </div>
                           {branch.bestCandidate && (
                             <div className="rounded bg-chart-1/5 border border-chart-1/15 p-2 text-[9px]">
@@ -769,55 +1282,111 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
           </div>
         </div>
 
-        {/* Exploration Scatter: Mean vs Uncertainty */}
-        <div className="surface-elevated rounded-xl border border-border p-4">
-          <p className="text-xs font-semibold flex items-center gap-1 mb-2">
-            <GitBranch className="w-3.5 h-3.5" /> Exploration Map (Mean vs Uncertainty)
-          </p>
-          <p className="text-[9px] text-muted-foreground mb-2">
-            Each point is an explored branch. Size = samples. Higher uncertainty = more potential.
-          </p>
-          {branchScatterData.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart>
-                  <XAxis
-                    type="number"
-                    dataKey="x"
-                    name="Posterior Mean"
-                    tick={{ fontSize: 8, fill: colors.tick }}
-                    label={{ value: "Posterior Mean", position: "bottom", fontSize: 9, fill: colors.tick }}
-                  />
-                  <YAxis
-                    type="number"
-                    dataKey="y"
-                    name="Uncertainty"
-                    tick={{ fontSize: 8, fill: colors.tick }}
-                    label={{ value: "Uncertainty (sqrt var)", angle: -90, position: "left", fontSize: 9, fill: colors.tick }}
-                  />
-                  <ZAxis type="number" dataKey="z" range={[20, 200]} />
-                  <Tooltip
-                    contentStyle={{
-                      background: colors.tooltipBg,
-                      border: `1px solid ${colors.tooltipBorder}`,
-                      borderRadius: 8,
-                      fontSize: 9,
-                      color: colors.tooltipText,
+        {/* Live Activity Feed + Performance */}
+        <div className="space-y-4">
+          <div className="surface-elevated rounded-xl border border-border p-4">
+            <p className="text-xs font-semibold flex items-center gap-1 mb-3">
+              <Activity className="w-3.5 h-3.5" /> Exploration Activity
+            </p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {recentEvents.length > 0 ? recentEvents.map((event, i) => (
+                <motion.div
+                  key={`${event.timestamp}-${i}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex items-center gap-2 rounded border border-border p-2 text-[10px]"
+                >
+                  <div
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      backgroundColor:
+                        event.regime === "low-vol"
+                          ? "hsl(142, 72%, 45%)"
+                          : event.regime === "high-vol"
+                          ? "hsl(38, 92%, 50%)"
+                          : "hsl(0, 72%, 55%)",
                     }}
-                    formatter={(value: number, name: string) => [
-                      name === "x" ? value.toFixed(3) : name === "y" ? value.toFixed(3) : value,
-                      name === "x" ? "Mean" : name === "y" ? "Uncertainty" : "Samples",
-                    ]}
                   />
-                  <Scatter data={branchScatterData} fill="hsl(var(--chart-2))" fillOpacity={0.6} />
-                </ScatterChart>
-              </ResponsiveContainer>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{event.branchId.split("-").slice(0, 3).join(" + ")}</p>
+                    <p className="text-muted-foreground">
+                      {event.candidatesGenerated} candidates | best: {event.bestScore.toFixed(3)}
+                      {event.improvement > 0 && (
+                        <span className="text-chart-1 ml-1">+{event.improvement.toFixed(3)}</span>
+                      )}
+                    </p>
+                  </div>
+                  <span className="text-[9px] text-muted-foreground shrink-0">
+                    {event.regime}
+                  </span>
+                </motion.div>
+              )) : (
+                <p className="text-[10px] text-muted-foreground text-center py-4">Auto-exploration starting...</p>
+              )}
             </div>
-          ) : (
-            <div className="h-64 flex items-center justify-center">
-              <p className="text-[10px] text-muted-foreground">No branches explored yet...</p>
-            </div>
-          )}
+          </div>
+
+          {/* Performance by Structural Family */}
+          <div className="surface-elevated rounded-xl border border-border p-4">
+            <p className="text-xs font-semibold flex items-center gap-1 mb-3">
+              <Eye className="w-3.5 h-3.5" /> Performance by Invariant Family
+            </p>
+            {(() => {
+              const familyPerf = new Map<string, { total: number; bestScore: number; avgScore: number; count: number }>();
+              for (const b of branches) {
+                if (b.tested === 0) continue;
+                const key = b.invariant;
+                const existing = familyPerf.get(key) ?? { total: 0, bestScore: Infinity, avgScore: 0, count: 0 };
+                familyPerf.set(key, {
+                  total: existing.total + b.tested,
+                  bestScore: Math.min(existing.bestScore, b.bestScore),
+                  avgScore: (existing.avgScore * existing.count + b.posteriorMean * b.tested) / (existing.count + b.tested),
+                  count: existing.count + b.tested,
+                });
+              }
+
+              const data = [...familyPerf.entries()]
+                .map(([name, perf]) => ({
+                  name: name.split(" ").slice(0, 2).join(" "),
+                  best: perf.bestScore === Infinity ? 0 : -perf.bestScore,
+                  samples: perf.total,
+                }))
+                .sort((a, b) => b.best - a.best);
+
+              if (data.length === 0) {
+                return (
+                  <div className="h-36 flex items-center justify-center">
+                    <p className="text-[10px] text-muted-foreground">Waiting for data...</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="h-36">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data} layout="vertical">
+                      <XAxis type="number" tick={{ fontSize: 8, fill: colors.tick }} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 8, fill: colors.tick }} width={80} />
+                      <Tooltip
+                        contentStyle={{
+                          background: colors.tooltipBg,
+                          border: `1px solid ${colors.tooltipBorder}`,
+                          borderRadius: 8,
+                          fontSize: 9,
+                          color: colors.tooltipText,
+                        }}
+                      />
+                      <Bar dataKey="best" name="Best Score (negated)" radius={[0, 4, 4, 0]}>
+                        {data.map((_, i) => (
+                          <Cell key={i} fill={`hsl(${142 + i * 30}, 60%, 50%)`} fillOpacity={0.7} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       </div>
 
@@ -873,113 +1442,6 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         <p className="text-[9px] text-muted-foreground mt-2">
           Empty cells are under-explored structural regions with high discovery potential. The allocator prioritizes these.
         </p>
-      </div>
-
-      {/* Live Activity Feed */}
-      <div className="grid xl:grid-cols-2 gap-4">
-        <div className="surface-elevated rounded-xl border border-border p-4">
-          <p className="text-xs font-semibold flex items-center gap-1 mb-3">
-            <Activity className="w-3.5 h-3.5" /> Exploration Activity
-          </p>
-          <div className="space-y-1.5 max-h-64 overflow-y-auto">
-            {recentEvents.length > 0 ? recentEvents.map((event, i) => (
-              <motion.div
-                key={`${event.timestamp}-${i}`}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-2 rounded border border-border p-2 text-[10px]"
-              >
-                <div
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{
-                    backgroundColor:
-                      event.regime === "low-vol"
-                        ? "hsl(142, 72%, 45%)"
-                        : event.regime === "high-vol"
-                        ? "hsl(38, 92%, 50%)"
-                        : "hsl(0, 72%, 55%)",
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{event.branchId.split("-").slice(0, 3).join(" + ")}</p>
-                  <p className="text-muted-foreground">
-                    {event.candidatesGenerated} candidates | best: {event.bestScore.toFixed(3)}
-                    {event.improvement > 0 && (
-                      <span className="text-chart-1 ml-1">+{event.improvement.toFixed(3)}</span>
-                    )}
-                  </p>
-                </div>
-                <span className="text-[9px] text-muted-foreground shrink-0">
-                  {event.regime}
-                </span>
-              </motion.div>
-            )) : (
-              <p className="text-[10px] text-muted-foreground text-center py-4">No exploration events yet.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Performance by Structural Family */}
-        <div className="surface-elevated rounded-xl border border-border p-4">
-          <p className="text-xs font-semibold flex items-center gap-1 mb-3">
-            <Eye className="w-3.5 h-3.5" /> Performance by Invariant Family
-          </p>
-          {(() => {
-            const familyPerf = new Map<string, { total: number; bestScore: number; avgScore: number; count: number }>();
-            for (const b of branches) {
-              if (b.tested === 0) continue;
-              const key = b.invariant;
-              const existing = familyPerf.get(key) ?? { total: 0, bestScore: Infinity, avgScore: 0, count: 0 };
-              familyPerf.set(key, {
-                total: existing.total + b.tested,
-                bestScore: Math.min(existing.bestScore, b.bestScore),
-                avgScore: (existing.avgScore * existing.count + b.posteriorMean * b.tested) / (existing.count + b.tested),
-                count: existing.count + b.tested,
-              });
-            }
-
-            const data = [...familyPerf.entries()]
-              .map(([name, perf]) => ({
-                name: name.split(" ").slice(0, 2).join(" "),
-                best: perf.bestScore === Infinity ? 0 : -perf.bestScore,
-                samples: perf.total,
-              }))
-              .sort((a, b) => b.best - a.best);
-
-            if (data.length === 0) {
-              return (
-                <div className="h-48 flex items-center justify-center">
-                  <p className="text-[10px] text-muted-foreground">Run allocations to see family performance...</p>
-                </div>
-              );
-            }
-
-            return (
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data} layout="vertical">
-                    <XAxis type="number" tick={{ fontSize: 8, fill: colors.tick }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 8, fill: colors.tick }} width={80} />
-                    <Tooltip
-                      contentStyle={{
-                        background: colors.tooltipBg,
-                        border: `1px solid ${colors.tooltipBorder}`,
-                        borderRadius: 8,
-                        fontSize: 9,
-                        color: colors.tooltipText,
-                      }}
-                    />
-                    <Bar dataKey="best" name="Best Score (negated)" radius={[0, 4, 4, 0]}>
-                      {data.map((_, i) => (
-                        <Cell key={i} fill={`hsl(${142 + i * 30}, 60%, 50%)`} fillOpacity={0.7} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            );
-          })()}
-        </div>
       </div>
     </section>
   );

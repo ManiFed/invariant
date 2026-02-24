@@ -628,14 +628,13 @@ Deno.serve(async (req) => {
     }
 
     if (action === "bayesian-allocate") {
-      // ─── Autonomous Bayesian Branch Allocation ──────────────────────
-      // Runs multiple generations using Thompson sampling to choose which
-      // regime + structural family to explore. This is the serverless
-      // version of the client-side GeometryObservatory — no tab required.
-      const steps = Math.min(body.steps || 5, 20); // max 20 steps per invocation
-      const results: { step: number; regime: string; score: number; archived: number }[] = [];
+      // ─── Autonomous Bayesian Branch Allocation with Learning ────────
+      // Runs multiple generations using UCB + Thompson sampling.
+      // Tracks failure streaks, stagnation, and adaptive mutation to learn
+      // from mistakes and focus search on the most promising regions.
+      const steps = Math.min(body.steps || 5, 20);
+      const results: { step: number; regime: string; score: number; archived: number; phase: string }[] = [];
 
-      // Load branch state from atlas_state (stored as JSON in a dedicated row)
       const { data: branchStateRow } = await supabase
         .from("atlas_state")
         .select("*")
@@ -647,6 +646,12 @@ Deno.serve(async (req) => {
         variance: number;
         tested: number;
         bestScore: number;
+        failureStreak: number;
+        stagnationPenalty: number;
+        mutationIntensity: number;
+        improvementVelocity: number;
+        recentScores: number[];
+        phase: "explore" | "exploit" | "intensify";
       };
 
       let branchMap: Record<string, BranchState> = {};
@@ -654,18 +659,50 @@ Deno.serve(async (req) => {
         branchMap = (branchStateRow as any).branch_data;
       }
 
+      // Ensure all regimes have state with new fields
+      for (const r of REGIMES) {
+        if (!branchMap[r.id]) {
+          branchMap[r.id] = {
+            posteriorMean: 0.5, variance: 0.5, tested: 0, bestScore: Infinity,
+            failureStreak: 0, stagnationPenalty: 0, mutationIntensity: 0.15,
+            improvementVelocity: 0, recentScores: [], phase: "explore",
+          };
+        }
+        // Migrate older state objects that lack new fields
+        const s = branchMap[r.id];
+        if (s.failureStreak === undefined) s.failureStreak = 0;
+        if (s.stagnationPenalty === undefined) s.stagnationPenalty = 0;
+        if (s.mutationIntensity === undefined) s.mutationIntensity = 0.15;
+        if (s.improvementVelocity === undefined) s.improvementVelocity = 0;
+        if (!s.recentScores) s.recentScores = [];
+        if (!s.phase) s.phase = "explore";
+      }
+
       for (let step = 0; step < steps; step++) {
-        // Thompson sampling: pick regime with highest sampled value
+        // UCB + Thompson sampling with stagnation awareness
+        const totalSteps = Object.values(branchMap).reduce((a, s) => a + s.tested, 0) + 1;
         const regimeSamples = REGIMES.map(r => {
-          const state = branchMap[r.id] || { posteriorMean: 0.5, variance: 0.5, tested: 0, bestScore: Infinity };
-          const noise = (Math.random() - 0.5) * Math.sqrt(Math.max(state.variance, 0.01)) * 2;
+          const state = branchMap[r.id];
+          // UCB exploration bonus
+          const ucb = Math.sqrt(2 * Math.log(totalSteps) / Math.max(state.tested, 1)) * 0.2;
+          // Thompson noise scaled by phase
+          const phaseScale = state.phase === "explore" ? 2.5 : state.phase === "intensify" ? 0.5 : 1.5;
+          const noise = (Math.random() - 0.5) * Math.sqrt(Math.max(state.variance, 0.01)) * phaseScale;
+          // Improvement velocity bonus
+          const velocityBonus = state.improvementVelocity > 0 ? state.improvementVelocity * 0.2 : 0;
+          // Stagnation discount
+          const stagnationDiscount = 1 - state.stagnationPenalty * 0.4;
+          // Unexplored bonus
           const explorationBonus = state.tested === 0 ? 0.5 : 0;
-          return { regime: r, sample: state.posteriorMean + noise + explorationBonus };
+          return {
+            regime: r,
+            sample: (state.posteriorMean + noise + ucb + velocityBonus + explorationBonus) * stagnationDiscount,
+          };
         });
         regimeSamples.sort((a, b) => b.sample - a.sample);
         const selectedRegime = regimeSamples[0].regime;
+        const branchState = branchMap[selectedRegime.id];
 
-        // Fetch current population for the selected regime
         const { data: existingPop } = await supabase
           .from("atlas_candidates")
           .select("*")
@@ -674,7 +711,6 @@ Deno.serve(async (req) => {
           .order("score", { ascending: true })
           .limit(POPULATION_SIZE);
 
-        // Get global gen count
         const { data: genRow } = await supabase
           .from("atlas_state")
           .select("total_generations")
@@ -683,8 +719,10 @@ Deno.serve(async (req) => {
 
         const gen = ((genRow as any)?.total_generations || 0) + 1;
         const allCandidates: CandidateRow[] = [];
-
         const parentBins = (existingPop || []).map((row: any) => new Float64Array(row.bins));
+
+        // Adaptive mutation intensity from branch state
+        const mutIntensity = branchState.mutationIntensity;
 
         if (parentBins.length === 0) {
           for (let i = 0; i < POPULATION_SIZE; i++) {
@@ -701,10 +739,15 @@ Deno.serve(async (req) => {
           const eliteCount = Math.max(2, Math.floor(POPULATION_SIZE * ELITE_FRACTION));
           const elites = sorted.slice(0, eliteCount);
 
-          const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
+          // Adaptive child count: intensify phase generates more children
+          const baseChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
+          const numChildren = branchState.phase === "intensify"
+            ? Math.min(POPULATION_SIZE - 2, Math.ceil(baseChildren * 1.2))
+            : baseChildren;
+
           for (let i = 0; i < numChildren; i++) {
             const parent = elites[i % eliteCount];
-            const childBins = mutateBins(new Float64Array(parent.bins), 0.1 + 0.05 * Math.random());
+            const childBins = mutateBins(new Float64Array(parent.bins), mutIntensity + 0.05 * Math.random());
             const { metrics, stability } = evaluateCandidate(childBins, selectedRegime);
             const features = computeFeatures(childBins);
             const score = scoreCandidate(metrics, stability);
@@ -726,7 +769,6 @@ Deno.serve(async (req) => {
         const archiveCandidates = allCandidates.slice(0, archiveCount);
         const newPopulation = allCandidates.slice(0, POPULATION_SIZE);
 
-        // DB operations
         await supabase.from("atlas_candidates").delete().eq("regime", selectedRegime.id).eq("is_population", true);
         await supabase.from("atlas_candidates").insert(
           newPopulation.map(c => ({ candidate_id: c.id, regime: c.regime, generation: c.generation, bins: c.bins, metrics: c.metrics, features: c.features, stability: c.stability, score: c.score, is_population: true, is_archived: false }))
@@ -736,21 +778,76 @@ Deno.serve(async (req) => {
         );
         await supabase.from("atlas_state").upsert({ id: "global", total_generations: gen, last_regime: selectedRegime.id, updated_at: new Date().toISOString() });
 
-        // Update branch posteriors
+        // ─── Enhanced posterior update with learning ───────────────────
         const bestScore = allCandidates[0].score;
         const avgScore = allCandidates.reduce((a, c) => a + c.score, 0) / allCandidates.length;
-        const prev = branchMap[selectedRegime.id] || { posteriorMean: 0.5, variance: 0.5, tested: 0, bestScore: Infinity };
+        const improved = bestScore < branchState.bestScore;
+
+        // Update recent scores for trend detection
+        const updatedScores = [...branchState.recentScores, avgScore].slice(-10);
+
+        // Detect trend from recent scores
+        let trend: "improving" | "plateau" | "degrading" = "improving";
+        if (updatedScores.length >= 3) {
+          const half = Math.ceil(updatedScores.length / 2);
+          const avgFirst = updatedScores.slice(0, half).reduce((a, b) => a + b, 0) / half;
+          const avgSecond = updatedScores.slice(half).reduce((a, b) => a + b, 0) / (updatedScores.length - half);
+          const delta = avgFirst - avgSecond;
+          if (delta > 0.01) trend = "improving";
+          else if (delta < -0.01) trend = "degrading";
+          else trend = "plateau";
+        }
+
+        // Update failure streak
+        const newFailureStreak = improved ? 0 : branchState.failureStreak + 1;
+
+        // Stagnation penalty: accumulates when stuck, decays on improvement
+        const newStagnationPenalty = improved
+          ? Math.max(0, branchState.stagnationPenalty * 0.5)
+          : Math.min(1, branchState.stagnationPenalty + 0.05 * Math.min(newFailureStreak, 10));
+
+        // Adaptive mutation: widen when stagnating, tighten when improving
+        let newMutIntensity = branchState.mutationIntensity;
+        if (trend === "improving") {
+          newMutIntensity = Math.max(0.05, branchState.mutationIntensity * 0.9);
+        } else if (trend === "plateau") {
+          newMutIntensity = Math.min(0.5, branchState.mutationIntensity * 1.15);
+        } else {
+          newMutIntensity = Math.min(0.5, branchState.mutationIntensity * 1.3);
+        }
+
+        // Improvement velocity (EMA)
+        const improvement = branchState.bestScore === Infinity ? 0.5 : Math.max(0, branchState.bestScore - bestScore);
+        const newVelocity = branchState.improvementVelocity * 0.7 + improvement * 0.3;
+
+        // Determine phase
+        let newPhase: BranchState["phase"] = branchState.phase;
+        if (branchState.tested < 200) {
+          newPhase = "explore";
+        } else if (trend === "improving" && newFailureStreak === 0) {
+          newPhase = "intensify";
+        } else if (newFailureStreak > 5 || trend === "degrading") {
+          newPhase = "explore";
+        } else {
+          newPhase = "exploit";
+        }
+
         branchMap[selectedRegime.id] = {
-          posteriorMean: prev.posteriorMean * 0.7 + (1 - avgScore / 10) * 0.3,
-          variance: Math.max(0.01, prev.variance * 0.8 + 0.2 * allCandidates.reduce((a, c) => a + (c.score - avgScore) ** 2, 0) / allCandidates.length),
-          tested: prev.tested + allCandidates.length,
-          bestScore: Math.min(prev.bestScore, bestScore),
+          posteriorMean: branchState.posteriorMean * 0.7 + (1 - avgScore / 10) * 0.3,
+          variance: Math.max(0.01, branchState.variance * 0.6 + 0.4 * allCandidates.reduce((a, c) => a + (c.score - avgScore) ** 2, 0) / allCandidates.length),
+          tested: branchState.tested + allCandidates.length,
+          bestScore: Math.min(branchState.bestScore, bestScore),
+          failureStreak: newFailureStreak,
+          stagnationPenalty: newStagnationPenalty,
+          mutationIntensity: newMutIntensity,
+          improvementVelocity: newVelocity,
+          recentScores: updatedScores,
+          phase: newPhase,
         };
 
-        results.push({ step: step + 1, regime: selectedRegime.id, score: bestScore, archived: archiveCount });
+        results.push({ step: step + 1, regime: selectedRegime.id, score: bestScore, archived: archiveCount, phase: newPhase });
       }
 
-      // Persist branch state
       await supabase.from("atlas_state").upsert({
         id: "bayesian-branches",
         total_generations: 0,
