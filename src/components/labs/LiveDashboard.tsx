@@ -211,7 +211,12 @@ function ScoreHistorySection({ state, regimeIds }: { state: EngineState; regimeI
   // Compute score distribution histogram across archive
   const histogram = useMemo(() => {
     if (state.archive.length === 0) return [];
-    const scores = state.archive.map(c => c.score);
+    const scores = state.archive
+      .map(c => c.score)
+      .filter((score) => Number.isFinite(score));
+
+    if (scores.length === 0) return [];
+
     const minScore = Math.min(...scores);
     const maxScore = Math.max(...scores);
     const range = maxScore - minScore;
@@ -228,11 +233,16 @@ function ScoreHistorySection({ state, regimeIds }: { state: EngineState; regimeI
     }));
 
     for (const c of state.archive) {
-      const idx = Math.min(Math.floor((c.score - minScore) / bucketWidth), NUM_BUCKETS - 1);
-      buckets[idx].count++;
-      if (c.regime === "low-vol") buckets[idx].low_vol++;
-      else if (c.regime === "high-vol") buckets[idx].high_vol++;
-      else buckets[idx].jump_diffusion++;
+      if (!Number.isFinite(c.score)) continue;
+      const rawIdx = Math.floor((c.score - minScore) / bucketWidth);
+      const idx = Math.min(Math.max(rawIdx, 0), NUM_BUCKETS - 1);
+      const bucket = buckets[idx];
+      if (!bucket) continue;
+
+      bucket.count++;
+      if (c.regime === "low-vol") bucket.low_vol++;
+      else if (c.regime === "high-vol") bucket.high_vol++;
+      else bucket.jump_diffusion++;
     }
 
     return buckets;
