@@ -64,7 +64,7 @@ export async function checkCloudStatus(): Promise<CloudStatus> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("atlas_state")
       .select("id")
       .limit(1)
