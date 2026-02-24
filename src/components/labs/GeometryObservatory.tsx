@@ -9,12 +9,15 @@ import { Button } from "@/components/ui/button";
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
   BarChart, Bar, Cell,
+  RadarChart, Radar as RechartsRadar, PolarGrid, PolarAngleAxis,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
-import type { EngineState, Candidate, RegimeId } from "@/lib/discovery-engine";
+import type { EngineState, Candidate, RegimeId, NormalizedMetrics, MetricAnalysis } from "@/lib/discovery-engine";
 import {
   REGIMES, createRandomCandidate, evaluateCandidate, computeFeatures,
   scoreCandidate, mutateBins, normalizeBins, NUM_BINS, TOTAL_LIQUIDITY,
+  analyzeMetricProfile, normalizeMetrics, mutateAmplifyStrengths,
+  mutateRemediateWeaknesses, blendBins, NORMALIZED_METRIC_LABELS,
 } from "@/lib/discovery-engine";
 
 // ─── Structural Coordinate Types ────────────────────────────────────────────
@@ -76,6 +79,12 @@ type Branch = {
   recentScores: number[];        // last N scores for trend detection
   parentBranchId: string | null; // track lineage for cross-branch learning
   explorationPhase: "explore" | "exploit" | "intensify"; // adaptive phase
+  // Self-optimizing analysis fields
+  metricProfile: NormalizedMetrics | null;   // best normalized metrics for this branch
+  spiderCoverage: number;                    // best spider coverage score (0-1)
+  metricStrengths: (keyof NormalizedMetrics)[];   // what worked well
+  metricWeaknesses: (keyof NormalizedMetrics)[];  // what didn't work
+  lastAnalysis: MetricAnalysis | null;       // most recent per-metric analysis
 };
 
 type BranchCandidate = {
@@ -375,6 +384,14 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
   const [explorationSpeed, setExplorationSpeed] = useState<"fast" | "normal" | "thorough">("normal");
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [spiderChampion, setSpiderChampion] = useState<{
+    branchId: string;
+    candidate: BranchCandidate;
+    analysis: MetricAnalysis;
+    regime: RegimeId;
+  } | null>(null);
+  const [spiderHistory, setSpiderHistory] = useState<{ step: number; coverage: number; minMetric: number }[]>([]);
+  const [metricChampionBins, setMetricChampionBins] = useState<Map<keyof NormalizedMetrics, Float64Array>>(new Map());
   const runningRef = useRef(false);
   const autoRunRef = useRef(false);
   const hasAutoStarted = useRef(false);
@@ -423,6 +440,11 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       recentScores: [],
       parentBranchId: null,
       explorationPhase: "explore" as const,
+      metricProfile: null,
+      spiderCoverage: 0,
+      metricStrengths: [],
+      metricWeaknesses: [],
+      lastAnalysis: null,
     }));
 
     setBranches(initial);
@@ -440,19 +462,33 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     return () => clearTimeout(timer);
   }, [branches.length]);
 
-  // ─── Core: Run one Bayesian allocation step (with learning) ───────────
+  // ─── Core: Self-optimizing allocation step ─────────────────────────────
+  //
+  // The algorithm analyzes each candidate's per-metric profile (spider graph),
+  // detects what worked well and what didn't, then uses three mutation
+  // strategies:
+  //   1. Strength amplification (30%) — preserve & enhance strong metrics
+  //   2. Weakness remediation (30%) — targeted fixes borrowing from metric
+  //      champions
+  //   3. Standard exploration (40%) — structural + random mutations
+  //
+  // The ultimate goal is a single AMM that fills the entire spider graph.
 
   const runAllocationStep = useCallback(async () => {
     if (branches.length === 0) return;
 
     setIsRunning(true);
 
-    // ENHANCED SELECTION: Thompson sampling + UCB + cross-branch learning
-    // Find top-performing branches to guide cross-branch learning
+    // ── 1. Branch Selection (Thompson + UCB + spider-coverage bonus) ──
     const testedBranches = branches.filter(b => b.tested > 0);
     const topPerformers = [...testedBranches]
       .sort((a, b) => a.bestScore - b.bestScore)
       .slice(0, 5);
+
+    // Also find branches with best spider coverage (balanced performance)
+    const topSpiderBranches = [...testedBranches]
+      .sort((a, b) => b.spiderCoverage - a.spiderCoverage)
+      .slice(0, 3);
 
     const scored = branches.map(b => {
       let draw = thompsonSample(b) + scoreBranch(b) * 0.3;
@@ -466,6 +502,20 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         draw += similarityBoost;
       }
 
+      // Spider coverage bonus: prefer branches that showed balanced potential
+      if (b.spiderCoverage > 0.3) {
+        draw += b.spiderCoverage * 0.25;
+      }
+
+      // Boost branches similar to high-spider-coverage branches
+      if (topSpiderBranches.length > 0 && b.tested < 5) {
+        const spiderBoost = topSpiderBranches.reduce((acc, top) => {
+          const sim = branchSimilarity(b, top);
+          return acc + sim * top.spiderCoverage * 0.15;
+        }, 0);
+        draw += spiderBoost;
+      }
+
       // Anti-stagnation: if a branch has been stuck, reduce its priority
       if (b.failureStreak > 3) {
         draw *= Math.max(0.3, 1 - b.failureStreak * 0.08);
@@ -476,10 +526,9 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     scored.sort((a, b) => b.draw - a.draw);
     const selected = scored[0].branch;
 
-    // Set the active node for visual feedback
     setActiveNodeId(selected.id);
 
-    // Intelligent regime selection: choose the regime where this branch is weakest
+    // ── 2. Regime Selection (weakest regime for this branch) ──
     const regimeScores = REGIMES.map(r => {
       const regimeCandidates = selected.candidates.filter(c => c.regime === r.id);
       const avgScore = regimeCandidates.length > 0
@@ -487,11 +536,10 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         : Infinity;
       return { regime: r, avgScore };
     });
-    // Prefer the regime where this branch performs worst (or hasn't been tested)
     regimeScores.sort((a, b) => b.avgScore - a.avgScore);
     const regime = regimeScores[0].regime;
 
-    // Adaptive candidate count based on branch phase
+    // ── 3. Candidate Generation with Three-Strategy Mix ──
     const baseCandidates = explorationSpeed === "fast" ? 4 : explorationSpeed === "thorough" ? 12 : 6;
     const candidatesPerStep = selected.explorationPhase === "intensify"
       ? Math.ceil(baseCandidates * 1.5)
@@ -499,30 +547,65 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
 
     const newCandidates: BranchCandidate[] = [];
     const realCandidates: Candidate[] = [];
-
-    // Adaptive mutation intensity based on branch history
+    const candidateAnalyses: MetricAnalysis[] = [];
     const adaptiveMutationIntensity = selected.mutationIntensity;
+
+    // Determine strategy mix based on branch analysis
+    const hasAnalysis = selected.lastAnalysis !== null;
+    const strengthCount = Math.max(1, Math.round(candidatesPerStep * 0.3));
+    const weaknessCount = Math.max(1, Math.round(candidatesPerStep * 0.3));
+    const explorationCount = candidatesPerStep - strengthCount - weaknessCount;
 
     for (let i = 0; i < candidatesPerStep; i++) {
       let bins: Float64Array;
 
-      if (selected.bestCandidate && selected.candidates.length > 0 && Math.random() > 0.3) {
+      const isStrengthAmplification = hasAnalysis && i < strengthCount;
+      const isWeaknessRemediation = hasAnalysis && i >= strengthCount && i < strengthCount + weaknessCount;
+      // Otherwise: standard exploration
+
+      if (isStrengthAmplification && selected.lastAnalysis) {
+        // STRATEGY 1: Amplify what worked well
+        const base = generateStructuredBins(selected.invariant, selected.liquidity);
+        bins = mutateAmplifyStrengths(base, selected.metricStrengths, adaptiveMutationIntensity * 0.7);
+
+      } else if (isWeaknessRemediation && selected.lastAnalysis) {
+        // STRATEGY 2: Fix what didn't work, borrowing from metric champions
         const base = generateStructuredBins(selected.invariant, selected.liquidity);
 
-        // Use cross-branch learning: blend with bins from top similar branches
-        if (topPerformers.length > 0 && Math.random() < 0.2) {
-          const donor = topPerformers[Math.floor(Math.random() * topPerformers.length)];
-          const donorBins = generateStructuredBins(donor.invariant, donor.liquidity);
-          const blendRatio = 0.2 + Math.random() * 0.3;
-          for (let j = 0; j < NUM_BINS; j++) {
-            base[j] = base[j] * (1 - blendRatio) + donorBins[j] * blendRatio;
+        // Cross-metric learning: blend with bins from metric champions for weak axes
+        const weaknesses = selected.metricWeaknesses;
+        if (weaknesses.length > 0 && metricChampionBins.size > 0) {
+          const targetWeakness = weaknesses[Math.floor(Math.random() * weaknesses.length)];
+          const championBins = metricChampionBins.get(targetWeakness);
+          if (championBins) {
+            const blended = blendBins(base, championBins, 0.2 + Math.random() * 0.2);
+            bins = mutateRemediateWeaknesses(blended, weaknesses, adaptiveMutationIntensity);
+          } else {
+            bins = mutateRemediateWeaknesses(base, weaknesses, adaptiveMutationIntensity);
           }
-          normalizeBins(base);
+        } else {
+          bins = mutateRemediateWeaknesses(base, weaknesses, adaptiveMutationIntensity);
         }
 
-        bins = mutateBins(base, adaptiveMutationIntensity);
       } else {
-        bins = generateStructuredBins(selected.invariant, selected.liquidity);
+        // STRATEGY 3: Standard exploration with cross-branch learning
+        if (selected.bestCandidate && selected.candidates.length > 0 && Math.random() > 0.3) {
+          const base = generateStructuredBins(selected.invariant, selected.liquidity);
+
+          if (topPerformers.length > 0 && Math.random() < 0.2) {
+            const donor = topPerformers[Math.floor(Math.random() * topPerformers.length)];
+            const donorBins = generateStructuredBins(donor.invariant, donor.liquidity);
+            const blendRatio = 0.2 + Math.random() * 0.3;
+            for (let j = 0; j < NUM_BINS; j++) {
+              base[j] = base[j] * (1 - blendRatio) + donorBins[j] * blendRatio;
+            }
+            normalizeBins(base);
+          }
+
+          bins = mutateBins(base, adaptiveMutationIntensity);
+        } else {
+          bins = generateStructuredBins(selected.invariant, selected.liquidity);
+        }
       }
 
       const pathCount = explorationSpeed === "fast" ? 8 : explorationSpeed === "thorough" ? 20 : 12;
@@ -530,6 +613,10 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       const { metrics, stability } = evaluateCandidate(bins, regime, pathCount, evalPathCount);
       const features = computeFeatures(bins);
       const score = scoreCandidate(metrics, stability);
+
+      // ── 4. Per-candidate analysis: what worked and what didn't ──
+      const analysis = analyzeMetricProfile(metrics, stability);
+      candidateAnalyses.push(analysis);
 
       const bc: BranchCandidate = {
         id: `ba-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -561,16 +648,68 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         experimentId: `branch-${selected.id}`,
         objectiveType: "balanced",
       });
+
+      // Track metric champion bins for cross-metric learning
+      const normMetrics = normalizeMetrics(metrics, stability);
+      const metricKeys = Object.keys(normMetrics) as (keyof NormalizedMetrics)[];
+      for (const mk of metricKeys) {
+        const currentBest = metricChampionBins.get(mk);
+        // Simple heuristic: if this candidate scores > 0.7 on a metric,
+        // record its bins as a potential donor for that metric
+        if (normMetrics[mk] > 0.7 && (!currentBest || Math.random() < 0.3)) {
+          metricChampionBins.set(mk, new Float64Array(bins));
+        }
+      }
     }
 
-    // Update branch posterior with enhanced learning
+    // ── 5. Analyze batch results: what worked, what didn't ──
     const avgScore = newCandidates.reduce((a, c) => a + c.score, 0) / newCandidates.length;
     const variance = newCandidates.reduce((a, c) => a + (c.score - avgScore) ** 2, 0) / newCandidates.length;
     const bestNew = newCandidates.reduce((best, c) => c.score < best.score ? c : best, newCandidates[0]);
+    const bestNewIdx = newCandidates.indexOf(bestNew);
+    const bestAnalysis = candidateAnalyses[bestNewIdx];
 
+    // Aggregate metric analysis across all candidates in this batch
+    const batchStrengths = new Map<keyof NormalizedMetrics, number>();
+    const batchWeaknesses = new Map<keyof NormalizedMetrics, number>();
+    for (const analysis of candidateAnalyses) {
+      for (const s of analysis.strengths) batchStrengths.set(s, (batchStrengths.get(s) ?? 0) + 1);
+      for (const w of analysis.weaknesses) batchWeaknesses.set(w, (batchWeaknesses.get(w) ?? 0) + 1);
+    }
+    const consistentStrengths = [...batchStrengths.entries()]
+      .filter(([, count]) => count >= candidateAnalyses.length * 0.5)
+      .map(([k]) => k);
+    const consistentWeaknesses = [...batchWeaknesses.entries()]
+      .filter(([, count]) => count >= candidateAnalyses.length * 0.5)
+      .map(([k]) => k);
+
+    // ── 6. Update spider coverage champion ──
+    const bestSpiderCoverage = Math.max(...candidateAnalyses.map(a => a.spiderCoverage));
+    const bestSpiderIdx = candidateAnalyses.findIndex(a => a.spiderCoverage === bestSpiderCoverage);
+
+    if (bestSpiderCoverage > (spiderChampion?.analysis.spiderCoverage ?? 0)) {
+      setSpiderChampion({
+        branchId: selected.id,
+        candidate: newCandidates[bestSpiderIdx],
+        analysis: candidateAnalyses[bestSpiderIdx],
+        regime: regime.id,
+      });
+    }
+
+    setSpiderHistory(prev => {
+      const step = prev.length + 1;
+      const currentBest = Math.max(bestSpiderCoverage, spiderChampion?.analysis.spiderCoverage ?? 0);
+      const minMetric = Math.min(
+        ...Object.values(candidateAnalyses[bestSpiderIdx].normalized),
+      );
+      return [...prev, { step, coverage: currentBest, minMetric }].slice(-100);
+    });
+
+    setMetricChampionBins(new Map(metricChampionBins));
+
+    // ── 7. Update branch with analysis ──
     setBranches(prev => prev.map(b => {
       if (b.id !== selected.id) {
-        // Decay unexplored branches' novelty slightly, increase uncertainty
         return {
           ...b,
           novelty: clamp(b.novelty * 0.998 + 0.001),
@@ -583,42 +722,40 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       const allCandidates = [...b.candidates, ...newCandidates].slice(-50);
       const newBestCandidate = bestNew.score < (b.bestCandidate?.score ?? Infinity) ? bestNew : b.bestCandidate;
 
-      // Update recent scores for trend detection
       const updatedRecentScores = [...b.recentScores, avgScore].slice(-10);
       const trend = detectTrend(updatedRecentScores);
 
-      // Update failure streak
       const newFailureStreak = improved ? 0 : b.failureStreak + 1;
 
-      // Update stagnation penalty (accumulates when stuck, decays when improving)
       const newStagnationPenalty = improved
-        ? clamp(b.stagnationPenalty * 0.5) // Fast decay on improvement
-        : clamp(b.stagnationPenalty + 0.05 * Math.min(newFailureStreak, 10)); // Slow accumulation
+        ? clamp(b.stagnationPenalty * 0.5)
+        : clamp(b.stagnationPenalty + 0.05 * Math.min(newFailureStreak, 10));
 
-      // Adaptive mutation intensity: increase when stagnating, decrease when improving
       let newMutationIntensity = b.mutationIntensity;
       if (trend === "improving") {
-        newMutationIntensity = clamp(b.mutationIntensity * 0.9, 0.05, 0.5); // Tighten search
+        newMutationIntensity = clamp(b.mutationIntensity * 0.9, 0.05, 0.5);
       } else if (trend === "plateau") {
-        newMutationIntensity = clamp(b.mutationIntensity * 1.15, 0.05, 0.5); // Widen search
+        newMutationIntensity = clamp(b.mutationIntensity * 1.15, 0.05, 0.5);
       } else if (trend === "degrading") {
-        newMutationIntensity = clamp(b.mutationIntensity * 1.3, 0.05, 0.5); // Much wider search
+        newMutationIntensity = clamp(b.mutationIntensity * 1.3, 0.05, 0.5);
       }
 
-      // Improvement velocity (exponential moving average)
       const newVelocity = b.improvementVelocity * 0.7 + improvement * 0.3;
 
-      // Determine exploration phase
       let newPhase: Branch["explorationPhase"] = b.explorationPhase;
       if (b.tested < 10) {
         newPhase = "explore";
       } else if (trend === "improving" && newFailureStreak === 0) {
-        newPhase = "intensify"; // Double down on winning branches
+        newPhase = "intensify";
       } else if (newFailureStreak > 5 || trend === "degrading") {
-        newPhase = "explore"; // Reset to broad exploration
+        newPhase = "explore";
       } else {
         newPhase = "exploit";
       }
+
+      // Update metric profile with best spider coverage from this batch
+      const newMetricProfile = bestAnalysis.normalized;
+      const newSpiderCoverage = Math.max(b.spiderCoverage, bestSpiderCoverage);
 
       return {
         ...b,
@@ -639,6 +776,12 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         improvementVelocity: newVelocity,
         recentScores: updatedRecentScores,
         explorationPhase: newPhase,
+        // Self-optimizing analysis: what worked and what didn't
+        metricProfile: newMetricProfile,
+        spiderCoverage: newSpiderCoverage,
+        metricStrengths: consistentStrengths,
+        metricWeaknesses: consistentWeaknesses,
+        lastAnalysis: bestAnalysis,
       };
     }));
 
@@ -657,19 +800,22 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     setConvergenceData(prev => {
       const step = prev.length + 1;
       const allBest = branches.reduce((min, b) => Math.min(min, b.bestScore), Infinity);
-      const testedBranches = branches.filter(b => b.tested > 0);
-      const avg = testedBranches.length > 0
-        ? testedBranches.reduce((a, b) => a + b.bestScore, 0) / testedBranches.length
+      const tested = branches.filter(b => b.tested > 0);
+      const avg = tested.length > 0
+        ? tested.reduce((a, b) => a + b.bestScore, 0) / tested.length
         : 0;
-      return [...prev, { step, best: Math.min(allBest, bestNew.score), avg, explored: testedBranches.length + 1 }].slice(-100);
+      return [...prev, { step, best: Math.min(allBest, bestNew.score), avg, explored: tested.length + 1 }].slice(-100);
     });
 
     setTotalAllocations(prev => prev + 1);
 
-    onIngestCandidates(realCandidates, `Bayesian allocation step ${totalAllocations + 1}: explored ${selected.invariant} + ${selected.liquidity} (${regime.label})`);
+    const strategyNote = hasAnalysis
+      ? ` | strengths: [${consistentStrengths.join(",")}] weaknesses: [${consistentWeaknesses.join(",")}] | spider: ${bestSpiderCoverage.toFixed(3)}`
+      : "";
+    onIngestCandidates(realCandidates, `Self-optimizing step ${totalAllocations + 1}: ${selected.invariant} + ${selected.liquidity} (${regime.label})${strategyNote}`);
 
     setIsRunning(false);
-  }, [branches, totalAllocations, explorationSpeed, onIngestCandidates]);
+  }, [branches, totalAllocations, explorationSpeed, onIngestCandidates, spiderChampion, metricChampionBins]);
 
   // ─── Auto-run loop ─────────────────────────────────────────────────────
 
