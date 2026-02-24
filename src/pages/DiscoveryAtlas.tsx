@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2,
-  FlaskConical, Radar, Zap,
+  FlaskConical, Radar, Zap, Layers, Repeat,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -11,10 +11,12 @@ import AtlasSurface from "@/components/labs/AtlasSurface";
 import DesignDetail from "@/components/labs/DesignDetail";
 import GeometryObservatory from "@/components/labs/GeometryObservatory";
 import ExperimentsTab from "@/components/labs/ExperimentsTab";
+import FamilyDirectory from "@/components/labs/FamilyDirectory";
+import StudioLoopPanel from "@/components/labs/StudioLoopPanel";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "observatory" | "experiments" | "detail";
+type View = "dashboard" | "atlas" | "directory" | "studio-loop" | "observatory" | "experiments" | "detail";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
 type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
@@ -135,7 +137,7 @@ const DiscoveryAtlas = () => {
     stressMode: "regime-path",
     compositionPlan: "Explore invariant families → narrow top 3 → robust optimization → adversarial stress → fine tune liquidity",
   });
-  const [atlasFilters, setAtlasFilters] = useState({ contributor: "all", experimentId: "all", objectiveType: "all", regime: "all" as RegimeId | "all" });
+  const [atlasFilters, setAtlasFilters] = useState({ contributor: "all", experimentId: "all", objectiveType: "all", regime: "all" as RegimeId | "all", source: "all", poolType: "all" });
   const detailCandidateRef = useRef(selectedCandidate);
 
   if (selectedCandidate) detailCandidateRef.current = selectedCandidate;
@@ -226,6 +228,19 @@ const DiscoveryAtlas = () => {
     setActiveView("detail");
   }, [selectCandidate]);
 
+
+
+  const handleImportStudioCandidate = useCallback((candidate: Candidate) => {
+    ingestExperimentCandidates([{
+      ...candidate,
+      source: "user-designed",
+      contributor: "studio",
+      experimentId: candidate.experimentId ?? "studio",
+      objectiveType: candidate.objectiveType ?? "studio",
+    }], `Studio import: ${candidate.id} evaluated and mapped to atlas`);
+    setActiveView("atlas");
+  }, [ingestExperimentCandidates]);
+
   const handleBackFromDetail = useCallback(() => {
     clearSelection();
     detailCandidateRef.current = null;
@@ -246,12 +261,16 @@ const DiscoveryAtlas = () => {
     if (atlasFilters.experimentId !== "all" && candidate.experimentId !== atlasFilters.experimentId) return false;
     if (atlasFilters.objectiveType !== "all" && candidate.objectiveType !== atlasFilters.objectiveType) return false;
     if (atlasFilters.regime !== "all" && candidate.regime !== atlasFilters.regime) return false;
+    if (atlasFilters.source !== "all" && (candidate.source ?? "global") !== atlasFilters.source) return false;
+    if (atlasFilters.poolType !== "all" && (candidate.poolType ?? "two-asset") !== atlasFilters.poolType) return false;
     return true;
   }), [atlasFilters, state.archive]);
 
   const tabs = [
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
+    { id: "directory" as const, label: "Family Directory", icon: Layers },
+    { id: "studio-loop" as const, label: "Studio Loop", icon: Repeat },
     { id: "observatory" as const, label: "Geometry Observatory", icon: Radar },
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
   ];
@@ -329,7 +348,7 @@ const DiscoveryAtlas = () => {
 
       <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
         {activeView === "atlas" && (
-          <section className="mb-5 grid sm:grid-cols-4 gap-2">
+          <section className="mb-5 grid sm:grid-cols-6 gap-2">
             <select className="px-2 py-2 rounded-md border border-border bg-background text-xs" value={atlasFilters.contributor} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, contributor: event.target.value }))}>
               {contributors.map((value) => <option key={value} value={value}>{value === "all" ? "All contributors" : value}</option>)}
             </select>
@@ -343,12 +362,25 @@ const DiscoveryAtlas = () => {
               <option value="all">All regimes</option>
               {REGIMES.map((regime) => <option key={regime.id} value={regime.id}>{regime.label}</option>)}
             </select>
+            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs" value={atlasFilters.source} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, source: event.target.value }))}>
+              <option value="all">All sources</option>
+              <option value="global">Discovered</option>
+              <option value="experiment">Experimental</option>
+              <option value="user-designed">User-designed</option>
+            </select>
+            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs" value={atlasFilters.poolType} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, poolType: event.target.value }))}>
+              <option value="all">All pool layers</option>
+              <option value="two-asset">Two-asset layer</option>
+              <option value="multi-asset">Multi-asset layer</option>
+            </select>
           </section>
         )}
 
         <AnimatePresence mode="wait">
           {activeView === "dashboard" && <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
           {activeView === "atlas" && <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} /></motion.div>}
+          {activeView === "directory" && <motion.div key="directory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><FamilyDirectory state={{ ...state, archive: filteredArchive }} /></motion.div>}
+          {activeView === "studio-loop" && <motion.div key="studio-loop" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><StudioLoopPanel state={state} onImportStudioCandidate={handleImportStudioCandidate} /></motion.div>}
           {activeView === "observatory" && <motion.div key="observatory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} /></motion.div>}
           {activeView === "experiments" && (
             <ExperimentsTab
