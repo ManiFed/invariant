@@ -840,6 +840,240 @@ export function computeCoverage(candidates: Candidate[], gridSize: number = 10):
   };
 }
 
+// ─── Spider Coverage Analysis ────────────────────────────────────────────────
+
+/** Normalized metric values (all in [0,1] where 1 = best) for spider graph */
+export interface NormalizedMetrics {
+  fees: number;
+  utilization: number;
+  lpValue: number;
+  lowSlippage: number;
+  lowArbLeak: number;
+  stability: number;
+  lowDrawdown: number;
+}
+
+export const NORMALIZED_METRIC_LABELS: Record<keyof NormalizedMetrics, string> = {
+  fees: "Fee Revenue",
+  utilization: "Utilization",
+  lpValue: "LP Value",
+  lowSlippage: "Low Slippage",
+  lowArbLeak: "Low Arb Leak",
+  stability: "Stability",
+  lowDrawdown: "Low Drawdown",
+};
+
+/** Analysis of what worked and what didn't for a candidate */
+export interface MetricAnalysis {
+  normalized: NormalizedMetrics;
+  spiderCoverage: number;     // 0-1, how much of the spider graph is "filled"
+  strengths: (keyof NormalizedMetrics)[];
+  weaknesses: (keyof NormalizedMetrics)[];
+  dominantMetric: keyof NormalizedMetrics;
+  weakestMetric: keyof NormalizedMetrics;
+}
+
+/** Normalize raw metrics to [0,1] where 1 = best for spider graph display */
+export function normalizeMetrics(metrics: MetricVector, stability: number): NormalizedMetrics {
+  return {
+    fees: Math.min(metrics.totalFees / 50, 1),
+    utilization: metrics.liquidityUtilization,
+    lpValue: Math.min(metrics.lpValueVsHodl, 1.2) / 1.2,
+    lowSlippage: Math.max(0, 1 - metrics.totalSlippage * 10),
+    lowArbLeak: Math.max(0, 1 - metrics.arbLeakage / 50),
+    stability: Math.max(0, 1 - stability * 5),
+    lowDrawdown: Math.max(0, 1 - metrics.maxDrawdown * 5),
+  };
+}
+
+/** Analyze a candidate's metric profile to identify strengths and weaknesses */
+export function analyzeMetricProfile(
+  metrics: MetricVector,
+  stability: number,
+  strengthThreshold = 0.6,
+  weaknessThreshold = 0.4,
+): MetricAnalysis {
+  const normalized = normalizeMetrics(metrics, stability);
+
+  const entries = Object.entries(normalized) as [keyof NormalizedMetrics, number][];
+  const strengths = entries.filter(([, v]) => v >= strengthThreshold).map(([k]) => k);
+  const weaknesses = entries.filter(([, v]) => v < weaknessThreshold).map(([k]) => k);
+
+  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
+  const dominantMetric = sorted[0][0];
+  const weakestMetric = sorted[sorted.length - 1][0];
+
+  // Spider coverage uses geometric mean (penalizes low outliers) blended with minimum
+  const values = Object.values(normalized);
+  const geoMean = Math.pow(
+    values.reduce((p, v) => p * Math.max(v, 0.01), 1),
+    1 / values.length,
+  );
+  const minVal = Math.min(...values);
+  const spiderCoverage = geoMean * 0.7 + minVal * 0.3;
+
+  return { normalized, spiderCoverage, strengths, weaknesses, dominantMetric, weakestMetric };
+}
+
+/**
+ * Targeted mutation that amplifies a candidate's strengths.
+ * Preserves the bin patterns responsible for high-scoring metrics while
+ * adding small perturbations that keep those metrics strong.
+ */
+export function mutateAmplifyStrengths(
+  parent: Float64Array,
+  strengths: (keyof NormalizedMetrics)[],
+  intensity: number = 0.08,
+): Float64Array {
+  const child = new Float64Array(parent);
+
+  for (const strength of strengths) {
+    switch (strength) {
+      case "utilization": {
+        // Sharpen existing concentration peaks (more liquidity where it already is)
+        const mean = child.reduce((a, b) => a + b, 0) / NUM_BINS;
+        for (let i = 0; i < NUM_BINS; i++) {
+          if (child[i] > mean * 1.2) {
+            child[i] += intensity * TOTAL_LIQUIDITY / NUM_BINS * 0.5;
+          }
+        }
+        break;
+      }
+      case "fees": {
+        // Slightly broaden high-liquidity regions to catch more trades
+        const smoothed = new Float64Array(child);
+        for (let i = 1; i < NUM_BINS - 1; i++) {
+          smoothed[i] = Math.max(child[i], (child[i - 1] + child[i + 1]) * 0.35);
+        }
+        for (let i = 0; i < NUM_BINS; i++) {
+          child[i] = child[i] * (1 - intensity) + smoothed[i] * intensity;
+        }
+        break;
+      }
+      case "lowSlippage": {
+        // Further smooth the curve to maintain low slippage
+        const s = new Float64Array(child);
+        for (let i = 2; i < NUM_BINS - 2; i++) {
+          s[i] = (child[i - 2] + child[i - 1] * 2 + child[i] * 4 + child[i + 1] * 2 + child[i + 2]) / 10;
+        }
+        for (let i = 0; i < NUM_BINS; i++) {
+          child[i] = child[i] * (1 - intensity * 0.5) + s[i] * intensity * 0.5;
+        }
+        break;
+      }
+      default:
+        // Small random perturbation that doesn't disrupt the shape
+        for (let i = 0; i < NUM_BINS; i++) {
+          child[i] += (Math.random() - 0.5) * intensity * TOTAL_LIQUIDITY / NUM_BINS * 0.1;
+          child[i] = Math.max(0, child[i]);
+        }
+        break;
+    }
+  }
+
+  for (let i = 0; i < NUM_BINS; i++) child[i] = Math.max(0, child[i]);
+  normalizeBins(child);
+  return child;
+}
+
+/**
+ * Targeted mutation to remediate specific weak metrics.
+ * Applies structural changes to the bin distribution that directly address
+ * the weakest scoring dimensions.
+ */
+export function mutateRemediateWeaknesses(
+  parent: Float64Array,
+  weaknesses: (keyof NormalizedMetrics)[],
+  intensity: number = 0.15,
+): Float64Array {
+  const child = new Float64Array(parent);
+
+  for (const weakness of weaknesses) {
+    switch (weakness) {
+      case "utilization": {
+        // Concentrate more liquidity in the active range (center bins)
+        const center = NUM_BINS / 2;
+        const width = 6 + Math.floor(Math.random() * 10);
+        for (let i = 0; i < NUM_BINS; i++) {
+          const dist = Math.abs(i - center);
+          if (dist < width) {
+            child[i] += intensity * TOTAL_LIQUIDITY / NUM_BINS * (1 - dist / width);
+          }
+        }
+        break;
+      }
+      case "lowSlippage": {
+        // Smooth the curve to reduce slippage (abrupt transitions cause slippage)
+        const smoothed = new Float64Array(child);
+        for (let i = 1; i < NUM_BINS - 1; i++) {
+          smoothed[i] = child[i - 1] * 0.25 + child[i] * 0.5 + child[i + 1] * 0.25;
+        }
+        const blend = 0.3 + Math.random() * 0.2;
+        for (let i = 0; i < NUM_BINS; i++) {
+          child[i] = child[i] * (1 - blend) + smoothed[i] * blend;
+        }
+        break;
+      }
+      case "fees": {
+        // Ensure minimum liquidity everywhere so fees can be captured across range
+        const minFloor = TOTAL_LIQUIDITY / NUM_BINS * 0.3;
+        for (let i = 0; i < NUM_BINS; i++) {
+          child[i] = Math.max(child[i], minFloor);
+        }
+        break;
+      }
+      case "lowArbLeak": {
+        // Tighter concentration around current price reduces arb opportunity
+        const mid = NUM_BINS / 2;
+        for (let i = 0; i < NUM_BINS; i++) {
+          const d = Math.abs(i - mid) / (NUM_BINS / 2);
+          child[i] *= 1 - d * 0.3 * intensity;
+        }
+        break;
+      }
+      case "stability":
+      case "lowDrawdown": {
+        // More even distribution reduces drawdown / instability
+        const mean = child.reduce((a, b) => a + b, 0) / NUM_BINS;
+        for (let i = 0; i < NUM_BINS; i++) {
+          child[i] = child[i] * (1 - intensity * 0.3) + mean * intensity * 0.3;
+        }
+        break;
+      }
+      case "lpValue": {
+        // Concentrate liquidity slightly above center to track upward price moves
+        for (let i = 0; i < NUM_BINS; i++) {
+          const relPos = i / NUM_BINS;
+          const boost = Math.exp(-Math.pow((relPos - 0.55) * 4, 2));
+          child[i] += intensity * TOTAL_LIQUIDITY / NUM_BINS * boost;
+        }
+        break;
+      }
+    }
+  }
+
+  for (let i = 0; i < NUM_BINS; i++) child[i] = Math.max(0, child[i]);
+  normalizeBins(child);
+  return child;
+}
+
+/**
+ * Blend the bin patterns from two candidates.
+ * Used for cross-branch metric learning: borrow strengths from a metric champion.
+ */
+export function blendBins(
+  base: Float64Array,
+  donor: Float64Array,
+  ratio: number = 0.3,
+): Float64Array {
+  const child = new Float64Array(NUM_BINS);
+  for (let i = 0; i < NUM_BINS; i++) {
+    child[i] = base[i] * (1 - ratio) + donor[i] * ratio;
+  }
+  normalizeBins(child);
+  return child;
+}
+
 // ─── Price Impact Curve Generation ──────────────────────────────────────────
 
 export function generatePriceImpactCurve(bins: Float64Array, numPoints: number = 40): { tradeSize: number; impact: number }[] {
