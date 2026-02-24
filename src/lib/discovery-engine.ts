@@ -790,50 +790,71 @@ export function runGeneration(
   } else {
     // Sort current population by score (lower is better)
     const sorted = [...population.candidates].sort((a, b) => a.score - b.score);
-    const eliteCount = Math.max(2, Math.floor(POPULATION_SIZE * ELITE_FRACTION));
-    const elites = sorted.slice(0, eliteCount);
+    const targetEliteCount = Math.max(2, Math.floor(POPULATION_SIZE * ELITE_FRACTION));
+    const elites = sorted.slice(0, targetEliteCount);
 
-    // Generate children from elite parents via mutation
-    const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
-    for (let i = 0; i < numChildren; i++) {
-      const parent = elites[i % eliteCount];
-      const childFamily = INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0];
-      const childParams = childFamily.mutateParams(parent.familyParams);
-      const childBins = childFamily.generateBins(childParams);
-      const { metrics, stability } = evaluateCandidate(childBins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
-      const features = computeFeatures(childBins);
-      const score = scoreCandidate(metrics, stability);
-      const candidate: Candidate = {
-        id: nextId(), bins: childBins, regime: regimeConfig.id, generation: gen,
-        familyId: childFamily.id,
-        familyParams: childParams,
-        metrics, features, stability, score, timestamp: Date.now(),
-        source: "global",
-        poolType: "two-asset",
-        assetCount: 2,
-        adaptiveProfile: computeAdaptiveProfile(childBins, childParams),
-      };
-      if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
-    }
+    // Safety: if persisted/synced state has too few candidates, bootstrap with randoms
+    if (elites.length === 0) {
+      for (let i = 0; i < POPULATION_SIZE; i++) {
+        const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
+        const { metrics, stability } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
+        const features = computeFeatures(bins);
+        const score = scoreCandidate(metrics, stability);
+        const candidate: Candidate = {
+          id: nextId(), bins, regime: regimeConfig.id, generation: gen,
+          familyId,
+          familyParams,
+          metrics, features, stability, score, timestamp: Date.now(),
+          source: "global",
+          poolType: "two-asset",
+          assetCount: 2,
+          adaptiveProfile: computeAdaptiveProfile(bins, familyParams),
+        };
+        if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
+      }
+    } else {
+      // Generate children from elite parents via mutation
+      const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
+      for (let i = 0; i < numChildren; i++) {
+        const parent = elites[i % elites.length];
+        const childFamily = INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0];
+        const childParams = childFamily.mutateParams(parent.familyParams);
+        const childBins = childFamily.generateBins(childParams);
+        const { metrics, stability } = evaluateCandidate(childBins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
+        const features = computeFeatures(childBins);
+        const score = scoreCandidate(metrics, stability);
+        const candidate: Candidate = {
+          id: nextId(), bins: childBins, regime: regimeConfig.id, generation: gen,
+          familyId: childFamily.id,
+          familyParams: childParams,
+          metrics, features, stability, score, timestamp: Date.now(),
+          source: "global",
+          poolType: "two-asset",
+          assetCount: 2,
+          adaptiveProfile: computeAdaptiveProfile(childBins, childParams),
+        };
+        if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
+      }
 
-    // Inject random exploratory candidates
-    const numExplore = POPULATION_SIZE - numChildren;
-    for (let i = 0; i < numExplore; i++) {
-      const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
-      const { metrics, stability } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
-      const features = computeFeatures(bins);
-      const score = scoreCandidate(metrics, stability);
-      const candidate: Candidate = {
-        id: nextId(), bins, regime: regimeConfig.id, generation: gen,
-        familyId,
-        familyParams,
-        metrics, features, stability, score, timestamp: Date.now(),
-        source: "global",
-        poolType: "two-asset",
-        assetCount: 2,
-        adaptiveProfile: computeAdaptiveProfile(bins, familyParams),
-      };
-      if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
+      // Inject random exploratory candidates
+      const numExplore = POPULATION_SIZE - numChildren;
+      for (let i = 0; i < numExplore; i++) {
+        const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
+        const { metrics, stability } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
+        const features = computeFeatures(bins);
+        const score = scoreCandidate(metrics, stability);
+        const candidate: Candidate = {
+          id: nextId(), bins, regime: regimeConfig.id, generation: gen,
+          familyId,
+          familyParams,
+          metrics, features, stability, score, timestamp: Date.now(),
+          source: "global",
+          poolType: "two-asset",
+          assetCount: 2,
+          adaptiveProfile: computeAdaptiveProfile(bins, familyParams),
+        };
+        if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
+      }
     }
   }
 
