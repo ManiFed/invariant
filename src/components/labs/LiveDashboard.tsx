@@ -32,9 +32,9 @@ interface LiveDashboardProps {
 function ScoreTrend({ score }: { score: number }) {
   // Lower score = better in this system. Rough ranges:
   // < -10: excellent, -10 to 0: good, 0 to 10: average, > 10: poor
-  if (score < -5) return <TrendingUp className="w-3 h-3 text-success" title="Excellent score" />;
-  if (score < 5) return <Minus className="w-3 h-3 text-muted-foreground" title="Average score" />;
-  return <TrendingDown className="w-3 h-3 text-destructive" title="Poor score" />;
+  if (score < -5) return <TrendingUp className="w-3 h-3 text-success" />;
+  if (score < 5) return <Minus className="w-3 h-3 text-muted-foreground" />;
+  return <TrendingDown className="w-3 h-3 text-destructive" />;
 }
 
 function ChampionCard({
@@ -342,8 +342,8 @@ function ScoreHistorySection({ state, regimeIds }: { state: EngineState; regimeI
 
 export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboardProps) {
   const regimeIds: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
-  const champions = regimeIds.map((r) => state.populations[r].champion);
-  const totalEvaluated = regimeIds.reduce((sum, r) => sum + state.populations[r].totalEvaluated, 0);
+  const champions = regimeIds.map((r) => state.populations[r]?.champion ?? null);
+  const totalEvaluated = regimeIds.reduce((sum, r) => sum + (state.populations[r]?.totalEvaluated ?? 0), 0);
 
   // Which regime is currently being evolved
   const currentRegimeId = REGIME_CYCLE[state.totalGenerations % REGIME_CYCLE.length];
@@ -374,7 +374,7 @@ export default function LiveDashboard({ state, onSelectCandidate }: LiveDashboar
   // Per-regime best scores for the mini bar chart
   const regimeScores = useMemo(() => {
     return regimeIds.map(r => {
-      const champ = state.populations[r].champion;
+      const champ = state.populations[r]?.champion;
       return {
         regime: r,
         label: REGIME_LABELS[r],
