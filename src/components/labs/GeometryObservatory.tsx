@@ -648,7 +648,7 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
                   />
                   <Line type="monotone" dataKey="best" stroke="hsl(142, 72%, 45%)" strokeWidth={2} dot={false} name="Best Score" />
                   <Line type="monotone" dataKey="avg" stroke="hsl(38, 92%, 50%)" strokeWidth={1.5} dot={false} name="Avg Explored" strokeDasharray="4 4" />
-                  <Line type="monotone" dataKey="explored" stroke="hsl(220, 70%, 55%)" strokeWidth={1} dot={false} name="Branches Explored" yAxisId="right" hide />
+                  <Line type="monotone" dataKey="explored" stroke="hsl(220, 70%, 55%)" strokeWidth={1} dot={false} name="Branches Explored" hide />
                 </LineChart>
               </ResponsiveContainer>
             </div>
