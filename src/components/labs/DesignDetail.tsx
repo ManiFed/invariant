@@ -3,12 +3,14 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Fingerprint, BarChart3, TrendingUp, Layers, Shield, Download } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, BarChart, Bar,
+  LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  ReferenceLine, ComposedChart,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import type { Candidate, RegimeId, EngineState } from "@/lib/discovery-engine";
 import {
-  NUM_BINS, binPrice, REGIMES, evaluateCandidate, generatePriceImpactCurve, computeFeatures,
+  NUM_BINS, binPrice, REGIMES, evaluateCandidate, generatePriceImpactCurve,
+  DT,
 } from "@/lib/discovery-engine";
 
 const REGIME_COLORS: Record<RegimeId, string> = {
@@ -78,24 +80,31 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
   );
 
   // Equity curve (regenerated for display with variance bands)
+  // Uses 8 independent paths to get robust statistics
   const equityCurves = useMemo(() => {
     const regimeConfig = REGIMES.find(r => r.id === candidate.regime)!;
     const curves: number[][] = [];
-    for (let p = 0; p < 5; p++) {
+    for (let p = 0; p < 8; p++) {
       const { equityCurve } = evaluateCandidate(candidate.bins, regimeConfig, 2, 2);
       curves.push(equityCurve);
     }
 
     const len = curves[0]?.length || 0;
+    const daysPerStep = Math.round(DT * 365); // steps to calendar days
     return Array.from({ length: len }, (_, t) => {
       const vals = curves.map(c => c[t] || 1);
       vals.sort((a, b) => a - b);
+      const p10idx = Math.floor(vals.length * 0.1);
+      const p90idx = Math.floor(vals.length * 0.9);
       return {
         step: t,
-        median: vals[Math.floor(vals.length / 2)],
-        low: vals[0],
-        high: vals[vals.length - 1],
-        mean: vals.reduce((a, b) => a + b, 0) / vals.length,
+        day: t * daysPerStep,
+        median: parseFloat(vals[Math.floor(vals.length / 2)].toFixed(4)),
+        p10: parseFloat(vals[p10idx].toFixed(4)),
+        p90: parseFloat(vals[p90idx].toFixed(4)),
+        min: parseFloat(vals[0].toFixed(4)),
+        max: parseFloat(vals[vals.length - 1].toFixed(4)),
+        mean: parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(4)),
       };
     });
   }, [candidate]);
@@ -145,7 +154,11 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
           <div>
             <h3 className="text-sm font-bold text-foreground">{candidate.id}</h3>
             <p className="text-[9px] text-muted-foreground">
-              Regime: {REGIME_LABELS[candidate.regime]} | Generation {candidate.generation} | Score: {candidate.score.toFixed(3)}
+              Regime: <span style={{ color: REGIME_COLORS[candidate.regime] }}>{REGIME_LABELS[candidate.regime]}</span>
+              {" · "} Gen {candidate.generation}
+              {" · "} Score: <span className="font-mono font-semibold text-foreground">{candidate.score.toFixed(3)}</span>
+              <span className="text-muted-foreground/60 ml-1">(lower = better)</span>
+              {" · "} σ: {candidate.stability.toFixed(4)}
             </p>
           </div>
         </div>
@@ -181,8 +194,14 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
             <BarChart3 className="w-3.5 h-3.5 text-foreground" />
             <h4 className="text-xs font-semibold text-foreground">Liquidity Distribution</h4>
           </div>
-          <p className="text-[9px] text-muted-foreground mb-3">Capital weight per price bin ({NUM_BINS} bins across log-price domain)</p>
-          <div className="h-48" onWheel={e => e.stopPropagation()}>
+          <div className="flex items-center gap-3 mb-3">
+            <p className="text-[9px] text-muted-foreground">Capital weight per price bin ({NUM_BINS} bins, log-price scale)</p>
+            <span className="text-[8px] text-muted-foreground/60 ml-auto flex items-center gap-1">
+              <div className="w-3 h-0.5 border-dashed border-t-2 border-foreground/40" />
+              dashed line = price 1.0 (current)
+            </span>
+          </div>
+          <div className="h-52" onWheel={e => e.stopPropagation()}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={liquidityData}>
                 <defs>
@@ -192,10 +211,32 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-                <XAxis dataKey="price" tick={{ fontSize: 8, fill: colors.tick }} tickCount={8} />
-                <YAxis tick={{ fontSize: 8, fill: colors.tick }} width={35} />
-                <Tooltip contentStyle={tooltipStyle} wrapperStyle={{ pointerEvents: "none" }} />
-                <Area type="monotone" dataKey="weight" stroke={REGIME_COLORS[candidate.regime]} fill="url(#liqDetailGrad)" strokeWidth={1.5} name="Weight" />
+                <XAxis
+                  dataKey="price"
+                  tick={{ fontSize: 8, fill: colors.tick }}
+                  tickCount={8}
+                  tickFormatter={v => Number(v).toFixed(2)}
+                  label={{ value: "Price", position: "insideBottomRight", offset: -4, fontSize: 8, fill: colors.tick }}
+                />
+                <YAxis
+                  tick={{ fontSize: 8, fill: colors.tick }}
+                  width={38}
+                  label={{ value: "Liquidity Weight", angle: -90, position: "insideLeft", offset: 12, fontSize: 7, fill: colors.tick }}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  wrapperStyle={{ pointerEvents: "none" }}
+                  formatter={(value: number) => [value.toFixed(4), "Weight"]}
+                  labelFormatter={(label: number) => `Price: ${Number(label).toFixed(4)}`}
+                />
+                <ReferenceLine
+                  x={1.0}
+                  stroke={colors.tick}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.5}
+                  label={{ value: "P=1.0", position: "top", fontSize: 8, fill: colors.tick }}
+                />
+                <Area type="monotone" dataKey="weight" stroke={REGIME_COLORS[candidate.regime]} fill="url(#liqDetailGrad)" strokeWidth={1.5} name="Liquidity Weight" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -209,7 +250,12 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
               <RadarChart data={featureRadar}>
                 <PolarGrid stroke={colors.grid} />
                 <PolarAngleAxis dataKey="axis" tick={{ fontSize: 7, fill: colors.tick }} />
-                <Radar dataKey="value" stroke={REGIME_COLORS[candidate.regime]} fill={REGIME_COLORS[candidate.regime]} fillOpacity={0.15} strokeWidth={1.5} />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  wrapperStyle={{ pointerEvents: "none" }}
+                  formatter={(value: number) => [`${value.toFixed(1)}%`, "Normalized score"]}
+                />
+                <Radar dataKey="value" stroke={REGIME_COLORS[candidate.regime]} fill={REGIME_COLORS[candidate.regime]} fillOpacity={0.15} strokeWidth={1.5} name="Shape Feature" />
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -229,18 +275,42 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
           <TrendingUp className="w-3.5 h-3.5 text-foreground" />
           <h4 className="text-xs font-semibold text-foreground">Implied Price Impact Curve</h4>
         </div>
-        <p className="text-[9px] text-muted-foreground mb-3">Slippage (%) vs trade size, derived from liquidity density</p>
-        <div className="h-40" onWheel={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-3">
+          <p className="text-[9px] text-muted-foreground">Slippage (%) vs trade size at current price (P=1.0)</p>
+          <span className="text-[8px] text-muted-foreground/60 ml-auto">
+            Lower curve = better for traders
+          </span>
+        </div>
+        <div className="h-44" onWheel={e => e.stopPropagation()}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={impactCurve}>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-              <XAxis dataKey="tradeSize" tick={{ fontSize: 8, fill: colors.tick }} tickFormatter={v => `${v.toFixed(0)}`} />
-              <YAxis tick={{ fontSize: 8, fill: colors.tick }} tickFormatter={v => `${v}%`} width={35} />
-              <Tooltip contentStyle={tooltipStyle} wrapperStyle={{ pointerEvents: "none" }} />
-              <Line type="monotone" dataKey="impact" stroke={colors.line} strokeWidth={1.5} dot={false} name="Impact %" />
+              <XAxis
+                dataKey="tradeSize"
+                tick={{ fontSize: 8, fill: colors.tick }}
+                tickFormatter={v => `${v.toFixed(0)}`}
+                label={{ value: "Trade size (pool units)", position: "insideBottomRight", offset: -4, fontSize: 7, fill: colors.tick }}
+              />
+              <YAxis
+                tick={{ fontSize: 8, fill: colors.tick }}
+                tickFormatter={v => `${v}%`}
+                width={38}
+                label={{ value: "Slippage %", angle: -90, position: "insideLeft", offset: 12, fontSize: 7, fill: colors.tick }}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                wrapperStyle={{ pointerEvents: "none" }}
+                formatter={(value: number) => [`${value.toFixed(3)}%`, "Slippage"]}
+                labelFormatter={(label: number) => `Trade size: ${Number(label).toFixed(1)}`}
+              />
+              <ReferenceLine y={0.1} stroke={colors.line} strokeDasharray="3 3" strokeOpacity={0.4} label={{ value: "0.1%", position: "right", fontSize: 7, fill: colors.tick }} />
+              <Line type="monotone" dataKey="impact" stroke={REGIME_COLORS[candidate.regime]} strokeWidth={2} dot={false} name="Slippage %" />
             </LineChart>
           </ResponsiveContainer>
         </div>
+        <p className="text-[8px] text-muted-foreground mt-1">
+          Pool size: 1,000 units · Fee rate: 0.3% · Computed at price = 1.0
+        </p>
       </motion.div>
 
       {/* Equity curve with variance bands */}
@@ -249,26 +319,77 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
           <Layers className="w-3.5 h-3.5 text-foreground" />
           <h4 className="text-xs font-semibold text-foreground">Equity Curve (Out-of-Sample)</h4>
         </div>
-        <p className="text-[9px] text-muted-foreground mb-3">Normalized LP value across 5 independent paths with range bands</p>
-        <div className="h-48" onWheel={e => e.stopPropagation()}>
+        <div className="flex items-center gap-4 mb-3">
+          <p className="text-[9px] text-muted-foreground">Normalized LP portfolio value across 8 independent paths</p>
+          <div className="flex items-center gap-3 ml-auto">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-0.5 rounded" style={{ backgroundColor: colors.green }} />
+              <span className="text-[8px] text-muted-foreground">Median</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-0.5 rounded border-dashed border-t-2" style={{ borderColor: colors.line }} />
+              <span className="text-[8px] text-muted-foreground">Mean</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-2 rounded opacity-30" style={{ backgroundColor: colors.green }} />
+              <span className="text-[8px] text-muted-foreground">P10–P90</span>
+            </div>
+          </div>
+        </div>
+        <div className="h-52" onWheel={e => e.stopPropagation()}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={equityCurves}>
+            <ComposedChart data={equityCurves}>
               <defs>
-                <linearGradient id="eqBand" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={colors.green} stopOpacity={0.15} />
-                  <stop offset="100%" stopColor={colors.green} stopOpacity={0.02} />
+                <linearGradient id="eqBandGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={colors.green} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={colors.green} stopOpacity={0.05} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-              <XAxis dataKey="step" tick={{ fontSize: 8, fill: colors.tick }} />
-              <YAxis tick={{ fontSize: 8, fill: colors.tick }} domain={["auto", "auto"]} width={40} />
-              <Tooltip contentStyle={tooltipStyle} wrapperStyle={{ pointerEvents: "none" }} />
-              <Area type="monotone" dataKey="high" stroke="none" fill="url(#eqBand)" name="High" />
-              <Area type="monotone" dataKey="low" stroke="none" fill="url(#eqBand)" name="Low" />
-              <Line type="monotone" dataKey="median" stroke={colors.green} strokeWidth={1.5} dot={false} name="Median" />
+              <XAxis
+                dataKey="day"
+                tick={{ fontSize: 8, fill: colors.tick }}
+                label={{ value: "Day", position: "insideBottomRight", offset: -4, fontSize: 8, fill: colors.tick }}
+              />
+              <YAxis
+                tick={{ fontSize: 8, fill: colors.tick }}
+                domain={["auto", "auto"]}
+                width={42}
+                tickFormatter={v => v.toFixed(3)}
+                label={{ value: "LP Value (normalized)", angle: -90, position: "insideLeft", offset: 10, fontSize: 7, fill: colors.tick }}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                wrapperStyle={{ pointerEvents: "none" }}
+                formatter={(value: number, name: string) => [value.toFixed(4), name]}
+                labelFormatter={(label: number) => `Day ${label}`}
+              />
+              <ReferenceLine y={1} stroke={colors.line} strokeDasharray="4 4" strokeOpacity={0.4} label={{ value: "HODL", position: "right", fontSize: 7, fill: colors.tick }} />
+              {/* P10-P90 band */}
+              <Area type="monotone" dataKey="p90" stroke="none" fill="url(#eqBandGrad)" fillOpacity={1} name="P90" legendType="none" />
+              <Area type="monotone" dataKey="p10" stroke="none" fill="hsl(var(--background))" fillOpacity={1} name="P10" legendType="none" />
+              {/* Main lines */}
+              <Line type="monotone" dataKey="median" stroke={colors.green} strokeWidth={2} dot={false} name="Median" />
               <Line type="monotone" dataKey="mean" stroke={colors.line} strokeWidth={1} dot={false} strokeDasharray="4 4" name="Mean" />
-            </AreaChart>
+            </ComposedChart>
           </ResponsiveContainer>
+        </div>
+        <div className="flex items-center gap-4 mt-2 text-[8px] text-muted-foreground">
+          <span>
+            Final median: <span className="font-mono font-semibold text-foreground">
+              {equityCurves.length > 0 ? equityCurves[equityCurves.length - 1].median.toFixed(4) : "—"}
+            </span>
+          </span>
+          <span>
+            P10: <span className="font-mono text-foreground">
+              {equityCurves.length > 0 ? equityCurves[equityCurves.length - 1].p10.toFixed(4) : "—"}
+            </span>
+          </span>
+          <span>
+            P90: <span className="font-mono text-foreground">
+              {equityCurves.length > 0 ? equityCurves[equityCurves.length - 1].p90.toFixed(4) : "—"}
+            </span>
+          </span>
         </div>
       </motion.div>
 
