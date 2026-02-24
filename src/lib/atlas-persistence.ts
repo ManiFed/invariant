@@ -8,6 +8,7 @@ import type {
   PopulationState,
   RegimeId,
   ChampionMetric,
+  InvariantFamilyId,
 } from "@/lib/discovery-engine";
 
 const DB_NAME = "invariant-atlas";
@@ -38,6 +39,8 @@ function openDB(): Promise<IDBDatabase> {
 interface SerializedCandidate {
   id: string;
   bins: number[];
+  familyId?: InvariantFamilyId;
+  familyParams?: Record<string, number>;
   regime: RegimeId;
   generation: number;
   metrics: Candidate["metrics"];
@@ -45,12 +48,18 @@ interface SerializedCandidate {
   stability: number;
   score: number;
   timestamp: number;
+  source?: Candidate["source"];
+  poolType?: Candidate["poolType"];
+  assetCount?: number;
+  adaptiveProfile?: Candidate["adaptiveProfile"];
 }
 
 function serializeCandidate(c: Candidate): SerializedCandidate {
   return {
     id: c.id,
     bins: Array.from(c.bins),
+    familyId: c.familyId,
+    familyParams: c.familyParams,
     regime: c.regime,
     generation: c.generation,
     metrics: c.metrics,
@@ -58,12 +67,21 @@ function serializeCandidate(c: Candidate): SerializedCandidate {
     stability: c.stability,
     score: c.score,
     timestamp: c.timestamp,
+    source: c.source,
+    poolType: c.poolType,
+    assetCount: c.assetCount,
+    adaptiveProfile: c.adaptiveProfile,
   };
 }
 
 function deserializeCandidate(s: SerializedCandidate): Candidate {
   return {
     ...s,
+    familyId: s.familyId ?? "piecewise-bands",
+    familyParams: s.familyParams ?? {},
+    source: s.source ?? "global",
+    poolType: s.poolType ?? "two-asset",
+    assetCount: s.assetCount ?? 2,
     bins: new Float64Array(s.bins),
   };
 }

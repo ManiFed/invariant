@@ -10,7 +10,7 @@ import { useChartColors } from "@/hooks/use-chart-theme";
 import type { Candidate, RegimeId, EngineState } from "@/lib/discovery-engine";
 import {
   NUM_BINS, binPrice, REGIMES, evaluateCandidate, generatePriceImpactCurve,
-  DT,
+  DT, candidateToMechanism,
 } from "@/lib/discovery-engine";
 
 const REGIME_COLORS: Record<RegimeId, string> = {
@@ -33,6 +33,7 @@ interface DesignDetailProps {
 
 function downloadCandidateJson(candidate: Candidate) {
   const payload = {
+    mechanism: candidateToMechanism(candidate),
     id: candidate.id,
     regime: candidate.regime,
     generation: candidate.generation,

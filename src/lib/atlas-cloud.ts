@@ -19,6 +19,12 @@ interface CandidateRow {
   regime: string;
   generation: number;
   bins: number[];
+  family_id?: string;
+  family_params?: Record<string, number>;
+  source?: Candidate["source"];
+  pool_type?: Candidate["poolType"];
+  asset_count?: number;
+  adaptive_profile?: Candidate["adaptiveProfile"];
   metrics: MetricVector;
   features: FeatureDescriptor;
   stability: number;
@@ -32,6 +38,8 @@ export function rowToCandidate(row: CandidateRow): Candidate {
   return {
     id: row.candidate_id,
     bins: new Float64Array(row.bins),
+    familyId: (row.family_id as Candidate["familyId"]) ?? "piecewise-bands",
+    familyParams: row.family_params ?? {},
     regime: row.regime as RegimeId,
     generation: row.generation,
     metrics: row.metrics,
@@ -39,6 +47,10 @@ export function rowToCandidate(row: CandidateRow): Candidate {
     stability: row.stability,
     score: row.score,
     timestamp: new Date(row.created_at).getTime(),
+    source: row.source ?? "global",
+    poolType: row.pool_type ?? "two-asset",
+    assetCount: row.asset_count ?? 2,
+    adaptiveProfile: row.adaptive_profile,
   };
 }
 

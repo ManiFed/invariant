@@ -760,7 +760,7 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
               <div className="text-right">
                 <p className="text-[9px] font-mono text-foreground">{hoveredCandidate.id}</p>
                 <p className="text-[8px] text-muted-foreground">
-                  Score: {hoveredCandidate.score.toFixed(3)} | {hoveredCandidate.familyId} | Gen {hoveredCandidate.generation}
+                  Score: {hoveredCandidate.score.toFixed(3)} | {hoveredCandidate.familyId} | {(hoveredCandidate.source ?? "global")} | Gen {hoveredCandidate.generation}
                 </p>
               </div>
             )}
@@ -861,8 +861,8 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
                     r={r}
                     fill={colorBy === "regime" ? REGIME_COLORS[c.regime] : FAMILY_COLORS[c.familyId]}
                     fillOpacity={isChampion ? 0.9 : 0.5}
-                    stroke={isChampion ? "hsl(var(--foreground))" : "none"}
-                    strokeWidth={isChampion ? 1.5 : 0}
+                    stroke={isChampion ? "hsl(var(--foreground))" : c.source === "user-designed" ? "hsl(var(--chart-2))" : "none"}
+                    strokeWidth={isChampion ? 1.5 : c.source === "user-designed" ? 1 : 0}
                     className="cursor-pointer transition-all"
                     onMouseEnter={() => setHoveredId(c.id)}
                     onMouseLeave={() => setHoveredId(null)}
@@ -890,6 +890,10 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-full border-2 border-foreground bg-transparent" />
               <span className="text-[9px] text-muted-foreground">Champion</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full border border-chart-2 bg-transparent" />
+              <span className="text-[9px] text-muted-foreground">Studio design</span>
             </div>
           </div>
         </motion.div>

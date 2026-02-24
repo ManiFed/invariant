@@ -75,7 +75,14 @@ export interface Candidate {
   stability: number;        // cross-path variance of lpValueVsHodl
   score: number;            // composite ranking score (lower is better rank)
   timestamp: number;
-  source?: "global" | "experiment";
+  source?: "global" | "experiment" | "user-designed";
+  poolType?: "two-asset" | "multi-asset";
+  assetCount?: number;
+  adaptiveProfile?: {
+    liquidityResponsiveness: number;
+    feeResponsiveness: number;
+    shockRecovery: number;
+  };
   contributor?: string;
   experimentId?: string;
   objectiveType?: string;
@@ -196,6 +203,23 @@ export const INVARIANT_FAMILIES: InvariantFamilyDefinition[] = [
 ];
 
 /** Full engine state */
+
+
+export interface MechanismObject {
+  id: string;
+  label: string;
+  origin: "atlas-global" | "atlas-experiment" | "studio";
+  familyId: InvariantFamilyId;
+  familyParams: Record<string, number>;
+  bins: number[];
+  poolType: "two-asset" | "multi-asset";
+  assetSymbols: string[];
+  adaptiveConfig?: {
+    volatilitySensitivity: number;
+    deviationSensitivity: number;
+  };
+}
+
 export interface EngineState {
   populations: Record<RegimeId, PopulationState>;
   archive: Candidate[];
@@ -719,6 +743,19 @@ export function mutateBins(parent: Float64Array, intensity: number = 0.1): Float
   return child;
 }
 
+
+function computeAdaptiveProfile(bins: Float64Array, params: Record<string, number>): Candidate["adaptiveProfile"] {
+  const avg = bins.reduce((acc, v) => acc + v, 0) / bins.length;
+  const variance = bins.reduce((acc, v) => acc + (v - avg) ** 2, 0) / bins.length;
+  const paramValues = Object.values(params);
+  const paramSignal = paramValues.length > 0 ? paramValues.reduce((a, b) => a + Math.abs(b), 0) / paramValues.length : 0;
+  return {
+    liquidityResponsiveness: Math.min(1, Math.sqrt(variance) / 20),
+    feeResponsiveness: Math.min(1, paramSignal / 5),
+    shockRecovery: Math.max(0, 1 - Math.min(1, variance / 2000)),
+  };
+}
+
 // ─── Single Generation Step ─────────────────────────────────────────────────
 
 /** Run one generation of the evolutionary search for a single regime */
@@ -743,6 +780,10 @@ export function runGeneration(
         familyId,
         familyParams,
         metrics, features, stability, score, timestamp: Date.now(),
+        source: "global",
+        poolType: "two-asset",
+        assetCount: 2,
+        adaptiveProfile: computeAdaptiveProfile(bins, familyParams),
       };
       allCandidates.push(candidate);
     }
@@ -767,6 +808,10 @@ export function runGeneration(
         familyId: childFamily.id,
         familyParams: childParams,
         metrics, features, stability, score, timestamp: Date.now(),
+        source: "global",
+        poolType: "two-asset",
+        assetCount: 2,
+        adaptiveProfile: computeAdaptiveProfile(childBins, childParams),
       };
       if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
     }
@@ -783,6 +828,10 @@ export function runGeneration(
         familyId,
         familyParams,
         metrics, features, stability, score, timestamp: Date.now(),
+        source: "global",
+        poolType: "two-asset",
+        assetCount: 2,
+        adaptiveProfile: computeAdaptiveProfile(bins, familyParams),
       };
       if (validateInvariantFamily(candidate)) allCandidates.push(candidate);
     }
@@ -1276,4 +1325,55 @@ export function computeFamilySummaries(candidates: Candidate[]): FamilySummary[]
       dominanceFrequency: REGIMES.length ? dominance / REGIMES.length : 0,
     };
   });
+}
+
+
+export function candidateToMechanism(candidate: Candidate): MechanismObject {
+  return {
+    id: candidate.id,
+    label: `${candidate.familyId} · ${candidate.id}`,
+    origin: candidate.source === "experiment" ? "atlas-experiment" : candidate.source === "user-designed" ? "studio" : "atlas-global",
+    familyId: candidate.familyId,
+    familyParams: candidate.familyParams,
+    bins: Array.from(candidate.bins),
+    poolType: candidate.poolType ?? "two-asset",
+    assetSymbols: (candidate.assetCount ?? 2) > 2 ? ["USDC", "ETH", "BTC"] : ["USDC", "ETH"],
+    adaptiveConfig: candidate.adaptiveProfile
+      ? {
+          volatilitySensitivity: candidate.adaptiveProfile.liquidityResponsiveness,
+          deviationSensitivity: candidate.adaptiveProfile.feeResponsiveness,
+        }
+      : undefined,
+  };
+}
+
+export function mechanismToCandidate(mechanism: MechanismObject, regime: RegimeId, generation: number): Candidate {
+  const bins = new Float64Array(mechanism.bins);
+  normalizeBins(bins);
+  const regimeConfig = REGIMES.find((value) => value.id === regime) ?? REGIMES[0];
+  const { metrics, stability } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
+  const features = computeFeatures(bins);
+  return {
+    id: mechanism.id,
+    bins,
+    familyId: mechanism.familyId,
+    familyParams: mechanism.familyParams,
+    regime,
+    generation,
+    metrics,
+    features,
+    stability,
+    score: scoreCandidate(metrics, stability),
+    timestamp: Date.now(),
+    source: mechanism.origin === "studio" ? "user-designed" : mechanism.origin === "atlas-experiment" ? "experiment" : "global",
+    poolType: mechanism.poolType,
+    assetCount: mechanism.assetSymbols.length,
+    adaptiveProfile: mechanism.adaptiveConfig
+      ? {
+          liquidityResponsiveness: mechanism.adaptiveConfig.volatilitySensitivity,
+          feeResponsiveness: mechanism.adaptiveConfig.deviationSensitivity,
+          shockRecovery: Math.max(0, 1 - mechanism.adaptiveConfig.deviationSensitivity * 0.6),
+        }
+      : undefined,
+  };
 }
