@@ -3,6 +3,7 @@ import {
   type FeatureDescriptor,
   type PopulationState,
   type RegimeConfig,
+  type RegimeId,
   REGIMES,
   computeFeatures,
   normalizeBins,
@@ -115,7 +116,7 @@ function makeRegimeConfig(vector: RegimeVector): RegimeConfig {
   };
 }
 
-function emptyPopulation(regimeId: string): PopulationState {
+function emptyPopulation(regimeId: RegimeId): PopulationState {
   return {
     regime: regimeId,
     candidates: [],
