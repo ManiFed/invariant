@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2,
-  FlaskConical, Radar,
+  FlaskConical, Radar, Zap,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -54,6 +54,7 @@ type Experiment = {
   performanceVariance: number;
   structuralFragility: number;
   robustnessScore: number;
+  scoreHistory: number[];
 };
 
 const SYNC_BADGE: Record<SyncMode, { icon: typeof Wifi; label: string; className: string }> = {
@@ -95,6 +96,25 @@ const DiscoveryAtlas = () => {
   const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence, ingestExperimentCandidates } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [experiments, setExperiments] = useState<Experiment[]>([]);
+  const [genRate, setGenRate] = useState<number | null>(null);
+  const genRateRef = useRef({ lastGen: 0, lastTime: Date.now(), samples: [] as number[] });
+
+  // Track generation rate (gens/sec)
+  useEffect(() => {
+    const { lastGen, lastTime, samples } = genRateRef.current;
+    if (state.totalGenerations !== lastGen) {
+      const now = Date.now();
+      const elapsed = (now - lastTime) / 1000;
+      if (elapsed > 0 && elapsed < 10) {
+        samples.push(1 / elapsed);
+        if (samples.length > 10) samples.shift();
+        const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+        setGenRate(parseFloat(avg.toFixed(1)));
+      }
+      genRateRef.current = { lastGen: state.totalGenerations, lastTime: now, samples };
+    }
+  }, [state.totalGenerations]);
+
   const [config, setConfig] = useState<ExperimentConfig>({
     contributor: "guest",
     regime: "low-vol",
@@ -157,6 +177,7 @@ const DiscoveryAtlas = () => {
               structuralFragility,
               robustnessScore,
               status: generation >= expConfig.generations ? "completed" : "running",
+              scoreHistory: [...experiment.scoreHistory, bestScore],
             }
           : experiment
       )));
@@ -194,6 +215,7 @@ const DiscoveryAtlas = () => {
       performanceVariance: 0,
       structuralFragility: 0,
       robustnessScore: 0,
+      scoreHistory: [],
     }, ...prev]);
     runExperiment(expId, config);
     setActiveView("experiments");
@@ -230,7 +252,7 @@ const DiscoveryAtlas = () => {
   const tabs = [
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
-    { id: "observatory" as const, label: "Geometry Observatory", icon: FlaskConical },
+    { id: "observatory" as const, label: "Geometry Observatory", icon: Radar },
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
   ];
 
@@ -274,6 +296,12 @@ const DiscoveryAtlas = () => {
               Gen {state.totalGenerations} | {(state.archiveSize ?? state.archive.length).toLocaleString()} archived
             </span>
           </div>
+          {genRate !== null && (
+            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary border border-border">
+              <Zap className="w-3 h-3 text-warning" />
+              <span className="text-[9px] font-mono text-muted-foreground">{genRate} gen/s</span>
+            </div>
+          )}
           <ThemeToggle />
         </div>
       </header>

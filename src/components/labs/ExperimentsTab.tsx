@@ -6,7 +6,7 @@ import {
   Target, Layers, Zap,
 } from "lucide-react";
 import {
-  LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
+  LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid,
   RadarChart, Radar as RadarChartElement, PolarGrid, PolarAngleAxis,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
@@ -54,6 +54,7 @@ export type Experiment = {
   performanceVariance: number;
   structuralFragility: number;
   robustnessScore: number;
+  scoreHistory: number[];
 };
 
 const RESEARCH_OBJECTIVES = [
@@ -826,6 +827,41 @@ export default function ExperimentsTab({
                         </div>
                       )}
                     </div>
+
+                    {/* Score convergence chart */}
+                    {experiment.scoreHistory.length > 1 && (
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="text-[10px] font-semibold mb-2 flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3" /> Score Convergence
+                          <span className="text-[8px] font-normal text-muted-foreground ml-1">— lower is better</span>
+                        </p>
+                        <div className="h-28">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={experiment.scoreHistory.map((s, i) => ({ gen: i + 1, score: parseFloat(s.toFixed(4)) }))}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
+                              <XAxis dataKey="gen" tick={{ fontSize: 7, fill: colors.tick }} label={{ value: "Generation", position: "insideBottomRight", offset: -4, fontSize: 7, fill: colors.tick }} />
+                              <YAxis tick={{ fontSize: 7, fill: colors.tick }} width={40} tickFormatter={v => v.toFixed(1)} domain={["auto", "auto"]} />
+                              <Tooltip
+                                contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}`, borderRadius: 6, fontSize: 9, color: colors.tooltipText }}
+                                wrapperStyle={{ pointerEvents: "none" }}
+                                formatter={(value: number) => [value.toFixed(4), "Best score"]}
+                                labelFormatter={(label: number) => `Generation ${label}`}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="score"
+                                stroke="hsl(var(--chart-1))"
+                                strokeWidth={2}
+                                dot={experiment.scoreHistory.length < 20}
+                                name="Best score"
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Objective Tags + Plan */}
                     <div className="flex flex-wrap items-center gap-2">

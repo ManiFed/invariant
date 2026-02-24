@@ -705,7 +705,10 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
         <motion.div className="surface-elevated rounded-xl p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}>
           <h4 className="text-xs font-semibold text-foreground mb-1">Collective Performance</h4>
           <p className="text-[9px] text-muted-foreground mb-2">
-            All {filteredCandidates.length} candidates — mean with P10/P90 bands
+            All {filteredCandidates.length} candidates — mean (solid) with P10/P90 bands (dashed)
+          </p>
+          <p className="text-[8px] text-muted-foreground/60 mb-2">
+            All axes: higher = better
           </p>
           <CollectiveSpiderGraph candidates={filteredCandidates} filterRegime={filterRegime} />
         </motion.div>
@@ -790,8 +793,28 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
               {/* Axes */}
               <line x1={pad} y1={pad + plotH} x2={pad + plotW} y2={pad + plotH} stroke="hsl(var(--border))" strokeWidth={1} />
               <line x1={pad} y1={pad} x2={pad} y2={pad + plotH} stroke="hsl(var(--border))" strokeWidth={1} />
-              <text x={pad + plotW / 2} y={svgH - 5} textAnchor="middle" fontSize={9} fill="hsl(var(--muted-foreground))">Concentration</text>
+              {/* X axis ticks */}
+              {[0, 0.25, 0.5, 0.75, 1].map(v => (
+                <g key={`xtick-${v}`}>
+                  <line x1={pad + v * plotW} y1={pad + plotH} x2={pad + v * plotW} y2={pad + plotH + 4} stroke="hsl(var(--border))" strokeWidth={1} />
+                  <text x={pad + v * plotW} y={pad + plotH + 13} textAnchor="middle" fontSize={7} fill="hsl(var(--muted-foreground))">{v.toFixed(2)}</text>
+                </g>
+              ))}
+              {/* Y axis ticks */}
+              {[0, 0.25, 0.5, 0.75, 1].map(v => (
+                <g key={`ytick-${v}`}>
+                  <line x1={pad - 4} y1={pad + plotH - v * plotH} x2={pad} y2={pad + plotH - v * plotH} stroke="hsl(var(--border))" strokeWidth={1} />
+                  <text x={pad - 6} y={pad + plotH - v * plotH + 3} textAnchor="end" fontSize={7} fill="hsl(var(--muted-foreground))">{v.toFixed(2)}</text>
+                </g>
+              ))}
+              {/* Axis labels */}
+              <text x={pad + plotW / 2} y={svgH - 2} textAnchor="middle" fontSize={9} fill="hsl(var(--muted-foreground))">← Uniform  |  Concentration  |  Peaked →</text>
               <text x={8} y={pad + plotH / 2} textAnchor="middle" fontSize={9} fill="hsl(var(--muted-foreground))" transform={`rotate(-90, 8, ${pad + plotH / 2})`}>Asymmetry</text>
+              {/* Quadrant labels */}
+              <text x={pad + 4} y={pad + 14} fontSize={7} fill="hsl(var(--muted-foreground))" opacity={0.5}>Asymmetric+Uniform</text>
+              <text x={pad + plotW - 4} y={pad + 14} fontSize={7} fill="hsl(var(--muted-foreground))" opacity={0.5} textAnchor="end">Asymmetric+Peaked</text>
+              <text x={pad + 4} y={pad + plotH - 6} fontSize={7} fill="hsl(var(--muted-foreground))" opacity={0.5}>Symmetric+Uniform</text>
+              <text x={pad + plotW - 4} y={pad + plotH - 6} fontSize={7} fill="hsl(var(--muted-foreground))" opacity={0.5} textAnchor="end">Symmetric+Peaked</text>
 
               {/* Candidate points */}
               {embedding.map((pt, i) => {
