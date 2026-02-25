@@ -2,8 +2,22 @@ import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2,
-  FlaskConical, Radar, Zap, Layers, Swords, History, Target, Blend,
+  ArrowLeft,
+  Activity,
+  Map,
+  Fingerprint,
+  Radio,
+  Wifi,
+  HardDrive,
+  Loader2,
+  FlaskConical,
+  Radar,
+  Zap,
+  Layers,
+  Swords,
+  History,
+  Target,
+  Blend,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -84,8 +98,10 @@ const paretoFront = (candidates: Candidate[]): Candidate[] => {
     return !candidates.some((other, j) => {
       if (i === j) return false;
       const o = other.metrics;
-      const noWorse = o.lpValueVsHodl >= c.lpValueVsHodl && o.totalSlippage <= c.totalSlippage && o.maxDrawdown <= c.maxDrawdown;
-      const strictlyBetter = o.lpValueVsHodl > c.lpValueVsHodl || o.totalSlippage < c.totalSlippage || o.maxDrawdown < c.maxDrawdown;
+      const noWorse =
+        o.lpValueVsHodl >= c.lpValueVsHodl && o.totalSlippage <= c.totalSlippage && o.maxDrawdown <= c.maxDrawdown;
+      const strictlyBetter =
+        o.lpValueVsHodl > c.lpValueVsHodl || o.totalSlippage < c.totalSlippage || o.maxDrawdown < c.maxDrawdown;
       return noWorse && strictlyBetter;
     });
   });
@@ -100,7 +116,16 @@ const binDispersion = (candidate: Candidate): number => {
 
 const DiscoveryAtlas = () => {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence, ingestExperimentCandidates } = useDiscoveryEngine();
+  const {
+    state,
+    selectedCandidate,
+    selectCandidate,
+    clearSelection,
+    syncMode,
+    role,
+    togglePersistence,
+    ingestExperimentCandidates,
+  } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [geometrySubview, setGeometrySubview] = useState<GeometrySubview>("observatory");
   const [competitionSubview, setCompetitionSubview] = useState<CompetitionSubview>("pareto");
@@ -142,99 +167,130 @@ const DiscoveryAtlas = () => {
     invariantMutationProbability: 0.18,
     topologyMutationProbability: 0.1,
     stressMode: "regime-path",
-    compositionPlan: "Explore invariant families → narrow top 3 → robust optimization → adversarial stress → fine tune liquidity",
+    compositionPlan:
+      "Explore invariant families → narrow top 3 → robust optimization → adversarial stress → fine tune liquidity",
   });
-  const [atlasFilters, setAtlasFilters] = useState({ contributor: "all", experimentId: "all", objectiveType: "all", regime: "all" as RegimeId | "all", source: "all", poolType: "all" });
+  const [atlasFilters, setAtlasFilters] = useState({
+    contributor: "all",
+    experimentId: "all",
+    objectiveType: "all",
+    regime: "all" as RegimeId | "all",
+    source: "all",
+    poolType: "all",
+  });
   const detailCandidateRef = useRef(selectedCandidate);
 
   if (selectedCandidate) detailCandidateRef.current = selectedCandidate;
 
-  const runExperiment = useCallback((expId: string, expConfig: ExperimentConfig) => {
-    const regimeConfig = REGIMES.find((regime) => regime.id === expConfig.regime);
-    if (!regimeConfig) return;
+  const runExperiment = useCallback(
+    (expId: string, expConfig: ExperimentConfig) => {
+      const regimeConfig = REGIMES.find((regime) => regime.id === expConfig.regime);
+      if (!regimeConfig) return;
 
-    let population = createInitialState().populations[expConfig.regime];
-    let prevBest = Infinity;
+      let population = createInitialState().populations[expConfig.regime];
+      let prevBest = Infinity;
 
-    const iterate = (generation: number) => {
-      const { newPopulation, newCandidates } = runGeneration(population, regimeConfig);
-      population = newPopulation;
+      const iterate = (generation: number) => {
+        const { newPopulation, newCandidates } = runGeneration(population, regimeConfig);
+        population = newPopulation;
 
-      const ranked = [...newPopulation.candidates].sort((a, b) => scoreForObjective(a, expConfig.objective) - scoreForObjective(b, expConfig.objective));
-      const champion = ranked[0] ?? null;
-      const front = paretoFront(newPopulation.candidates);
-      const bestScore = champion ? scoreForObjective(champion, expConfig.objective) : Infinity;
-      const convergenceRate = Number((prevBest - bestScore).toFixed(4));
-      prevBest = bestScore;
-      const performanceVariance = champion ? Number((champion.stability * champion.stability).toFixed(5)) : 0;
-      const structuralFragility = champion ? Number((Math.max(0, 1 - champion.stability) * (1 + expConfig.topologyMutationProbability)).toFixed(4)) : 0;
-      const robustnessScore = champion
-        ? Number((champion.stability * (1 - expConfig.mutationStrength * 0.2) * (expConfig.stressMode === "adversarial" ? 0.9 : 1)).toFixed(4))
-        : 0;
+        const ranked = [...newPopulation.candidates].sort(
+          (a, b) => scoreForObjective(a, expConfig.objective) - scoreForObjective(b, expConfig.objective),
+        );
+        const champion = ranked[0] ?? null;
+        const front = paretoFront(newPopulation.candidates);
+        const bestScore = champion ? scoreForObjective(champion, expConfig.objective) : Infinity;
+        const convergenceRate = Number((prevBest - bestScore).toFixed(4));
+        prevBest = bestScore;
+        const performanceVariance = champion ? Number((champion.stability * champion.stability).toFixed(5)) : 0;
+        const structuralFragility = champion
+          ? Number((Math.max(0, 1 - champion.stability) * (1 + expConfig.topologyMutationProbability)).toFixed(4))
+          : 0;
+        const robustnessScore = champion
+          ? Number(
+              (
+                champion.stability *
+                (1 - expConfig.mutationStrength * 0.2) *
+                (expConfig.stressMode === "adversarial" ? 0.9 : 1)
+              ).toFixed(4),
+            )
+          : 0;
 
-      setExperiments((prev) => prev.map((experiment) => (
-        experiment.id === expId
-          ? {
-              ...experiment,
-              currentGeneration: generation,
-              bestScore,
-              bestCandidate: champion,
-              paretoCount: front.length,
-              convergenceRate,
-              parameterDispersion: champion ? Number(binDispersion(champion).toFixed(3)) : 0,
-              performanceVariance,
-              structuralFragility,
-              robustnessScore,
-              status: generation >= expConfig.generations ? "completed" : "running",
-              scoreHistory: [...experiment.scoreHistory, bestScore],
-            }
-          : experiment
-      )));
+        setExperiments((prev) =>
+          prev.map((experiment) =>
+            experiment.id === expId
+              ? {
+                  ...experiment,
+                  currentGeneration: generation,
+                  bestScore,
+                  bestCandidate: champion,
+                  paretoCount: front.length,
+                  convergenceRate,
+                  parameterDispersion: champion ? Number(binDispersion(champion).toFixed(3)) : 0,
+                  performanceVariance,
+                  structuralFragility,
+                  robustnessScore,
+                  status: generation >= expConfig.generations ? "completed" : "running",
+                  scoreHistory: [...experiment.scoreHistory, bestScore],
+                }
+              : experiment,
+          ),
+        );
 
-      const tagged = newCandidates.map((candidate) => ({
-        ...candidate,
-        source: "experiment" as const,
-        contributor: expConfig.contributor,
-        experimentId: expId,
-        objectiveType: expConfig.objective,
-      }));
-      ingestExperimentCandidates(tagged, `Experiment ${expId} generation ${generation}: archived ${tagged.length} candidates`);
+        const tagged = newCandidates.map((candidate) => ({
+          ...candidate,
+          source: "experiment" as const,
+          contributor: expConfig.contributor,
+          experimentId: expId,
+          objectiveType: expConfig.objective,
+        }));
+        ingestExperimentCandidates(
+          tagged,
+          `Experiment ${expId} generation ${generation}: archived ${tagged.length} candidates`,
+        );
 
-      if (generation < expConfig.generations) {
-        setTimeout(() => iterate(generation + 1), 90);
-      }
-    };
+        if (generation < expConfig.generations) {
+          setTimeout(() => iterate(generation + 1), 90);
+        }
+      };
 
-    iterate(1);
-  }, [ingestExperimentCandidates]);
+      iterate(1);
+    },
+    [ingestExperimentCandidates],
+  );
 
   const handleSubmitExperiment = useCallback(() => {
     const expId = `exp-${Date.now().toString(36)}`;
-    setExperiments((prev) => [{
-      id: expId,
-      config,
-      status: "running",
-      startedAt: Date.now(),
-      currentGeneration: 0,
-      bestScore: Infinity,
-      bestCandidate: null,
-      paretoCount: 0,
-      convergenceRate: 0,
-      parameterDispersion: 0,
-      performanceVariance: 0,
-      structuralFragility: 0,
-      robustnessScore: 0,
-      scoreHistory: [],
-    }, ...prev]);
+    setExperiments((prev) => [
+      {
+        id: expId,
+        config,
+        status: "running",
+        startedAt: Date.now(),
+        currentGeneration: 0,
+        bestScore: Infinity,
+        bestCandidate: null,
+        paretoCount: 0,
+        convergenceRate: 0,
+        parameterDispersion: 0,
+        performanceVariance: 0,
+        structuralFragility: 0,
+        robustnessScore: 0,
+        scoreHistory: [],
+      },
+      ...prev,
+    ]);
     runExperiment(expId, config);
     setActiveView("experiments");
   }, [config, runExperiment]);
 
-  const handleSelectCandidate = useCallback((id: string) => {
-    selectCandidate(id);
-    setActiveView("detail");
-  }, [selectCandidate]);
-
+  const handleSelectCandidate = useCallback(
+    (id: string) => {
+      selectCandidate(id);
+      setActiveView("detail");
+    },
+    [selectCandidate],
+  );
 
   const handleBackFromDetail = useCallback(() => {
     clearSelection();
@@ -242,39 +298,57 @@ const DiscoveryAtlas = () => {
     setActiveView("atlas");
   }, [clearSelection]);
 
-  const detailCandidate = activeView === "detail" ? (selectedCandidate || detailCandidateRef.current) : selectedCandidate;
+  const detailCandidate = activeView === "detail" ? selectedCandidate || detailCandidateRef.current : selectedCandidate;
   const badge = SYNC_BADGE[syncMode];
   const BadgeIcon = badge.icon;
   const canToggle = syncMode === "persisted" || syncMode === "memory" || syncMode === "live";
 
-  const contributors = useMemo(() => ["all", ...new Set(state.archive.map((candidate) => candidate.contributor).filter(Boolean) as string[])], [state.archive]);
-  const experimentIds = useMemo(() => ["all", ...new Set(state.archive.map((candidate) => candidate.experimentId).filter(Boolean) as string[])], [state.archive]);
-  const objectiveTypes = useMemo(() => ["all", ...new Set(state.archive.map((candidate) => candidate.objectiveType).filter(Boolean) as string[])], [state.archive]);
+  const contributors = useMemo(
+    () => ["all", ...new Set(state.archive.map((candidate) => candidate.contributor).filter(Boolean) as string[])],
+    [state.archive],
+  );
+  const experimentIds = useMemo(
+    () => ["all", ...new Set(state.archive.map((candidate) => candidate.experimentId).filter(Boolean) as string[])],
+    [state.archive],
+  );
+  const objectiveTypes = useMemo(
+    () => ["all", ...new Set(state.archive.map((candidate) => candidate.objectiveType).filter(Boolean) as string[])],
+    [state.archive],
+  );
 
-  const filteredArchive = useMemo(() => state.archive.filter((candidate) => {
-    if (atlasFilters.contributor !== "all" && candidate.contributor !== atlasFilters.contributor) return false;
-    if (atlasFilters.experimentId !== "all" && candidate.experimentId !== atlasFilters.experimentId) return false;
-    if (atlasFilters.objectiveType !== "all" && candidate.objectiveType !== atlasFilters.objectiveType) return false;
-    if (atlasFilters.regime !== "all" && candidate.regime !== atlasFilters.regime) return false;
-    if (atlasFilters.source !== "all" && (candidate.source ?? "global") !== atlasFilters.source) return false;
-    if (atlasFilters.poolType !== "all" && (candidate.poolType ?? "two-asset") !== atlasFilters.poolType) return false;
-    return true;
-  }), [atlasFilters, state.archive]);
+  const filteredArchive = useMemo(
+    () =>
+      state.archive.filter((candidate) => {
+        if (atlasFilters.contributor !== "all" && candidate.contributor !== atlasFilters.contributor) return false;
+        if (atlasFilters.experimentId !== "all" && candidate.experimentId !== atlasFilters.experimentId) return false;
+        if (atlasFilters.objectiveType !== "all" && candidate.objectiveType !== atlasFilters.objectiveType)
+          return false;
+        if (atlasFilters.regime !== "all" && candidate.regime !== atlasFilters.regime) return false;
+        if (atlasFilters.source !== "all" && (candidate.source ?? "global") !== atlasFilters.source) return false;
+        if (atlasFilters.poolType !== "all" && (candidate.poolType ?? "two-asset") !== atlasFilters.poolType)
+          return false;
+        return true;
+      }),
+    [atlasFilters, state.archive],
+  );
 
   const tabs = [
-    { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
-    { id: "competition" as const, label: "Evolution Arena", icon: Swords },
+    { id: "dashboard" as const, label: "Live Dashboard" },
+    { id: "competition" as const, label: "Evolution" },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
-    { id: "geometry" as const, label: "Geometry & Families", icon: Blend },
-    { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
-    { id: "methodology" as const, label: "Methodology", icon: Radar },
+    { id: "geometry" as const, label: "Geometry & Families" },
+    { id: "experiments" as const, label: "Experiments" },
+    { id: "methodology" as const, label: "Methodology" },
   ];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            onClick={() => navigate("/labs")}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
             <ArrowLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT ATLAS</span>
@@ -288,8 +362,8 @@ const DiscoveryAtlas = () => {
                 syncMode === "live"
                   ? "Cloud stream is shared globally and updates in real time."
                   : syncMode === "persisted"
-                  ? "Saving to IndexedDB. Click to switch to in-memory."
-                  : "In-memory only. Click to enable persistence."
+                    ? "Saving to IndexedDB. Click to switch to in-memory."
+                    : "In-memory only. Click to enable persistence."
               }
             >
               <BadgeIcon className="w-3 h-3" />
@@ -326,14 +400,21 @@ const DiscoveryAtlas = () => {
             const Icon = tab.icon;
             const isActive = activeView === tab.id;
             return (
-              <button key={tab.id} onClick={() => setActiveView(tab.id)} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              <button
+                key={tab.id}
+                onClick={() => setActiveView(tab.id)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+              >
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
               </button>
             );
           })}
           {(selectedCandidate || detailCandidateRef.current) && (
-            <button onClick={() => setActiveView("detail")} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${activeView === "detail" ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+            <button
+              onClick={() => setActiveView("detail")}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${activeView === "detail" ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
               <Fingerprint className="w-3.5 h-3.5" />
               Design Detail
             </button>
@@ -345,66 +426,176 @@ const DiscoveryAtlas = () => {
         {activeView === "atlas" && (
           <section className="mb-5 grid sm:grid-cols-6 gap-2">
             <div>
-              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.contributor} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, contributor: event.target.value }))}>
-              {contributors.map((value) => <option key={value} value={value}>{value === "all" ? "All contributors" : value}</option>)}
-            </select>
+              <select
+                className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full"
+                value={atlasFilters.contributor}
+                onChange={(event) => setAtlasFilters((prev) => ({ ...prev, contributor: event.target.value }))}
+              >
+                {contributors.map((value) => (
+                  <option key={value} value={value}>
+                    {value === "all" ? "All contributors" : value}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.experimentId} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, experimentId: event.target.value }))}>
-              {experimentIds.map((value) => <option key={value} value={value}>{value === "all" ? "All experiments" : value}</option>)}
-            </select>
+              <select
+                className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full"
+                value={atlasFilters.experimentId}
+                onChange={(event) => setAtlasFilters((prev) => ({ ...prev, experimentId: event.target.value }))}
+              >
+                {experimentIds.map((value) => (
+                  <option key={value} value={value}>
+                    {value === "all" ? "All experiments" : value}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.objectiveType} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, objectiveType: event.target.value }))}>
-              {objectiveTypes.map((value) => <option key={value} value={value}>{value === "all" ? "All objectives" : value}</option>)}
-            </select>
+              <select
+                className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full"
+                value={atlasFilters.objectiveType}
+                onChange={(event) => setAtlasFilters((prev) => ({ ...prev, objectiveType: event.target.value }))}
+              >
+                {objectiveTypes.map((value) => (
+                  <option key={value} value={value}>
+                    {value === "all" ? "All objectives" : value}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.regime} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, regime: event.target.value as RegimeId | "all" }))}>
-              <option value="all">All regimes</option>
-              {REGIMES.map((regime) => <option key={regime.id} value={regime.id}>{regime.label}</option>)}
-            </select>
+              <select
+                className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full"
+                value={atlasFilters.regime}
+                onChange={(event) =>
+                  setAtlasFilters((prev) => ({ ...prev, regime: event.target.value as RegimeId | "all" }))
+                }
+              >
+                <option value="all">All regimes</option>
+                {REGIMES.map((regime) => (
+                  <option key={regime.id} value={regime.id}>
+                    {regime.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.source} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, source: event.target.value }))}>
-              <option value="all">All sources</option>
-              <option value="global">Discovered</option>
-              <option value="experiment">Experimental</option>
-              <option value="user-designed">User-designed</option>
-            </select>
+              <select
+                className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full"
+                value={atlasFilters.source}
+                onChange={(event) => setAtlasFilters((prev) => ({ ...prev, source: event.target.value }))}
+              >
+                <option value="all">All sources</option>
+                <option value="global">Discovered</option>
+                <option value="experiment">Experimental</option>
+                <option value="user-designed">User-designed</option>
+              </select>
             </div>
             <div>
-              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.poolType} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, poolType: event.target.value }))}>
-              <option value="all">All pool layers</option>
-              <option value="two-asset">Two-asset layer</option>
-              <option value="multi-asset">Multi-asset layer</option>
-            </select>
+              <select
+                className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full"
+                value={atlasFilters.poolType}
+                onChange={(event) => setAtlasFilters((prev) => ({ ...prev, poolType: event.target.value }))}
+              >
+                <option value="all">All pool layers</option>
+                <option value="two-asset">Two-asset layer</option>
+                <option value="multi-asset">Multi-asset layer</option>
+              </select>
             </div>
           </section>
         )}
 
         <AnimatePresence mode="wait">
-          {activeView === "dashboard" && <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
-          {activeView === "atlas" && <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} /></motion.div>}
+          {activeView === "dashboard" && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} />
+            </motion.div>
+          )}
+          {activeView === "atlas" && (
+            <motion.div
+              key="atlas"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} />
+            </motion.div>
+          )}
           {activeView === "competition" && (
-            <motion.div key="competition" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="space-y-4">
+            <motion.div
+              key="competition"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-4"
+            >
               <div className="inline-flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/40">
-                <button onClick={() => setCompetitionSubview("pareto")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "pareto" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Target className="w-3 h-3 inline mr-1" />Pareto Frontier</button>
-                <button onClick={() => setCompetitionSubview("arena")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "arena" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Swords className="w-3 h-3 inline mr-1" />Arena</button>
-                <button onClick={() => setCompetitionSubview("replay")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "replay" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><History className="w-3 h-3 inline mr-1" />Evolution Replay</button>
+                <button
+                  onClick={() => setCompetitionSubview("pareto")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "pareto" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Target className="w-3 h-3 inline mr-1" />
+                  Pareto Frontier
+                </button>
+                <button
+                  onClick={() => setCompetitionSubview("arena")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "arena" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Swords className="w-3 h-3 inline mr-1" />
+                  Arena
+                </button>
+                <button
+                  onClick={() => setCompetitionSubview("replay")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "replay" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <History className="w-3 h-3 inline mr-1" />
+                  Evolution Replay
+                </button>
               </div>
-              {competitionSubview === "pareto" && <ParetoFrontier state={state} onSelectCandidate={handleSelectCandidate} />}
+              {competitionSubview === "pareto" && (
+                <ParetoFrontier state={state} onSelectCandidate={handleSelectCandidate} />
+              )}
               {competitionSubview === "arena" && <ArenaView state={state} onSelectCandidate={handleSelectCandidate} />}
               {competitionSubview === "replay" && <EvolutionReplay state={state} />}
             </motion.div>
           )}
           {activeView === "geometry" && (
-            <motion.div key="geometry" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="space-y-4">
+            <motion.div
+              key="geometry"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-4"
+            >
               <div className="inline-flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/40">
-                <button onClick={() => setGeometrySubview("observatory")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${geometrySubview === "observatory" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Radar className="w-3 h-3 inline mr-1" />Geometry Observatory</button>
-                <button onClick={() => setGeometrySubview("directory")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${geometrySubview === "directory" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Layers className="w-3 h-3 inline mr-1" />Family Directory</button>
+                <button
+                  onClick={() => setGeometrySubview("observatory")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${geometrySubview === "observatory" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Radar className="w-3 h-3 inline mr-1" />
+                  Geometry Observatory
+                </button>
+                <button
+                  onClick={() => setGeometrySubview("directory")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${geometrySubview === "directory" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Layers className="w-3 h-3 inline mr-1" />
+                  Family Directory
+                </button>
               </div>
-              {geometrySubview === "observatory" && <GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} />}
+              {geometrySubview === "observatory" && (
+                <GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} />
+              )}
               {geometrySubview === "directory" && <FamilyDirectory state={{ ...state, archive: filteredArchive }} />}
             </motion.div>
           )}
@@ -418,8 +609,28 @@ const DiscoveryAtlas = () => {
               state={state}
             />
           )}
-          {activeView === "methodology" && <motion.div key="methodology" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><MethodologyTab /></motion.div>}
-          {activeView === "detail" && detailCandidate && <motion.div key="detail" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><DesignDetail candidate={detailCandidate} state={state} onBack={handleBackFromDetail} /></motion.div>}
+          {activeView === "methodology" && (
+            <motion.div
+              key="methodology"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <MethodologyTab />
+            </motion.div>
+          )}
+          {activeView === "detail" && detailCandidate && (
+            <motion.div
+              key="detail"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <DesignDetail candidate={detailCandidate} state={state} onBack={handleBackFromDetail} />
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
     </div>
