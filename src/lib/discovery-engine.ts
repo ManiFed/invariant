@@ -10,7 +10,7 @@ export const BIN_WIDTH = (LOG_PRICE_MAX - LOG_PRICE_MIN) / NUM_BINS;
 export const TOTAL_LIQUIDITY = 1_000; // normalized constant
 export const POPULATION_SIZE = 40;
 export const ELITE_FRACTION = 0.25;
-export const EXPLORATION_RATE = 0.15;
+export const EXPLORATION_RATE = 0.24;
 export const FEE_RATE = 0.003; // 30 bps
 export const ARB_THRESHOLD = 0.005; // 50 bps deviation triggers arb
 export const TRAINING_PATHS = 20;
@@ -701,16 +701,28 @@ export function scoreCandidate(metrics: MetricVector, stability: number): number
   // +fees, +utilization, +lpValueVsHodl
   // Objectives (lower is better):
   // +slippage, +arbLeakage, +maxDrawdown, +volatility, +stability
+  // Atlas objective extension:
+  // maximize full spider coverage and improve the weakest axis.
+
+  const normalized = normalizeMetrics(metrics, stability);
+  const axisValues = Object.values(normalized);
+  const weakestAxis = Math.min(...axisValues);
+  const spiderCoverage = Math.pow(
+    axisValues.reduce((prod, value) => prod * Math.max(value, 0.02), 1),
+    1 / axisValues.length,
+  );
 
   const score =
-    -metrics.totalFees * 2 +          // maximize fees
-    metrics.totalSlippage * 1 +        // minimize slippage
-    metrics.arbLeakage * 1.5 +         // minimize arb leakage
-    -metrics.liquidityUtilization * 3 + // maximize utilization
-    -(metrics.lpValueVsHodl - 1) * 5 + // maximize LP value vs HODL
-    metrics.maxDrawdown * 2 +           // minimize drawdown
-    metrics.volatilityOfReturns * 1 +   // minimize vol of returns
-    stability * 2;                      // minimize instability
+    -metrics.totalFees * 1.8 +           // maximize fees
+    metrics.totalSlippage * 1.1 +         // minimize slippage
+    metrics.arbLeakage * 1.5 +            // minimize arb leakage
+    -metrics.liquidityUtilization * 2.6 + // maximize utilization
+    -(metrics.lpValueVsHodl - 1) * 4.8 +  // maximize LP value vs HODL
+    metrics.maxDrawdown * 2.2 +           // minimize drawdown
+    metrics.volatilityOfReturns * 1.0 +   // minimize vol of returns
+    stability * 1.8 +                     // minimize instability
+    -spiderCoverage * 4.0 +               // occupy as much spider graph as possible
+    (1 - weakestAxis) * 3.0;              // force weakest non-optimized path upward
 
   return score;
 }
@@ -837,7 +849,11 @@ export function runGeneration(
       }
     } else {
       // Generate children from elite parents via mutation
-      const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * EXPLORATION_RATE);
+      const championCoverage = population.champion
+        ? analyzeMetricProfile(population.champion.metrics, population.champion.stability).spiderCoverage
+        : 0;
+      const adaptiveExplorationRate = Math.min(0.42, Math.max(0.14, EXPLORATION_RATE + (0.58 - championCoverage) * 0.35));
+      const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * adaptiveExplorationRate);
       for (let i = 0; i < numChildren; i++) {
         const parent = elites[i % elites.length];
         const childFamily = INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0];

@@ -547,10 +547,13 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     const regime = regimeScores[0].regime;
 
     // ── 3. Candidate Generation with Three-Strategy Mix ──
-    const baseCandidates = explorationSpeed === "fast" ? 4 : explorationSpeed === "thorough" ? 12 : 6;
-    const candidatesPerStep = selected.explorationPhase === "intensify"
-      ? Math.ceil(baseCandidates * 1.5)
-      : baseCandidates;
+    const baseCandidates = explorationSpeed === "fast" ? 5 : explorationSpeed === "thorough" ? 14 : 8;
+    const pathwayLooksBad = selected.failureStreak >= 5 || selected.stagnationPenalty > 0.45;
+    const candidatesPerStep = pathwayLooksBad
+      ? Math.max(3, Math.floor(baseCandidates * 0.5))
+      : selected.explorationPhase === "intensify"
+        ? Math.ceil(baseCandidates * 1.5)
+        : baseCandidates;
 
     const newCandidates: BranchCandidate[] = [];
     const realCandidates: Candidate[] = [];
@@ -615,8 +618,8 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
         }
       }
 
-      const pathCount = explorationSpeed === "fast" ? 8 : explorationSpeed === "thorough" ? 20 : 12;
-      const evalPathCount = explorationSpeed === "fast" ? 4 : explorationSpeed === "thorough" ? 10 : 6;
+      const pathCount = explorationSpeed === "fast" ? 8 : explorationSpeed === "thorough" ? 22 : 13;
+      const evalPathCount = explorationSpeed === "fast" ? 4 : explorationSpeed === "thorough" ? 11 : 7;
       const { metrics, stability } = evaluateCandidate(bins, regime, pathCount, evalPathCount);
       const features = computeFeatures(bins);
       const score = scoreCandidate(metrics, stability);

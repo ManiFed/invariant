@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2,
-  FlaskConical, Radar, Zap, Layers, Swords, History, Target,
+  FlaskConical, Radar, Zap, Layers, Swords, History, Target, Blend,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -19,7 +19,9 @@ import EvolutionReplay from "@/components/labs/EvolutionReplay";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "directory" | "observatory" | "experiments" | "methodology" | "detail" | "pareto" | "arena" | "replay";
+type View = "dashboard" | "atlas" | "geometry" | "competition" | "experiments" | "methodology" | "detail";
+type GeometrySubview = "directory" | "observatory";
+type CompetitionSubview = "pareto" | "arena" | "replay";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
 type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
@@ -100,6 +102,8 @@ const DiscoveryAtlas = () => {
   const navigate = useNavigate();
   const { state, selectedCandidate, selectCandidate, clearSelection, syncMode, role, togglePersistence, ingestExperimentCandidates } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
+  const [geometrySubview, setGeometrySubview] = useState<GeometrySubview>("observatory");
+  const [competitionSubview, setCompetitionSubview] = useState<CompetitionSubview>("pareto");
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [genRate, setGenRate] = useState<number | null>(null);
   const genRateRef = useRef({ lastGen: 0, lastTime: Date.now(), samples: [] as number[] });
@@ -197,7 +201,7 @@ const DiscoveryAtlas = () => {
       ingestExperimentCandidates(tagged, `Experiment ${expId} generation ${generation}: archived ${tagged.length} candidates`);
 
       if (generation < expConfig.generations) {
-        setTimeout(() => iterate(generation + 1), 200);
+        setTimeout(() => iterate(generation + 1), 90);
       }
     };
 
@@ -259,12 +263,9 @@ const DiscoveryAtlas = () => {
 
   const tabs = [
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
-    { id: "pareto" as const, label: "Pareto Frontier", icon: Target },
-    { id: "arena" as const, label: "Arena", icon: Swords },
-    { id: "replay" as const, label: "Evolution Replay", icon: History },
+    { id: "competition" as const, label: "Evolution Arena", icon: Swords },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
-    { id: "directory" as const, label: "Family Directory", icon: Layers },
-    { id: "observatory" as const, label: "Geometry Observatory", icon: Radar },
+    { id: "geometry" as const, label: "Geometry & Families", icon: Blend },
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
     { id: "methodology" as const, label: "Methodology", icon: Radar },
   ];
@@ -384,12 +385,29 @@ const DiscoveryAtlas = () => {
 
         <AnimatePresence mode="wait">
           {activeView === "dashboard" && <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
-          {activeView === "pareto" && <motion.div key="pareto" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><ParetoFrontier state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
-          {activeView === "arena" && <motion.div key="arena" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><ArenaView state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
-          {activeView === "replay" && <motion.div key="replay" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><EvolutionReplay state={state} /></motion.div>}
           {activeView === "atlas" && <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} /></motion.div>}
-          {activeView === "directory" && <motion.div key="directory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><FamilyDirectory state={{ ...state, archive: filteredArchive }} /></motion.div>}
-          {activeView === "observatory" && <motion.div key="observatory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} /></motion.div>}
+          {activeView === "competition" && (
+            <motion.div key="competition" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="space-y-4">
+              <div className="inline-flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/40">
+                <button onClick={() => setCompetitionSubview("pareto")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "pareto" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Target className="w-3 h-3 inline mr-1" />Pareto Frontier</button>
+                <button onClick={() => setCompetitionSubview("arena")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "arena" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Swords className="w-3 h-3 inline mr-1" />Arena</button>
+                <button onClick={() => setCompetitionSubview("replay")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${competitionSubview === "replay" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><History className="w-3 h-3 inline mr-1" />Evolution Replay</button>
+              </div>
+              {competitionSubview === "pareto" && <ParetoFrontier state={state} onSelectCandidate={handleSelectCandidate} />}
+              {competitionSubview === "arena" && <ArenaView state={state} onSelectCandidate={handleSelectCandidate} />}
+              {competitionSubview === "replay" && <EvolutionReplay state={state} />}
+            </motion.div>
+          )}
+          {activeView === "geometry" && (
+            <motion.div key="geometry" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }} className="space-y-4">
+              <div className="inline-flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/40">
+                <button onClick={() => setGeometrySubview("observatory")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${geometrySubview === "observatory" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Radar className="w-3 h-3 inline mr-1" />Geometry Observatory</button>
+                <button onClick={() => setGeometrySubview("directory")} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${geometrySubview === "directory" ? "bg-background border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}><Layers className="w-3 h-3 inline mr-1" />Family Directory</button>
+              </div>
+              {geometrySubview === "observatory" && <GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} />}
+              {geometrySubview === "directory" && <FamilyDirectory state={{ ...state, archive: filteredArchive }} />}
+            </motion.div>
+          )}
           {activeView === "experiments" && (
             <ExperimentsTab
               config={config}

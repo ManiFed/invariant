@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from "recharts";
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis, Cell } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import type { EngineState, Candidate, RegimeId } from "@/lib/discovery-engine";
 
@@ -48,6 +48,9 @@ export default function ParetoFrontier({ state, onSelectCandidate }: ParetoFront
   const [xMetric, setXMetric] = useState<MetricKey>("totalFees");
   const [yMetric, setYMetric] = useState<MetricKey>("totalSlippage");
   const [regimeFilter, setRegimeFilter] = useState<RegimeId | "all">("all");
+  const [showDominated, setShowDominated] = useState(true);
+  const [pointScale, setPointScale] = useState<"uniform" | "score">("score");
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const xOption = METRIC_OPTIONS.find(m => m.key === xMetric)!;
   const yOption = METRIC_OPTIONS.find(m => m.key === yMetric)!;
@@ -72,6 +75,7 @@ export default function ParetoFrontier({ state, onSelectCandidate }: ParetoFront
         score: c.score,
         dominated,
         familyId: c.familyId,
+        size: pointScale === "uniform" ? 40 : Math.max(24, 90 - c.score * 20),
       };
     });
 
@@ -81,10 +85,11 @@ export default function ParetoFrontier({ state, onSelectCandidate }: ParetoFront
       paretoCount: pareto.length,
       dominatedCount: pts.length - pareto.length,
     };
-  }, [state.archive, xMetric, yMetric, regimeFilter, xOption.higher, yOption.higher]);
+  }, [state.archive, xMetric, yMetric, regimeFilter, xOption.higher, yOption.higher, pointScale]);
 
   const nonDominated = points.filter(p => !p.dominated);
   const dominated = points.filter(p => p.dominated);
+  const topFrontier = [...nonDominated].sort((a, b) => a.score - b.score).slice(0, 6);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.[0]) return null;
@@ -125,7 +130,7 @@ export default function ParetoFrontier({ state, onSelectCandidate }: ParetoFront
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid md:grid-cols-4 gap-3">
         <div>
           <label className="text-[9px] text-muted-foreground block mb-1">X Axis</label>
           <select
@@ -150,10 +155,22 @@ export default function ParetoFrontier({ state, onSelectCandidate }: ParetoFront
             ))}
           </select>
         </div>
+        <button
+          onClick={() => setShowDominated(v => !v)}
+          className="text-[10px] px-2 py-1.5 rounded border border-border bg-background mt-4 md:mt-0"
+        >
+          {showDominated ? "Hide" : "Show"} dominated points
+        </button>
+        <button
+          onClick={() => setPointScale(v => v === "uniform" ? "score" : "uniform")}
+          className="text-[10px] px-2 py-1.5 rounded border border-border bg-background mt-4 md:mt-0"
+        >
+          Point size: {pointScale === "score" ? "by quality" : "uniform"}
+        </button>
       </div>
 
-      <div className="surface-elevated rounded-xl p-4">
-        <div className="h-80">
+      <div className="surface-elevated rounded-xl p-4 border border-primary/20 shadow-[0_0_20px_hsl(var(--primary)/0.08)]">
+        <div className="h-[26rem]">
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 10, right: 10, bottom: 20, left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
@@ -167,29 +184,47 @@ export default function ParetoFrontier({ state, onSelectCandidate }: ParetoFront
                 tick={{ fontSize: 8, fill: chartColors.tick }}
                 label={{ value: yOption.label, angle: -90, position: "insideLeft", offset: -5, fontSize: 9, fill: chartColors.tick }}
               />
-              <ZAxis range={[20, 20]} />
+              <ZAxis dataKey="size" range={[20, 140]} />
               <Tooltip content={<CustomTooltip />} />
-              <Scatter
-                name="Dominated"
-                data={dominated}
-                fill={chartColors.grid}
-                fillOpacity={0.3}
-                onClick={(d: any) => d?.id && onSelectCandidate(d.id)}
-                cursor="pointer"
-              />
+              {showDominated && <Scatter name="Dominated" data={dominated} fill={chartColors.grid} fillOpacity={0.22} onClick={(d: any) => d?.id && onSelectCandidate(d.id)} cursor="pointer" />}
               <Scatter
                 name="Pareto Front"
                 data={nonDominated}
                 fillOpacity={0.9}
                 onClick={(d: any) => d?.id && onSelectCandidate(d.id)}
+                onMouseOver={(d: any) => setHighlightId(d?.id ?? null)}
                 cursor="pointer"
               >
                 {nonDominated.map((entry, index) => (
-                  <rect key={index} fill={REGIME_COLORS[entry.regime as RegimeId] || chartColors.tick} />
+                  <Cell
+                    key={index}
+                    fill={REGIME_COLORS[entry.regime as RegimeId] || chartColors.tick}
+                    stroke={highlightId === entry.id ? "hsl(var(--foreground))" : "transparent"}
+                    strokeWidth={highlightId === entry.id ? 2 : 0}
+                  />
                 ))}
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3">
+        <div className="surface-elevated rounded-lg p-3 border border-border">
+          <p className="text-[10px] text-muted-foreground mb-2">Frontier leaders (click to inspect)</p>
+          <div className="space-y-1.5">
+            {topFrontier.map((point) => (
+              <button key={point.id} onClick={() => onSelectCandidate(point.id)} className="w-full flex items-center justify-between text-left px-2 py-1.5 rounded border border-border hover:border-primary/40 hover:bg-primary/5">
+                <span className="text-[10px] font-medium">{point.familyId}</span>
+                <span className="text-[10px] text-muted-foreground">score {point.score.toFixed(3)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="surface-elevated rounded-lg p-3 border border-border text-[10px] text-muted-foreground space-y-1.5">
+          <p><span className="text-foreground font-semibold">Tip:</span> switch axes to expose non-optimized pathways.</p>
+          <p>Pareto points are color-coded by regime, and larger points indicate stronger aggregate performance.</p>
+          <p>Click any point to jump into Design Detail for deeper inspection and replay.</p>
         </div>
       </div>
 
