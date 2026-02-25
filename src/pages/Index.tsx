@@ -81,7 +81,7 @@ const Index = () => {
 
           <NavCard
             title="Labs"
-            description="Multi-asset pools and time-varying AMM mechanisms"
+            description="Cool stuff I built, pushing the limit of what my Railway hosting plan can handle"
             icon={<FlaskConical className="w-5 h-5" />}
             badge="New"
             badgeColor="border-warning/30 text-warning"
@@ -90,7 +90,7 @@ const Index = () => {
 
           <NavCard
             title="AMM Library"
-            description="Browse famous, featured, and community-made AMM designs"
+            description="Browse featured and community-made AMM designs"
             icon={<Library className="w-5 h-5" />}
             onClick={() => navigate("/library")}
           />
