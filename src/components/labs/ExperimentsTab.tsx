@@ -68,6 +68,7 @@ const RESEARCH_OBJECTIVES = [
 ] as const;
 
 const scoreBar = (value: number) => `${Math.max(4, Math.min(100, value * 100))}%`;
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/amm-chat`;
 
 // ─── AI Assistant Messages ──────────────────────────────────────────────────
 
@@ -152,15 +153,81 @@ export default function ExperimentsTab({
   const [showAssistant, setShowAssistant] = useState(true);
   const [expandedExperiment, setExpandedExperiment] = useState<string | null>(null);
   const [designMode, setDesignMode] = useState<"simple" | "advanced">("simple");
+  const [isAssistantLoading, setIsAssistantLoading] = useState(false);
 
-  const handleSendMessage = useCallback(() => {
-    if (!chatInput.trim()) return;
-    const userMsg: AssistantMessage = { role: "user", content: chatInput, timestamp: Date.now() };
-    const response = generateAssistantResponse(chatInput);
+  const fetchAssistantResponse = useCallback(async (userInput: string, conversation: AssistantMessage[]) => {
+    try {
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          context: "You are assisting with AMM experiment design in the Experiments tab.",
+          messages: conversation.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!resp.ok || !resp.body) throw new Error("Assistant endpoint unavailable");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+      let assistantSoFar = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+
+          const payload = line.slice(6).trim();
+          if (payload === "[DONE]") break;
+
+          try {
+            const parsed = JSON.parse(payload);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) assistantSoFar += content;
+          } catch {
+            // Wait for the next chunk when partial JSON arrives.
+          }
+        }
+      }
+
+      if (assistantSoFar.trim()) return assistantSoFar;
+      throw new Error("Empty assistant response");
+    } catch {
+      return generateAssistantResponse(userInput);
+    }
+  }, []);
+
+  const sendMessage = useCallback(async (text: string) => {
+    if (!text.trim() || isAssistantLoading) return;
+    const userMsg: AssistantMessage = { role: "user", content: text.trim(), timestamp: Date.now() };
+    const conversation = [...assistantMessages, userMsg];
+    setAssistantMessages(conversation);
+    setIsAssistantLoading(true);
+
+    const response = await fetchAssistantResponse(text.trim(), conversation);
     const assistantMsg: AssistantMessage = { role: "assistant", content: response, timestamp: Date.now() + 1 };
-    setAssistantMessages(prev => [...prev, userMsg, assistantMsg]);
+    setAssistantMessages((prev) => [...prev, assistantMsg]);
+    setIsAssistantLoading(false);
+  }, [assistantMessages, fetchAssistantResponse, isAssistantLoading]);
+
+  const handleSendMessage = useCallback(async () => {
+    if (!chatInput.trim()) return;
+    const nextInput = chatInput;
     setChatInput("");
-  }, [chatInput]);
+    await sendMessage(nextInput);
+  }, [chatInput, sendMessage]);
 
   const quickQuestions = Object.keys(AI_SUGGESTIONS);
 
@@ -586,10 +653,7 @@ export default function ExperimentsTab({
                       <button
                         key={q}
                         onClick={() => {
-                          const userMsg: AssistantMessage = { role: "user", content: q, timestamp: Date.now() };
-                          const response = AI_SUGGESTIONS[q];
-                          const assistantMsg: AssistantMessage = { role: "assistant", content: response, timestamp: Date.now() + 1 };
-                          setAssistantMessages(prev => [...prev, userMsg, assistantMsg]);
+                          void sendMessage(q);
                         }}
                         className="text-[9px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all truncate max-w-[200px]"
                       >
@@ -625,6 +689,11 @@ export default function ExperimentsTab({
                       </div>
                     </motion.div>
                   ))}
+                  {isAssistantLoading && (
+                    <div className="rounded-lg p-2.5 text-[10px] leading-relaxed bg-chart-3/5 border border-chart-3/15 mr-2 text-muted-foreground">
+                      Ammy is thinking...
+                    </div>
+                  )}
                 </div>
 
                 {/* Input */}
@@ -635,11 +704,12 @@ export default function ExperimentsTab({
                       placeholder="Ask about experiment design..."
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                      onKeyDown={(e) => { if (e.key === "Enter") void handleSendMessage(); }}
                     />
                     <button
-                      onClick={handleSendMessage}
-                      className="p-2 rounded-md bg-chart-3/10 border border-chart-3/20 text-chart-3 hover:bg-chart-3/20 transition-colors"
+                      onClick={() => { void handleSendMessage(); }}
+                      disabled={isAssistantLoading || !chatInput.trim()}
+                      className="p-2 rounded-md bg-chart-3/10 border border-chart-3/20 text-chart-3 hover:bg-chart-3/20 transition-colors disabled:opacity-50"
                     >
                       <Send className="w-3 h-3" />
                     </button>

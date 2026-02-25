@@ -17,6 +17,9 @@ export const TRAINING_PATHS = 20;
 export const EVAL_PATHS = 10;
 export const PATH_STEPS = 200;
 export const DT = 1 / 365; // daily steps
+export const FAST_PATH_STEPS = 96;
+export const MAX_TRAIN_PATHS_PER_EVAL = 4;
+export const MAX_EVAL_PATHS_PER_EVAL = 4;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -541,17 +544,19 @@ export function evaluateCandidate(
   numEvalPaths: number
 ): { metrics: MetricVector; stability: number; equityCurve: number[] } {
   const allMetrics: MetricVector[] = [];
+  const effectiveTrainPaths = Math.max(1, Math.min(numTrainPaths, MAX_TRAIN_PATHS_PER_EVAL));
+  const effectiveEvalPaths = Math.max(1, Math.min(numEvalPaths, MAX_EVAL_PATHS_PER_EVAL));
 
   // Training paths
-  for (let p = 0; p < numTrainPaths; p++) {
-    const pricePath = generatePricePath(regime, PATH_STEPS, DT);
+  for (let p = 0; p < effectiveTrainPaths; p++) {
+    const pricePath = generatePricePath(regime, FAST_PATH_STEPS, DT);
     allMetrics.push(simulatePath(bins, pricePath, regime));
   }
 
   // Evaluation paths (separate for overfitting prevention)
   const evalMetrics: MetricVector[] = [];
-  for (let p = 0; p < numEvalPaths; p++) {
-    const pricePath = generatePricePath(regime, PATH_STEPS, DT);
+  for (let p = 0; p < effectiveEvalPaths; p++) {
+    const pricePath = generatePricePath(regime, FAST_PATH_STEPS, DT);
     const m = simulatePath(bins, pricePath, regime);
     allMetrics.push(m);
     evalMetrics.push(m);
@@ -586,7 +591,7 @@ export function evaluateCandidate(
   const varLpvh = allLpvh.reduce((a, v) => a + (v - meanLpvh) ** 2, 0) / allLpvh.length;
 
   // Simple equity curve from last eval path (normalized)
-  const lastPath = generatePricePath(regime, PATH_STEPS, DT);
+  const lastPath = generatePricePath(regime, FAST_PATH_STEPS, DT);
   const simState = initSimState(new Float64Array(bins));
   const equity: number[] = [1];
   for (let t = 1; t < lastPath.length; t++) {
