@@ -524,7 +524,14 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       return { branch: b, draw };
     });
     scored.sort((a, b) => b.draw - a.draw);
-    const selected = scored[0].branch;
+
+    const unexploredBranches = branches.filter((b) => b.tested === 0);
+    const exploredRatio = branches.filter((b) => b.tested > 0).length / Math.max(1, branches.length);
+    const forcedExplorationChance = clamp(0.4 - exploredRatio * 0.35, 0.08, 0.4);
+
+    const selected = (unexploredBranches.length > 0 && Math.random() < forcedExplorationChance)
+      ? unexploredBranches[Math.floor(Math.random() * unexploredBranches.length)]
+      : scored[0].branch;
 
     setActiveNodeId(selected.id);
 
@@ -731,6 +738,30 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     // ── 7. Update branch with analysis ──
     setBranches(prev => prev.map(b => {
       if (b.id !== selected.id) {
+        const shouldTrashBranch = b.failureStreak >= 12 && b.bestScore > 1.2;
+        if (shouldTrashBranch) {
+          return {
+            ...b,
+            tested: 0,
+            candidates: [],
+            scoreHistory: [],
+            bestScore: Infinity,
+            bestCandidate: null,
+            failureStreak: 0,
+            stagnationPenalty: 0,
+            mutationIntensity: 0.22,
+            improvementVelocity: 0,
+            recentScores: [],
+            explorationPhase: "explore",
+            novelty: 1,
+            metricProfile: null,
+            spiderCoverage: 0,
+            metricStrengths: [],
+            metricWeaknesses: [],
+            lastAnalysis: null,
+          };
+        }
+
         return {
           ...b,
           novelty: clamp(b.novelty * 0.998 + 0.001),
@@ -820,12 +851,25 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     // Update convergence tracking
     setConvergenceData(prev => {
       const step = prev.length + 1;
-      const allBest = branches.reduce((min, b) => Math.min(min, b.bestScore), Infinity);
-      const tested = branches.filter(b => b.tested > 0);
+      const projectedBranches = branches.map((b) => {
+        if (b.id !== selected.id) return b;
+        return {
+          ...b,
+          tested: b.tested + newCandidates.length,
+          bestScore: Math.min(b.bestScore, bestNew.score),
+        };
+      });
+
+      const finiteBestScores = projectedBranches
+        .map((b) => b.bestScore)
+        .filter((score) => Number.isFinite(score));
+      const tested = projectedBranches.filter((b) => b.tested > 0);
       const avg = tested.length > 0
-        ? tested.reduce((a, b) => a + b.bestScore, 0) / tested.length
+        ? tested.reduce((a, b) => a + (Number.isFinite(b.bestScore) ? b.bestScore : 0), 0) / tested.length
         : 0;
-      return [...prev, { step, best: Math.min(allBest, bestNew.score), avg, explored: tested.length + 1 }].slice(-100);
+      const best = finiteBestScores.length > 0 ? Math.min(...finiteBestScores) : bestNew.score;
+
+      return [...prev, { step, best, avg, explored: tested.length }].slice(-100);
     });
 
     setTotalAllocations(prev => prev + 1);
@@ -884,6 +928,18 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     const coverageRatio = explored / Math.max(1, branches.length);
     return { explored, total: branches.length, totalCandidates, coverageRatio };
   }, [branches]);
+
+  const convergenceCoverageData = useMemo(() => {
+    if (convergenceData.length === 0) return [];
+    return convergenceData.map((entry) => {
+      const spiderPoint = spiderHistory.find((h) => h.step === entry.step);
+      return {
+        ...entry,
+        coverage: spiderPoint?.coverage ?? 0,
+        minMetric: spiderPoint?.minMetric ?? 0,
+      };
+    });
+  }, [convergenceData, spiderHistory]);
 
   // Universe graph layout
   const graphWidth = 700;
@@ -1304,9 +1360,10 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
           {convergenceData.length > 1 ? (
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={convergenceData}>
+                <LineChart data={convergenceCoverageData}>
                   <XAxis dataKey="step" tick={{ fontSize: 8, fill: colors.tick }} />
-                  <YAxis tick={{ fontSize: 8, fill: colors.tick }} />
+                  <YAxis yAxisId="score" tick={{ fontSize: 8, fill: colors.tick }} />
+                  <YAxis yAxisId="coverage" orientation="right" domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} tick={{ fontSize: 8, fill: colors.tick }} />
                   <Tooltip
                     contentStyle={{
                       background: colors.tooltipBg,
@@ -1316,9 +1373,10 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
                       color: colors.tooltipText,
                     }}
                   />
-                  <Line type="monotone" dataKey="best" stroke="hsl(142, 72%, 45%)" strokeWidth={2} dot={false} name="Best Score" />
-                  <Line type="monotone" dataKey="avg" stroke="hsl(38, 92%, 50%)" strokeWidth={1.5} dot={false} name="Avg Explored" strokeDasharray="4 4" />
-                  <Line type="monotone" dataKey="explored" stroke="hsl(220, 70%, 55%)" strokeWidth={1} dot={false} name="Branches Explored" hide />
+                  <Line yAxisId="score" type="monotone" dataKey="best" stroke="hsl(142, 72%, 45%)" strokeWidth={2} dot={false} name="Best Score" />
+                  <Line yAxisId="score" type="monotone" dataKey="avg" stroke="hsl(38, 92%, 50%)" strokeWidth={1.5} dot={false} name="Avg Explored" strokeDasharray="4 4" />
+                  <Line yAxisId="coverage" type="monotone" dataKey="coverage" stroke="hsl(220, 70%, 55%)" strokeWidth={1.5} dot={false} name="Spider Coverage" />
+                  <Line yAxisId="coverage" type="monotone" dataKey="minMetric" stroke="hsl(280, 75%, 60%)" strokeWidth={1} dot={false} name="Weakest Axis" strokeDasharray="3 3" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
