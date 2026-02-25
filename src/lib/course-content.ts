@@ -291,10 +291,9 @@ export const COURSE_MODULES: CourseModule[] = [
         type: "lesson",
         title: "What Does HODL Mean?",
         content: [
-          "Before we dive into impermanent loss, you need to understand one term: HODL.",
+          "Before we dive into impermanent loss, you need to understand one odd term: HODL.",
           "HODL stands for \"Hold On for Dear Life\" — it's crypto slang that simply means holding your tokens in your wallet without doing anything with them.",
-          "For example, if you have 100 ETH and 100,000 USDC, your HODL value is just what those tokens are worth at any given time. If ETH goes to $3,000, your HODL value = (100 × $3,000) + $100,000 = $400,000.",
-          "We use HODL value as a benchmark: would you have been better off just holding, or was providing liquidity worth it?",
+          "Your HODL value is just what those tokens are worth at any given time. We use HODL value as a benchmark: would you have been better off just holding, or was providing liquidity worth it?",
         ],
         visual: "hodl-explain",
       },
