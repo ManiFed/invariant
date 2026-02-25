@@ -667,9 +667,18 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     // ── 5. Analyze batch results: what worked, what didn't ──
     const avgScore = newCandidates.reduce((a, c) => a + c.score, 0) / newCandidates.length;
     const variance = newCandidates.reduce((a, c) => a + (c.score - avgScore) ** 2, 0) / newCandidates.length;
+    if (newCandidates.length === 0 || candidateAnalyses.length === 0) {
+      setIsRunning(false);
+      return;
+    }
+
     const bestNew = newCandidates.reduce((best, c) => c.score < best.score ? c : best, newCandidates[0]);
     const bestNewIdx = newCandidates.indexOf(bestNew);
-    const bestAnalysis = candidateAnalyses[bestNewIdx];
+    const bestAnalysis = candidateAnalyses[bestNewIdx] ?? candidateAnalyses[0];
+    if (!bestAnalysis) {
+      setIsRunning(false);
+      return;
+    }
 
     // Aggregate metric analysis across all candidates in this batch
     const batchStrengths = new Map<keyof NormalizedMetrics, number>();
@@ -686,14 +695,26 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
       .map(([k]) => k);
 
     // ── 6. Update spider coverage champion ──
-    const bestSpiderCoverage = Math.max(...candidateAnalyses.map(a => a.spiderCoverage));
-    const bestSpiderIdx = candidateAnalyses.findIndex(a => a.spiderCoverage === bestSpiderCoverage);
+    let bestSpiderIdx = -1;
+    let bestSpiderCoverage = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < candidateAnalyses.length; i++) {
+      const coverage = candidateAnalyses[i]?.spiderCoverage;
+      if (!Number.isFinite(coverage)) continue;
+      if (coverage > bestSpiderCoverage) {
+        bestSpiderCoverage = coverage;
+        bestSpiderIdx = i;
+      }
+    }
+
+    const spiderAnalysis = bestSpiderIdx >= 0 ? candidateAnalyses[bestSpiderIdx] : bestAnalysis;
+    const spiderCandidate = bestSpiderIdx >= 0 ? newCandidates[bestSpiderIdx] : bestNew;
+    const normalizedValues = Object.values(spiderAnalysis.normalized).filter(Number.isFinite);
 
     if (bestSpiderCoverage > (spiderChampion?.analysis.spiderCoverage ?? 0)) {
       setSpiderChampion({
         branchId: selected.id,
-        candidate: newCandidates[bestSpiderIdx],
-        analysis: candidateAnalyses[bestSpiderIdx],
+        candidate: spiderCandidate,
+        analysis: spiderAnalysis,
         regime: regime.id,
       });
     }
@@ -701,10 +722,8 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
     setSpiderHistory(prev => {
       const step = prev.length + 1;
       const currentBest = Math.max(bestSpiderCoverage, spiderChampion?.analysis.spiderCoverage ?? 0);
-      const minMetric = Math.min(
-        ...Object.values(candidateAnalyses[bestSpiderIdx].normalized),
-      );
-      return [...prev, { step, coverage: currentBest, minMetric }].slice(-100);
+      const minMetric = normalizedValues.length > 0 ? Math.min(...normalizedValues) : 0;
+      return [...prev, { step, coverage: Number.isFinite(currentBest) ? currentBest : 0, minMetric }].slice(-100);
     });
 
     setMetricChampionBins(new Map(metricChampionBins));
