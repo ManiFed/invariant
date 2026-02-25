@@ -227,6 +227,80 @@ export async function triggerGeneration(regime?: RegimeId): Promise<{
   }
 }
 
+interface CloudBackupCandidate {
+  id: string;
+  bins: number[];
+  familyId?: Candidate["familyId"];
+  familyParams?: Candidate["familyParams"];
+  regime: RegimeId;
+  generation: number;
+  metrics: Candidate["metrics"];
+  features: Candidate["features"];
+  stability: number;
+  score: number;
+  timestamp: number;
+  source?: Candidate["source"];
+  poolType?: Candidate["poolType"];
+  assetCount?: Candidate["assetCount"];
+  adaptiveProfile?: Candidate["adaptiveProfile"];
+}
+
+function serializeCandidateForBackup(candidate: Candidate): CloudBackupCandidate {
+  return {
+    id: candidate.id,
+    bins: Array.from(candidate.bins),
+    familyId: candidate.familyId,
+    familyParams: candidate.familyParams,
+    regime: candidate.regime,
+    generation: candidate.generation,
+    metrics: candidate.metrics,
+    features: candidate.features,
+    stability: candidate.stability,
+    score: candidate.score,
+    timestamp: candidate.timestamp,
+    source: candidate.source,
+    poolType: candidate.poolType,
+    assetCount: candidate.assetCount,
+    adaptiveProfile: candidate.adaptiveProfile,
+  };
+}
+
+/**
+ * Persist the currently visible Atlas state to Supabase so the map can recover
+ * even after all browser tabs close.
+ */
+export async function backupAtlasState(state: EngineState): Promise<{ success: boolean; error?: string }> {
+  if (state.archive.length === 0 && state.totalGenerations === 0) {
+    return { success: true };
+  }
+
+  const archive = state.archive.slice(-10000).map(serializeCandidateForBackup);
+  const populations: Record<RegimeId, CloudBackupCandidate[]> = {
+    "low-vol": state.populations["low-vol"].candidates.map(serializeCandidateForBackup),
+    "high-vol": state.populations["high-vol"].candidates.map(serializeCandidateForBackup),
+    "jump-diffusion": state.populations["jump-diffusion"].candidates.map(serializeCandidateForBackup),
+  };
+
+  try {
+    const { data, error } = await supabase.functions.invoke("atlas-engine", {
+      body: {
+        action: "backup-state",
+        totalGenerations: state.totalGenerations,
+        archive,
+        populations,
+      },
+    });
+
+    if (error) throw error;
+    if (!data?.success) {
+      return { success: false, error: data?.error || "unknown backup failure" };
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
+
 // ─── Subscribe to real-time updates ──────────────────────────────────────────
 
 export function subscribeToAtlas(
