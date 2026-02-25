@@ -6,6 +6,7 @@ import {
   REGIMES,
   createInitialState,
   runGeneration,
+  learnMlRecommendation,
 } from "@/lib/discovery-engine";
 import {
   loadAtlasState,
@@ -69,7 +70,13 @@ export function useDiscoveryEngine() {
       const regimeConfig = REGIMES.find(r => r.id === regimeId)!;
       const population = prev.populations[regimeId];
 
-      const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig);
+      const recommendationPool = [
+        ...population.candidates,
+        ...prev.archive.filter((candidate) => candidate.regime === regimeId).slice(-120),
+      ];
+      const recommendation = learnMlRecommendation(recommendationPool);
+
+      const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig, { recommendation });
 
       const newArchive = [...prev.archive, ...newCandidates];
       if (newArchive.length > LOCAL_ARCHIVE_LIMIT) {
