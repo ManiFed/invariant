@@ -547,6 +547,87 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (action === "backup-state") {
+      const archive = Array.isArray(body.archive) ? body.archive : [];
+      const populations = body.populations && typeof body.populations === "object" ? body.populations : {};
+      const incomingGenerations = Number(body.totalGenerations || 0);
+
+      if (archive.length === 0 && incomingGenerations === 0) {
+        return new Response(
+          JSON.stringify({ success: true, skipped: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const safeArchive = archive.filter((row: any) => (
+        row && typeof row.id === "string" && Array.isArray(row.bins) && typeof row.regime === "string"
+      ));
+
+      const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
+      const safePopulationRows: any[] = [];
+      for (const regime of regimes) {
+        const rows = Array.isArray(populations[regime]) ? populations[regime] : [];
+        for (const row of rows) {
+          if (!row || typeof row.id !== "string" || !Array.isArray(row.bins)) continue;
+          safePopulationRows.push({
+            candidate_id: row.id,
+            regime,
+            generation: row.generation || 0,
+            bins: row.bins,
+            metrics: row.metrics || {},
+            features: row.features || {},
+            stability: row.stability || 0,
+            score: row.score || 0,
+            is_population: true,
+            is_archived: false,
+          });
+        }
+      }
+
+      const archiveRows = safeArchive.map((row: any) => ({
+        candidate_id: row.id,
+        regime: row.regime,
+        generation: row.generation || 0,
+        bins: row.bins,
+        metrics: row.metrics || {},
+        features: row.features || {},
+        stability: row.stability || 0,
+        score: row.score || 0,
+        is_population: false,
+        is_archived: true,
+      }));
+
+      await supabase.from("atlas_candidates").delete().eq("is_population", true);
+      await supabase.from("atlas_candidates").delete().eq("is_archived", true);
+
+      if (safePopulationRows.length > 0) {
+        await supabase.from("atlas_candidates").insert(safePopulationRows);
+      }
+      if (archiveRows.length > 0) {
+        await supabase.from("atlas_candidates").insert(archiveRows);
+      }
+
+      const { data: currentState } = await supabase
+        .from("atlas_state")
+        .select("total_generations")
+        .eq("id", "global")
+        .single();
+
+      const existingGenerations = (currentState as any)?.total_generations || 0;
+      const totalGenerations = Math.max(existingGenerations, incomingGenerations);
+
+      await supabase.from("atlas_state").upsert({
+        id: "global",
+        total_generations: totalGenerations,
+        updated_at: new Date().toISOString(),
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, archived: archiveRows.length, population: safePopulationRows.length, totalGenerations }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (action === "bootstrap") {
       // Auto-create tables if they don't exist (uses service role key)
       const bootstrapSQL = `

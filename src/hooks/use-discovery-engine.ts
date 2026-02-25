@@ -9,8 +9,8 @@ import {
 } from "@/lib/discovery-engine";
 import {
   loadAtlasState,
-  subscribeToAtlas,
   triggerGeneration,
+  backupAtlasState,
 } from "@/lib/atlas-cloud";
 import {
   AtlasSync,
@@ -28,6 +28,7 @@ const CLOUD_ARCHIVE_LIMIT = 10000;
 const TICK_INTERVAL = 50;
 const PERSIST_INTERVAL = 3000;
 const CLOUD_KEEPALIVE_INTERVAL = 45000;
+const CLOUD_BACKUP_INTERVAL = 15000;
 const CLOUD_STALE_AFTER_MS = 90000;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
 
@@ -45,6 +46,7 @@ export function useDiscoveryEngine() {
   const persistIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const unsubscribeCloudRef = useRef<(() => void) | null>(null);
   const keepaliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cloudBackupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const generationPulseRef = useRef<number>(Date.now());
   const generationInFlightRef = useRef(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -152,11 +154,21 @@ export function useDiscoveryEngine() {
         setRole(initialRole);
         setSyncMode("live");
 
-        // If no peer responded, load from IndexedDB as starting point
+        // If no peer responded, recover from cloud first, then IndexedDB.
         if (!receivedState) {
+          const { state: cloudState } = await loadAtlasState();
           const persistedState = await loadAtlasStateFromDB();
-          if (!cancelled && persistedState && persistedState.archive.length > 0) {
-            setState(persistedState);
+          if (!cancelled) {
+            const pickedState = (() => {
+              if (cloudState && persistedState) {
+                return cloudState.totalGenerations >= persistedState.totalGenerations ? cloudState : persistedState;
+              }
+              return cloudState || persistedState;
+            })();
+
+            if (pickedState && pickedState.archive.length > 0) {
+              setState(pickedState);
+            }
           }
         }
 
@@ -186,10 +198,39 @@ export function useDiscoveryEngine() {
       cancelled = true;
       unsubscribeCloudRef.current?.();
       if (keepaliveIntervalRef.current) clearInterval(keepaliveIntervalRef.current);
+      if (cloudBackupIntervalRef.current) clearInterval(cloudBackupIntervalRef.current);
       syncRef.current?.cleanup();
       syncRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (syncMode !== "live") return;
+
+    const backupNow = () => {
+      if (roleRef.current !== "leader") return;
+      void backupAtlasState(stateRef.current);
+    };
+
+    backupNow();
+    cloudBackupIntervalRef.current = setInterval(backupNow, CLOUD_BACKUP_INTERVAL);
+
+    const onVisibilityOrUnload = () => {
+      if (document.visibilityState === "hidden") {
+        backupNow();
+      }
+    };
+
+    window.addEventListener("visibilitychange", onVisibilityOrUnload);
+    window.addEventListener("beforeunload", backupNow);
+
+    return () => {
+      if (cloudBackupIntervalRef.current) clearInterval(cloudBackupIntervalRef.current);
+      window.removeEventListener("visibilitychange", onVisibilityOrUnload);
+      window.removeEventListener("beforeunload", backupNow);
+      backupNow();
+    };
+  }, [syncMode, role]);
 
   useEffect(() => {
     if (syncMode === "loading" || syncMode === "memory") return;
