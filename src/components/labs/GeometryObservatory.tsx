@@ -384,6 +384,9 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
   const [explorationSpeed, setExplorationSpeed] = useState<"fast" | "normal" | "thorough">("normal");
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [viewportScale, setViewportScale] = useState(1);
+  const [viewportOffset, setViewportOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const [spiderChampion, setSpiderChampion] = useState<{
     branchId: string;
     candidate: BranchCandidate;
@@ -395,6 +398,9 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
   const runningRef = useRef(false);
   const autoRunRef = useRef(false);
   const hasAutoStarted = useRef(false);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const panStartRef = useRef<{ x: number; y: number } | null>(null);
+  const panMovedRef = useRef(false);
   autoRunRef.current = autoRun;
 
   // Initialize branches from structural combinations
@@ -947,10 +953,77 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
   // Universe graph layout
   const graphWidth = 700;
   const graphHeight = 500;
+  const minScale = 0.65;
+  const maxScale = 2.2;
   const universeGraph = useMemo(
     () => computeUniverseLayout(branches, graphWidth, graphHeight),
     [branches]
   );
+
+  const resetViewport = useCallback(() => {
+    setViewportScale(1);
+    setViewportOffset({ x: 0, y: 0 });
+  }, []);
+
+  const handleMapWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const bounds = container.getBoundingClientRect();
+    const cursorX = ((e.clientX - bounds.left) / bounds.width) * graphWidth;
+    const cursorY = ((e.clientY - bounds.top) / bounds.height) * graphHeight;
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+
+    setViewportScale((prevScale) => {
+      const nextScale = clamp(prevScale * zoomFactor, minScale, maxScale);
+      if (nextScale === prevScale) return prevScale;
+
+      setViewportOffset((prevOffset) => {
+        const worldX = (cursorX - prevOffset.x) / prevScale;
+        const worldY = (cursorY - prevOffset.y) / prevScale;
+        return {
+          x: cursorX - worldX * nextScale,
+          y: cursorY - worldY * nextScale,
+        };
+      });
+
+      return nextScale;
+    });
+  }, [graphHeight, graphWidth, maxScale, minScale]);
+
+  const handleMapMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return;
+    setIsPanning(true);
+    panMovedRef.current = false;
+    panStartRef.current = {
+      x: e.clientX - viewportOffset.x,
+      y: e.clientY - viewportOffset.y,
+    };
+  }, [viewportOffset.x, viewportOffset.y]);
+
+  const handleMapMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isPanning || !panStartRef.current) return;
+
+    const nextOffset = {
+      x: e.clientX - panStartRef.current.x,
+      y: e.clientY - panStartRef.current.y,
+    };
+
+    const delta = Math.abs(nextOffset.x - viewportOffset.x) + Math.abs(nextOffset.y - viewportOffset.y);
+    if (delta > 2) panMovedRef.current = true;
+    setViewportOffset(nextOffset);
+  }, [isPanning, viewportOffset.x, viewportOffset.y]);
+
+  const handleMapMouseUp = useCallback(() => {
+    setIsPanning(false);
+    panStartRef.current = null;
+  }, []);
+
+  const handleNodeClick = useCallback((branchId: string) => {
+    if (panMovedRef.current) return;
+    setExpandedBranch((prev) => (prev === branchId ? null : branchId));
+  }, []);
 
   const coverageGrid = useMemo(() => {
     const map = new Map<string, { count: number; bestScore: number }>();
@@ -1091,8 +1164,19 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
           Edges connect branches sharing invariant, liquidity, or fee families.
           {activeNodeId && <span className="ml-1 text-chart-1 font-medium">Exploring...</span>}
         </p>
-        <div className="relative overflow-hidden rounded-lg border border-border bg-background/50" style={{ height: graphHeight }}>
-          <svg width="100%" height="100%" viewBox={`0 0 ${graphWidth} ${graphHeight}`} className="select-none">
+        <div ref={mapContainerRef} className="relative overflow-hidden rounded-lg border border-border bg-background/50" style={{ height: graphHeight }}>
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${graphWidth} ${graphHeight}`}
+            className="select-none"
+            onWheel={handleMapWheel}
+            onMouseDown={handleMapMouseDown}
+            onMouseMove={handleMapMouseMove}
+            onMouseUp={handleMapMouseUp}
+            onMouseLeave={handleMapMouseUp}
+            style={{ cursor: isPanning ? "grabbing" : "grab" }}
+          >
             {/* Background grid */}
             <defs>
               <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
@@ -1116,197 +1200,221 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
               </filter>
             </defs>
 
-            {/* Center glow */}
-            <circle cx={graphWidth / 2} cy={graphHeight / 2} r={Math.min(graphWidth, graphHeight) * 0.45} fill="url(#centerGlow)" />
+            <g transform={`translate(${viewportOffset.x} ${viewportOffset.y}) scale(${viewportScale})`}>
+              {/* Center glow */}
+              <circle cx={graphWidth / 2} cy={graphHeight / 2} r={Math.min(graphWidth, graphHeight) * 0.45} fill="url(#centerGlow)" />
 
-            {/* Edges */}
-            {universeGraph.edges.map((edge, i) => {
-              const from = universeGraph.nodes[edge.from];
-              const to = universeGraph.nodes[edge.to];
-              if (!from || !to) return null;
+              {/* Edges */}
+              {universeGraph.edges.map((edge, i) => {
+                const from = universeGraph.nodes[edge.from];
+                const to = universeGraph.nodes[edge.to];
+                if (!from || !to) return null;
 
-              const isHighlighted = hoveredNode === from.branch.id || hoveredNode === to.branch.id;
-              const isActive = activeNodeId === from.branch.id || activeNodeId === to.branch.id;
+                const isHighlighted = hoveredNode === from.branch.id || hoveredNode === to.branch.id;
+                const isActive = activeNodeId === from.branch.id || activeNodeId === to.branch.id;
 
-              return (
-                <line
-                  key={`edge-${i}`}
-                  x1={from.x}
-                  y1={from.y}
-                  x2={to.x}
-                  y2={to.y}
-                  stroke={
-                    isActive ? "hsl(var(--chart-1))"
-                    : isHighlighted ? "hsl(var(--chart-2))"
-                    : edge.type === "invariant" ? "hsl(220, 50%, 50%)"
-                    : edge.type === "liquidity" ? "hsl(172, 50%, 45%)"
-                    : "hsl(280, 40%, 50%)"
-                  }
-                  strokeWidth={isActive ? 1.5 : isHighlighted ? 1 : 0.5}
-                  strokeOpacity={isActive ? 0.6 : isHighlighted ? 0.5 : edge.strength * 0.15}
-                  strokeDasharray={edge.type === "fee" ? "2 3" : undefined}
-                />
-              );
-            })}
-
-            {/* Nodes */}
-            {universeGraph.nodes.map((node, i) => {
-              const isHovered = hoveredNode === node.branch.id;
-              const isActive = activeNodeId === node.branch.id;
-              const isRecent = Date.now() - node.branch.lastExploredAt < 3000;
-
-              return (
-                <g
-                  key={node.branch.id}
-                  onMouseEnter={() => setHoveredNode(node.branch.id)}
-                  onMouseLeave={() => setHoveredNode(null)}
-                  onClick={() => setExpandedBranch(
-                    expandedBranch === node.branch.id ? null : node.branch.id
-                  )}
-                  className="cursor-pointer"
-                >
-                  {/* Active pulse ring */}
-                  {(isActive || isRecent) && (
-                    <>
-                      <circle
-                        cx={node.x}
-                        cy={node.y}
-                        r={node.radius + 8}
-                        fill="none"
-                        stroke={node.color}
-                        strokeWidth={0.8}
-                        strokeOpacity={0.3}
-                      >
-                        <animate
-                          attributeName="r"
-                          values={`${node.radius + 4};${node.radius + 14};${node.radius + 4}`}
-                          dur="2s"
-                          repeatCount="indefinite"
-                        />
-                        <animate
-                          attributeName="stroke-opacity"
-                          values="0.4;0.1;0.4"
-                          dur="2s"
-                          repeatCount="indefinite"
-                        />
-                      </circle>
-                      <circle
-                        cx={node.x}
-                        cy={node.y}
-                        r={node.radius + 4}
-                        fill="none"
-                        stroke={node.color}
-                        strokeWidth={1}
-                        strokeOpacity={0.5}
-                      >
-                        <animate
-                          attributeName="r"
-                          values={`${node.radius + 2};${node.radius + 10};${node.radius + 2}`}
-                          dur="1.5s"
-                          repeatCount="indefinite"
-                        />
-                        <animate
-                          attributeName="stroke-opacity"
-                          values="0.6;0.15;0.6"
-                          dur="1.5s"
-                          repeatCount="indefinite"
-                        />
-                      </circle>
-                    </>
-                  )}
-
-                  {/* Main node */}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={isHovered ? node.radius + 2 : node.radius}
-                    fill={node.color}
-                    fillOpacity={node.opacity}
-                    stroke={isHovered ? "hsl(var(--foreground))" : node.color}
-                    strokeWidth={isHovered ? 1.5 : 0.5}
-                    strokeOpacity={isHovered ? 0.8 : 0.3}
-                    filter={isActive ? "url(#activeGlow)" : isHovered ? "url(#glow)" : undefined}
+                return (
+                  <line
+                    key={`edge-${i}`}
+                    x1={from.x}
+                    y1={from.y}
+                    x2={to.x}
+                    y2={to.y}
+                    stroke={
+                      isActive ? "hsl(var(--chart-1))"
+                      : isHighlighted ? "hsl(var(--chart-2))"
+                      : edge.type === "invariant" ? "hsl(220, 50%, 50%)"
+                      : edge.type === "liquidity" ? "hsl(172, 50%, 45%)"
+                      : "hsl(280, 40%, 50%)"
+                    }
+                    strokeWidth={isActive ? 1.5 : isHighlighted ? 1 : 0.5}
+                    strokeOpacity={isActive ? 0.6 : isHighlighted ? 0.5 : edge.strength * 0.15}
+                    strokeDasharray={edge.type === "fee" ? "2 3" : undefined}
                   />
+                );
+              })}
 
-                  {/* Phase indicator (tiny inner dot) */}
-                  {node.branch.tested > 0 && (
+              {/* Nodes */}
+              {universeGraph.nodes.map((node, i) => {
+                const isHovered = hoveredNode === node.branch.id;
+                const isActive = activeNodeId === node.branch.id;
+                const isRecent = Date.now() - node.branch.lastExploredAt < 3000;
+
+                return (
+                  <g
+                    key={node.branch.id}
+                    onMouseEnter={() => setHoveredNode(node.branch.id)}
+                    onMouseLeave={() => setHoveredNode(null)}
+                    onClick={() => handleNodeClick(node.branch.id)}
+                    className="cursor-pointer"
+                  >
+                    {/* Active pulse ring */}
+                    {(isActive || isRecent) && (
+                      <>
+                        <circle
+                          cx={node.x}
+                          cy={node.y}
+                          r={node.radius + 8}
+                          fill="none"
+                          stroke={node.color}
+                          strokeWidth={0.8}
+                          strokeOpacity={0.3}
+                        >
+                          <animate
+                            attributeName="r"
+                            values={`${node.radius + 4};${node.radius + 14};${node.radius + 4}`}
+                            dur="2s"
+                            repeatCount="indefinite"
+                          />
+                          <animate
+                            attributeName="stroke-opacity"
+                            values="0.4;0.1;0.4"
+                            dur="2s"
+                            repeatCount="indefinite"
+                          />
+                        </circle>
+                        <circle
+                          cx={node.x}
+                          cy={node.y}
+                          r={node.radius + 4}
+                          fill="none"
+                          stroke={node.color}
+                          strokeWidth={1}
+                          strokeOpacity={0.5}
+                        >
+                          <animate
+                            attributeName="r"
+                            values={`${node.radius + 2};${node.radius + 10};${node.radius + 2}`}
+                            dur="1.5s"
+                            repeatCount="indefinite"
+                          />
+                          <animate
+                            attributeName="stroke-opacity"
+                            values="0.6;0.15;0.6"
+                            dur="1.5s"
+                            repeatCount="indefinite"
+                          />
+                        </circle>
+                      </>
+                    )}
+
+                    {/* Main node */}
                     <circle
                       cx={node.x}
                       cy={node.y}
-                      r={Math.max(1.5, node.radius * 0.3)}
-                      fill={
-                        node.branch.explorationPhase === "intensify" ? "hsl(45, 100%, 70%)"
-                        : node.branch.explorationPhase === "explore" ? "hsl(200, 80%, 65%)"
-                        : "hsl(0, 0%, 90%)"
-                      }
-                      fillOpacity={0.9}
+                      r={isHovered ? node.radius + 2 : node.radius}
+                      fill={node.color}
+                      fillOpacity={node.opacity}
+                      stroke={isHovered ? "hsl(var(--foreground))" : node.color}
+                      strokeWidth={isHovered ? 1.5 : 0.5}
+                      strokeOpacity={isHovered ? 0.8 : 0.3}
+                      filter={isActive ? "url(#activeGlow)" : isHovered ? "url(#glow)" : undefined}
                     />
-                  )}
 
-                  {/* Hover tooltip */}
-                  {isHovered && (
-                    <g>
-                      <rect
-                        x={node.x + node.radius + 6}
-                        y={node.y - 28}
-                        width={180}
-                        height={56}
-                        rx={6}
-                        fill="hsl(var(--popover))"
-                        stroke="hsl(var(--border))"
-                        strokeWidth={1}
-                        fillOpacity={0.95}
+                    {/* Phase indicator (tiny inner dot) */}
+                    {node.branch.tested > 0 && (
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={Math.max(1.5, node.radius * 0.3)}
+                        fill={
+                          node.branch.explorationPhase === "intensify" ? "hsl(45, 100%, 70%)"
+                          : node.branch.explorationPhase === "explore" ? "hsl(200, 80%, 65%)"
+                          : "hsl(0, 0%, 90%)"
+                        }
+                        fillOpacity={0.9}
                       />
-                      <text
-                        x={node.x + node.radius + 12}
-                        y={node.y - 14}
-                        fontSize={9}
-                        fontWeight={600}
-                        fill="hsl(var(--foreground))"
-                      >
-                        {node.branch.invariant.split(" ")[0]} + {node.branch.liquidity.split(" ")[0]}
-                      </text>
-                      <text
-                        x={node.x + node.radius + 12}
-                        y={node.y}
-                        fontSize={8}
-                        fill="hsl(var(--muted-foreground))"
-                      >
-                        {node.branch.fee} | n={node.branch.tested}
-                      </text>
-                      <text
-                        x={node.x + node.radius + 12}
-                        y={node.y + 14}
-                        fontSize={8}
-                        fill={node.branch.bestScore < 0 ? "hsl(142, 72%, 50%)" : "hsl(var(--muted-foreground))"}
-                      >
-                        {node.branch.bestScore === Infinity
-                          ? "Not tested"
-                          : `Best: ${node.branch.bestScore.toFixed(3)} | ${node.branch.explorationPhase}`}
-                      </text>
-                    </g>
-                  )}
-                </g>
-              );
-            })}
+                    )}
 
-            {/* Legend */}
-            <g transform={`translate(12, ${graphHeight - 65})`}>
-              <rect x={0} y={0} width={160} height={58} rx={6} fill="hsl(var(--popover))" fillOpacity={0.8} stroke="hsl(var(--border))" strokeWidth={0.5} />
-              <circle cx={14} cy={12} r={4} fill="hsl(142, 72%, 50%)" />
-              <text x={24} y={15} fontSize={8} fill="hsl(var(--muted-foreground))">Excellent score</text>
-              <circle cx={14} cy={26} r={4} fill="hsl(38, 92%, 55%)" />
-              <text x={24} y={29} fontSize={8} fill="hsl(var(--muted-foreground))">Promising</text>
-              <circle cx={14} cy={40} r={4} fill="hsl(220, 15%, 45%)" fillOpacity={0.4} />
-              <text x={24} y={43} fontSize={8} fill="hsl(var(--muted-foreground))">Unexplored</text>
-              <line x1={80} y1={12} x2={100} y2={12} stroke="hsl(220, 50%, 50%)" strokeWidth={1} />
-              <text x={105} y={15} fontSize={7} fill="hsl(var(--muted-foreground))">Same invariant</text>
-              <line x1={80} y1={26} x2={100} y2={26} stroke="hsl(172, 50%, 45%)" strokeWidth={1} />
-              <text x={105} y={29} fontSize={7} fill="hsl(var(--muted-foreground))">Same liquidity</text>
-              <line x1={80} y1={40} x2={100} y2={40} stroke="hsl(280, 40%, 50%)" strokeWidth={1} strokeDasharray="2 3" />
-              <text x={105} y={43} fontSize={7} fill="hsl(var(--muted-foreground))">Same fee</text>
+                    {/* Hover tooltip */}
+                    {isHovered && (
+                      <g>
+                        <rect
+                          x={node.x + node.radius + 6}
+                          y={node.y - 28}
+                          width={180}
+                          height={56}
+                          rx={6}
+                          fill="hsl(var(--popover))"
+                          stroke="hsl(var(--border))"
+                          strokeWidth={1}
+                          fillOpacity={0.95}
+                        />
+                        <text
+                          x={node.x + node.radius + 12}
+                          y={node.y - 14}
+                          fontSize={9}
+                          fontWeight={600}
+                          fill="hsl(var(--foreground))"
+                        >
+                          {node.branch.invariant.split(" ")[0]} + {node.branch.liquidity.split(" ")[0]}
+                        </text>
+                        <text
+                          x={node.x + node.radius + 12}
+                          y={node.y}
+                          fontSize={8}
+                          fill="hsl(var(--muted-foreground))"
+                        >
+                          {node.branch.fee} | n={node.branch.tested}
+                        </text>
+                        <text
+                          x={node.x + node.radius + 12}
+                          y={node.y + 14}
+                          fontSize={8}
+                          fill={node.branch.bestScore < 0 ? "hsl(142, 72%, 50%)" : "hsl(var(--muted-foreground))"}
+                        >
+                          {node.branch.bestScore === Infinity
+                            ? "Not tested"
+                            : `Best: ${node.branch.bestScore.toFixed(3)} | ${node.branch.explorationPhase}`}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
             </g>
           </svg>
+
+          <div className="absolute left-3 top-3 rounded-md border border-border/80 bg-popover/95 px-3 py-2 text-[11px] shadow-sm backdrop-blur-sm">
+            <p className="font-medium text-foreground">Map controls</p>
+            <p className="text-muted-foreground">Drag to pan · Scroll to zoom</p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="font-mono text-[10px] text-muted-foreground">{viewportScale.toFixed(2)}x</span>
+              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={resetViewport}>
+                Reset view
+              </Button>
+            </div>
+          </div>
+
+          <div className="absolute right-3 bottom-3 w-64 rounded-md border border-border/80 bg-popover/95 p-3 text-[11px] shadow-sm backdrop-blur-sm">
+            <p className="font-semibold text-foreground">Legend</p>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[hsl(142,72%,50%)]" />
+                <span>Excellent score</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-0.5 w-4 bg-[hsl(220,50%,50%)]" />
+                <span>Shared invariant</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[hsl(38,92%,55%)]" />
+                <span>Promising</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-0.5 w-4 bg-[hsl(172,50%,45%)]" />
+                <span>Shared liquidity</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[hsl(220,15%,45%)] opacity-50" />
+                <span>Unexplored</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-0.5 w-4 border-t border-dashed border-[hsl(280,40%,50%)]" />
+                <span>Shared fee model</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
