@@ -14,6 +14,7 @@ import ExperimentsTab from "@/components/labs/ExperimentsTab";
 import FamilyDirectory from "@/components/labs/FamilyDirectory";
 import StudioLoopPanel from "@/components/labs/StudioLoopPanel";
 import MethodologyTab from "@/components/labs/MethodologyTab";
+import LabHelpLink from "@/components/labs/LabHelpLink";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
@@ -274,6 +275,15 @@ const DiscoveryAtlas = () => {
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
     { id: "methodology" as const, label: "Methodology", icon: Radar },
   ];
+  const tabToMethodSection: Record<Exclude<View, "detail">, string> = {
+    dashboard: "method-dashboard",
+    atlas: "method-atlas",
+    directory: "method-directory",
+    "studio-loop": "method-studio-loop",
+    observatory: "method-observatory",
+    experiments: "method-experiments",
+    methodology: "method-overview",
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -299,26 +309,31 @@ const DiscoveryAtlas = () => {
             >
               <BadgeIcon className="w-3 h-3" />
               <span className="text-[9px] font-medium">{badge.label}</span>
+              <LabHelpLink href="#method-sync" label="Sync modes and persistence" className="ml-1" />
             </button>
           ) : (
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${badge.className}`}>
               <BadgeIcon className={`w-3 h-3 ${syncMode === "loading" ? "animate-spin" : ""}`} />
               <span className="text-[9px] font-medium">{badge.label}</span>
+              <LabHelpLink href="#method-sync" label="Sync modes and persistence" className="ml-1" />
             </div>
           )}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-success/5 border border-success/20">
             <Radio className="w-3 h-3 text-success animate-pulse" />
             <span className="text-[9px] font-medium text-success">LIVE</span>
+            <LabHelpLink href="#method-overview" label="System overview" className="ml-1" />
           </div>
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary border border-border">
             <span className="text-[9px] font-mono text-muted-foreground">
               Gen {state.totalGenerations} | {(state.archiveSize ?? state.archive.length).toLocaleString()} archived
             </span>
+            <LabHelpLink href="#method-dashboard" label="Generation counter and archive" className="ml-1" />
           </div>
           {genRate !== null && (
             <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary border border-border">
               <Zap className="w-3 h-3 text-warning" />
               <span className="text-[9px] font-mono text-muted-foreground">{genRate} gen/s</span>
+              <LabHelpLink href="#method-dashboard" label="Generation-rate computation" className="ml-1" />
             </div>
           )}
           <ThemeToggle />
@@ -334,6 +349,10 @@ const DiscoveryAtlas = () => {
               <button key={tab.id} onClick={() => setActiveView(tab.id)} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
+                <LabHelpLink
+                  href={`#${tabToMethodSection[tab.id]}`}
+                  label={`${tab.label} methodology`}
+                />
               </button>
             );
           })}
@@ -341,6 +360,7 @@ const DiscoveryAtlas = () => {
             <button onClick={() => setActiveView("detail")} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${activeView === "detail" ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
               <Fingerprint className="w-3.5 h-3.5" />
               Design Detail
+              <LabHelpLink href="#method-detail" label="Design detail methodology" />
             </button>
           )}
         </div>
