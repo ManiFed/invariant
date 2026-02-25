@@ -117,6 +117,12 @@ const EMPTY_SYNC_POPULATION_INFO: Record<RegimeId, SyncPopulationInfo> = {
     championId: null,
     metricChampionIds: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
   },
+  "regime-shift": {
+    generation: 0,
+    totalEvaluated: 0,
+    championId: null,
+    metricChampionIds: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
+  },
 };
 
 export interface RemoteStateExtras {

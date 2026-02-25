@@ -23,7 +23,7 @@ export const MAX_EVAL_PATHS_PER_EVAL = 4;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type RegimeId = "low-vol" | "high-vol" | "jump-diffusion";
+export type RegimeId = "low-vol" | "high-vol" | "jump-diffusion" | "regime-shift";
 
 export interface RegimeConfig {
   id: RegimeId;
@@ -41,6 +41,7 @@ export const REGIMES: RegimeConfig[] = [
   { id: "low-vol", label: "Low Volatility GBM", volatility: 0.3, drift: 0, jumpIntensity: 0, jumpMean: 0, jumpStd: 0 },
   { id: "high-vol", label: "High Volatility GBM", volatility: 1.0, drift: 0, jumpIntensity: 0, jumpMean: 0, jumpStd: 0 },
   { id: "jump-diffusion", label: "Jump Diffusion", volatility: 0.6, drift: 0, jumpIntensity: 5, jumpMean: -0.05, jumpStd: 0.15 },
+  { id: "regime-shift", label: "Regime Shift", volatility: 0.3, drift: 0, jumpIntensity: 0, jumpMean: 0, jumpStd: 0 },
 ];
 
 /** Multi-dimensional metric vector for a single candidate evaluation */
@@ -123,7 +124,7 @@ export interface ActivityEntry {
   generation: number;
 }
 
-export type InvariantFamilyId = "piecewise-bands" | "amplified-hybrid" | "tail-shielded";
+export type InvariantFamilyId = "piecewise-bands" | "amplified-hybrid" | "tail-shielded" | "custom";
 
 export interface InvariantFamilyDefinition {
   id: InvariantFamilyId;
@@ -381,18 +382,35 @@ function randn(): number {
 export function generatePricePath(regime: RegimeConfig, steps: number, dt: number): Float64Array {
   const path = new Float64Array(steps + 1);
   path[0] = 0; // log-price starts at 0 (price = 1.0)
-  const { volatility, drift, jumpIntensity, jumpMean, jumpStd } = regime;
+
+  // Regime-shift: swap volatility/jump params at a random midpoint
+  const isRegimeShift = regime.id === "regime-shift";
+  const shiftPoint = isRegimeShift ? Math.floor(steps * (0.3 + Math.random() * 0.4)) : steps + 1;
+
+  // Phase 1 config (low-vol)
+  let volatility = isRegimeShift ? 0.3 : regime.volatility;
+  let drift = regime.drift;
+  let jumpIntensity = isRegimeShift ? 0 : regime.jumpIntensity;
+  let jumpMean = regime.jumpMean;
+  let jumpStd = regime.jumpStd;
   const meanReversion = regime.meanReversion ?? 0;
   const anchor = 0;
 
   for (let t = 1; t <= steps; t++) {
+    // Switch to high-vol + jumps at the shift point
+    if (isRegimeShift && t === shiftPoint) {
+      volatility = 1.0;
+      jumpIntensity = 5;
+      jumpMean = -0.05;
+      jumpStd = 0.15;
+    }
+
     const diffusion = (drift - 0.5 * volatility * volatility) * dt + volatility * Math.sqrt(dt) * randn();
 
     // Poisson jump component
     let jumpComponent = 0;
     if (jumpIntensity > 0) {
       const lambda = jumpIntensity * dt;
-      // Simple Poisson: probability of at least one jump
       if (Math.random() < lambda) {
         jumpComponent = jumpMean + jumpStd * randn();
       }
@@ -1322,6 +1340,7 @@ export function createInitialState(): EngineState {
     "low-vol": { regime: "low-vol", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
     "high-vol": { regime: "high-vol", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
     "jump-diffusion": { regime: "jump-diffusion", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
+    "regime-shift": { regime: "regime-shift", candidates: [], champion: null, metricChampions: { ...EMPTY_METRIC_CHAMPIONS }, generation: 0, totalEvaluated: 0 },
   };
   return { populations, archive: [], activityLog: [], running: false, totalGenerations: 0 };
 }

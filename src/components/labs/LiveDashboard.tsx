@@ -15,13 +15,15 @@ const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
 const REGIME_COLORS: Record<RegimeId, string> = {
   "low-vol": "hsl(142, 72%, 45%)",
   "high-vol": "hsl(38, 92%, 50%)",
-  "jump-diffusion": "hsl(0, 72%, 55%)"
+  "jump-diffusion": "hsl(0, 72%, 55%)",
+  "regime-shift": "hsl(270, 65%, 55%)",
 };
 
 const REGIME_LABELS: Record<RegimeId, string> = {
   "low-vol": "Low Vol",
   "high-vol": "High Vol",
-  "jump-diffusion": "Jump Diff"
+  "jump-diffusion": "Jump Diff",
+  "regime-shift": "Regime Shift",
 };
 
 interface LiveDashboardProps {
@@ -252,7 +254,7 @@ function ScoreHistorySection({ state, regimeIds }: { state: EngineState; regimeI
   const paretoStats = useMemo(() => {
     if (state.archive.length === 0) return { total: 0, perRegime: {} as Record<RegimeId, number> };
 
-    const perRegime: Record<RegimeId, number> = { "low-vol": 0, "high-vol": 0, "jump-diffusion": 0 };
+    const perRegime: Record<RegimeId, number> = { "low-vol": 0, "high-vol": 0, "jump-diffusion": 0, "regime-shift": 0 };
 
     for (const rid of regimeIds) {
       const regCandidates = state.archive.filter(c => c.regime === rid);

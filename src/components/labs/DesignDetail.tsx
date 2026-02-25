@@ -17,12 +17,14 @@ const REGIME_COLORS: Record<RegimeId, string> = {
   "low-vol": "hsl(142, 72%, 45%)",
   "high-vol": "hsl(38, 92%, 50%)",
   "jump-diffusion": "hsl(0, 72%, 55%)",
+  "regime-shift": "hsl(270, 65%, 55%)",
 };
 
 const REGIME_LABELS: Record<RegimeId, string> = {
   "low-vol": "Low Vol",
   "high-vol": "High Vol",
   "jump-diffusion": "Jump Diff",
+  "regime-shift": "Regime Shift",
 };
 
 interface DesignDetailProps {

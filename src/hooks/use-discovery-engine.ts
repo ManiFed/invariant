@@ -30,7 +30,7 @@ const PERSIST_INTERVAL = 3000;
 const CLOUD_KEEPALIVE_INTERVAL = 45000;
 const CLOUD_BACKUP_INTERVAL = 15000;
 const CLOUD_STALE_AFTER_MS = 90000;
-const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
+const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
 
 export type SyncMode = "live" | "persisted" | "memory" | "loading";
 

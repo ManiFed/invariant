@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2,
-  FlaskConical, Radar, Zap, Layers,
+  FlaskConical, Radar, Zap, Layers, Swords, History, Target,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -13,10 +13,13 @@ import GeometryObservatory from "@/components/labs/GeometryObservatory";
 import ExperimentsTab from "@/components/labs/ExperimentsTab";
 import FamilyDirectory from "@/components/labs/FamilyDirectory";
 import MethodologyTab from "@/components/labs/MethodologyTab";
+import ParetoFrontier from "@/components/labs/ParetoFrontier";
+import ArenaView from "@/components/labs/ArenaView";
+import EvolutionReplay from "@/components/labs/EvolutionReplay";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "directory" | "observatory" | "experiments" | "methodology" | "detail";
+type View = "dashboard" | "atlas" | "directory" | "observatory" | "experiments" | "methodology" | "detail" | "pareto" | "arena" | "replay";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
 type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
@@ -256,6 +259,9 @@ const DiscoveryAtlas = () => {
 
   const tabs = [
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
+    { id: "pareto" as const, label: "Pareto Frontier", icon: Target },
+    { id: "arena" as const, label: "Arena", icon: Swords },
+    { id: "replay" as const, label: "Evolution Replay", icon: History },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
     { id: "directory" as const, label: "Family Directory", icon: Layers },
     { id: "observatory" as const, label: "Geometry Observatory", icon: Radar },
@@ -378,6 +384,9 @@ const DiscoveryAtlas = () => {
 
         <AnimatePresence mode="wait">
           {activeView === "dashboard" && <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
+          {activeView === "pareto" && <motion.div key="pareto" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><ParetoFrontier state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
+          {activeView === "arena" && <motion.div key="arena" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><ArenaView state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
+          {activeView === "replay" && <motion.div key="replay" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><EvolutionReplay state={state} /></motion.div>}
           {activeView === "atlas" && <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} /></motion.div>}
           {activeView === "directory" && <motion.div key="directory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><FamilyDirectory state={{ ...state, archive: filteredArchive }} /></motion.div>}
           {activeView === "observatory" && <motion.div key="observatory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} /></motion.div>}
