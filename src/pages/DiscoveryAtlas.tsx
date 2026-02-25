@@ -230,8 +230,6 @@ const DiscoveryAtlas = () => {
     setActiveView("detail");
   }, [selectCandidate]);
 
-
-
   const handleImportStudioCandidate = useCallback((candidate: Candidate) => {
     ingestExperimentCandidates([{
       ...candidate,
@@ -371,47 +369,41 @@ const DiscoveryAtlas = () => {
       <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
         {activeView === "atlas" && (
           <section className="mb-5 grid sm:grid-cols-6 gap-2">
-            <div className="flex items-center gap-1">
-            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.contributor} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, contributor: event.target.value }))}>
+            <div>
+              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.contributor} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, contributor: event.target.value }))}>
               {contributors.map((value) => <option key={value} value={value}>{value === "all" ? "All contributors" : value}</option>)}
             </select>
-              <LabHelpLink href="#method-atlas" label="Contributor filter" />
             </div>
-            <div className="flex items-center gap-1">
-            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.experimentId} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, experimentId: event.target.value }))}>
+            <div>
+              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.experimentId} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, experimentId: event.target.value }))}>
               {experimentIds.map((value) => <option key={value} value={value}>{value === "all" ? "All experiments" : value}</option>)}
             </select>
-              <LabHelpLink href="#method-atlas" label="Experiment filter" />
             </div>
-            <div className="flex items-center gap-1">
-            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.objectiveType} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, objectiveType: event.target.value }))}>
+            <div>
+              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.objectiveType} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, objectiveType: event.target.value }))}>
               {objectiveTypes.map((value) => <option key={value} value={value}>{value === "all" ? "All objectives" : value}</option>)}
             </select>
-              <LabHelpLink href="#method-objective-math" label="Objective filter" />
             </div>
-            <div className="flex items-center gap-1">
-            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.regime} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, regime: event.target.value as RegimeId | "all" }))}>
+            <div>
+              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.regime} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, regime: event.target.value as RegimeId | "all" }))}>
               <option value="all">All regimes</option>
               {REGIMES.map((regime) => <option key={regime.id} value={regime.id}>{regime.label}</option>)}
             </select>
-              <LabHelpLink href="#method-engine-functions" label="Regime filter" />
             </div>
-            <div className="flex items-center gap-1">
-            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.source} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, source: event.target.value }))}>
+            <div>
+              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.source} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, source: event.target.value }))}>
               <option value="all">All sources</option>
               <option value="global">Discovered</option>
               <option value="experiment">Experimental</option>
               <option value="user-designed">User-designed</option>
             </select>
-              <LabHelpLink href="#method-atlas" label="Source filter" />
             </div>
-            <div className="flex items-center gap-1">
-            <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.poolType} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, poolType: event.target.value }))}>
+            <div>
+              <select className="px-2 py-2 rounded-md border border-border bg-background text-xs w-full" value={atlasFilters.poolType} onChange={(event) => setAtlasFilters((prev) => ({ ...prev, poolType: event.target.value }))}>
               <option value="all">All pool layers</option>
               <option value="two-asset">Two-asset layer</option>
               <option value="multi-asset">Multi-asset layer</option>
             </select>
-              <LabHelpLink href="#method-atlas" label="Pool-layer filter" />
             </div>
           </section>
         )}
