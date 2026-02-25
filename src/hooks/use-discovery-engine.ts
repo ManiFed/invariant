@@ -68,7 +68,11 @@ export function useDiscoveryEngine() {
       const regimeIdx = prev.totalGenerations % REGIME_CYCLE.length;
       const regimeId = REGIME_CYCLE[regimeIdx];
       const regimeConfig = REGIMES.find(r => r.id === regimeId)!;
-      const population = prev.populations[regimeId];
+      const population = prev.populations[regimeId] ?? {
+        regime: regimeId, candidates: [], champion: null,
+        metricChampions: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
+        generation: 0, totalEvaluated: 0,
+      };
 
       const recommendationPool = [
         ...population.candidates,

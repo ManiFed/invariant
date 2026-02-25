@@ -182,12 +182,17 @@ export async function loadAtlasStateFromDB(): Promise<EngineState | null> {
 
     if (!result || !result.populations) return null;
 
+    const emptyPop = (regime: RegimeId): PopulationState => ({
+      regime, candidates: [], champion: null,
+      metricChampions: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
+      generation: 0, totalEvaluated: 0,
+    });
     return {
       populations: {
-        "low-vol": deserializePopulation(result.populations["low-vol"]),
-        "high-vol": deserializePopulation(result.populations["high-vol"]),
-        "jump-diffusion": deserializePopulation(result.populations["jump-diffusion"]),
-        "regime-shift": result.populations["regime-shift"] ? deserializePopulation(result.populations["regime-shift"]) : { regime: "regime-shift" as RegimeId, candidates: [], champion: null, metricChampions: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null }, generation: 0, totalEvaluated: 0 },
+        "low-vol": result.populations["low-vol"] ? deserializePopulation(result.populations["low-vol"]) : emptyPop("low-vol"),
+        "high-vol": result.populations["high-vol"] ? deserializePopulation(result.populations["high-vol"]) : emptyPop("high-vol"),
+        "jump-diffusion": result.populations["jump-diffusion"] ? deserializePopulation(result.populations["jump-diffusion"]) : emptyPop("jump-diffusion"),
+        "regime-shift": result.populations["regime-shift"] ? deserializePopulation(result.populations["regime-shift"]) : emptyPop("regime-shift"),
       },
       archive: result.archive.map(deserializeCandidate),
       activityLog: result.activityLog || [],
