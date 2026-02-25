@@ -28,7 +28,7 @@ const CLOUD_ARCHIVE_LIMIT = 10000;
 const TICK_INTERVAL = 50;
 const PERSIST_INTERVAL = 3000;
 const CLOUD_KEEPALIVE_INTERVAL = 45000;
-const CLOUD_BACKUP_INTERVAL = 15000;
+const CLOUD_BACKUP_INTERVAL = 60000; // Backup to cloud every 60s
 const CLOUD_STALE_AFTER_MS = 90000;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
 
@@ -144,6 +144,12 @@ export function useDiscoveryEngine() {
         (newRole: SyncRole) => {
           setRole(newRole);
         },
+        // onLeaderGoodbye: new leader should immediately save state
+        () => {
+          // Immediately persist when we get promoted from a goodbye
+          void saveAtlasState(stateRef.current);
+          void backupAtlasState(stateRef.current);
+        },
       );
       syncRef.current = sync;
 
@@ -196,9 +202,14 @@ export function useDiscoveryEngine() {
 
     return () => {
       cancelled = true;
+      // Send goodbye so followers promote instantly
+      syncRef.current?.sendGoodbye();
       unsubscribeCloudRef.current?.();
       if (keepaliveIntervalRef.current) clearInterval(keepaliveIntervalRef.current);
       if (cloudBackupIntervalRef.current) clearInterval(cloudBackupIntervalRef.current);
+      // Final backup on teardown
+      void saveAtlasState(stateRef.current);
+      void backupAtlasState(stateRef.current);
       syncRef.current?.cleanup();
       syncRef.current = null;
     };
@@ -212,22 +223,32 @@ export function useDiscoveryEngine() {
       void backupAtlasState(stateRef.current);
     };
 
+    // Initial backup right away
     backupNow();
     cloudBackupIntervalRef.current = setInterval(backupNow, CLOUD_BACKUP_INTERVAL);
 
-    const onVisibilityOrUnload = () => {
+    const onBeforeUnload = () => {
+      // Send goodbye broadcast for instant follower promotion
+      syncRef.current?.sendGoodbye();
+      // Final backup
+      backupNow();
+      void saveAtlasState(stateRef.current);
+    };
+
+    const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         backupNow();
+        void saveAtlasState(stateRef.current);
       }
     };
 
-    window.addEventListener("visibilitychange", onVisibilityOrUnload);
-    window.addEventListener("beforeunload", backupNow);
+    window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("beforeunload", onBeforeUnload);
 
     return () => {
       if (cloudBackupIntervalRef.current) clearInterval(cloudBackupIntervalRef.current);
-      window.removeEventListener("visibilitychange", onVisibilityOrUnload);
-      window.removeEventListener("beforeunload", backupNow);
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("beforeunload", onBeforeUnload);
       backupNow();
     };
   }, [syncMode, role]);
