@@ -13,10 +13,11 @@ import GeometryObservatory from "@/components/labs/GeometryObservatory";
 import ExperimentsTab from "@/components/labs/ExperimentsTab";
 import FamilyDirectory from "@/components/labs/FamilyDirectory";
 import StudioLoopPanel from "@/components/labs/StudioLoopPanel";
+import GoalsTab from "@/components/labs/GoalsTab";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "directory" | "studio-loop" | "observatory" | "experiments" | "detail";
+type View = "dashboard" | "atlas" | "directory" | "studio-loop" | "observatory" | "experiments" | "goals" | "detail";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
 type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
@@ -273,6 +274,7 @@ const DiscoveryAtlas = () => {
     { id: "studio-loop" as const, label: "Studio Loop", icon: Repeat },
     { id: "observatory" as const, label: "Geometry Observatory", icon: Radar },
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
+    { id: "goals" as const, label: "Goals", icon: Radar },
   ];
 
   return (
@@ -392,6 +394,7 @@ const DiscoveryAtlas = () => {
               state={state}
             />
           )}
+          {activeView === "goals" && <motion.div key="goals" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GoalsTab /></motion.div>}
           {activeView === "detail" && detailCandidate && <motion.div key="detail" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><DesignDetail candidate={detailCandidate} state={state} onBack={handleBackFromDetail} /></motion.div>}
         </AnimatePresence>
       </main>
