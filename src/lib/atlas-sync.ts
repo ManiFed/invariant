@@ -9,11 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Candidate, RegimeId, PopulationState, ChampionMetric, EngineState, ActivityEntry } from "@/lib/discovery-engine";
 
 const CHANNEL_NAME = "invariant-atlas-live";
-const LEADER_BROADCAST_INTERVAL = 1000; // Leader broadcasts every 1s for tight sync
+const LEADER_BROADCAST_INTERVAL = 1000;
 const MAX_SYNC_CANDIDATES = 200;
 const STATE_REQUEST_TIMEOUT = 3000;
-const FAILOVER_TIMEOUT = 2500;  // Promote follower quickly if the active leader disappears
-const FAILOVER_CHECK_INTERVAL = 2000;
+const FAILOVER_TIMEOUT = 2000;
+const FAILOVER_CHECK_INTERVAL = 800; // Check frequently for fast promotion
 
 export type SyncRole = "leader" | "follower";
 
@@ -246,6 +246,7 @@ export class AtlasSync {
     extras: RemoteStateExtras,
   ) => void;
   private onRoleChange: (role: SyncRole) => void;
+  private onLeaderGoodbye?: () => void;
   private _connected = false;
   private _role: SyncRole = "leader";
   private _lastReceivedTs = 0;
@@ -258,10 +259,12 @@ export class AtlasSync {
       extras: RemoteStateExtras,
     ) => void,
     onRoleChange: (role: SyncRole) => void,
+    onLeaderGoodbye?: () => void,
   ) {
     this.getState = getState;
     this.onRemoteState = onRemoteState;
     this.onRoleChange = onRoleChange;
+    this.onLeaderGoodbye = onLeaderGoodbye;
   }
 
   /** Join the channel and wait up to 3s for an existing client's state. */
@@ -286,7 +289,6 @@ export class AtlasSync {
 
       this.channel
         .on("broadcast", { event: "need-state" }, () => {
-          // Another client is asking for state — respond immediately
           this.broadcastState();
         })
         .on("broadcast", { event: "state-snapshot" }, ({ payload }: { payload: unknown }) => {
@@ -294,6 +296,19 @@ export class AtlasSync {
           if (!resolved) {
             clearTimeout(timeout);
             done(true);
+          }
+        })
+        .on("broadcast", { event: "leader-goodbye" }, ({ payload }: { payload: unknown }) => {
+          // Leader is leaving — immediately promote if we're a follower
+          if (this._role === "follower") {
+            // Accept the final state snapshot if included
+            if (isObject(payload)) {
+              this.handleSnapshot(payload);
+            }
+            this._role = "leader";
+            this.onRoleChange("leader");
+            this.stopFailoverCheck();
+            this.onLeaderGoodbye?.();
           }
         })
         .subscribe((status) => {
@@ -453,6 +468,67 @@ export class AtlasSync {
 
   get connected() { return this._connected; }
   get role() { return this._role; }
+
+  /** Send a goodbye broadcast so followers promote instantly, then clean up. */
+  sendGoodbye() {
+    if (!this.channel || !this._connected || this._role !== "leader") return;
+    // Build a final snapshot so the new leader has the freshest state
+    const state = this.getState();
+    if (state.archive.length > 0 || state.totalGenerations > 0) {
+      const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
+      const populationSnapshots = {} as Record<RegimeId, SyncPopulationInfo>;
+      const candidateMap = new Map<string, Candidate>();
+      const importantIds = new Set<string>();
+
+      for (const rid of regimes) {
+        const pop = state.populations[rid];
+        if (!pop) continue;
+        if (pop.champion) importantIds.add(pop.champion.id);
+        const metricChampionIds: Record<ChampionMetric, string | null> = {
+          fees: null, utilization: null, lpValue: null,
+          lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null,
+        };
+        for (const [metric, candidate] of Object.entries(pop.metricChampions)) {
+          if (candidate) {
+            importantIds.add(candidate.id);
+            metricChampionIds[metric as ChampionMetric] = candidate.id;
+          }
+        }
+        populationSnapshots[rid] = {
+          generation: pop.generation,
+          totalEvaluated: pop.totalEvaluated,
+          championId: pop.champion?.id ?? null,
+          metricChampionIds,
+        };
+      }
+
+      for (const id of importantIds) {
+        const c = state.archive.find(c => c.id === id);
+        if (c) candidateMap.set(id, c);
+      }
+      const remaining = MAX_SYNC_CANDIDATES - candidateMap.size;
+      if (remaining > 0) {
+        for (const c of state.archive.slice(-remaining)) {
+          if (!candidateMap.has(c.id)) candidateMap.set(c.id, c);
+        }
+      }
+
+      const snapshot: SyncSnapshot = {
+        totalGenerations: state.totalGenerations,
+        candidates: Array.from(candidateMap.values()).map(serializeCandidate),
+        archiveSize: state.archive.length,
+        populations: populationSnapshots,
+        activityLog: state.activityLog.slice(-50),
+        ts: Date.now(),
+      };
+
+      this.channel.send({
+        type: "broadcast",
+        event: "leader-goodbye",
+        payload: snapshot,
+      });
+    }
+  }
 
   cleanup() {
     if (this.broadcastTimer) clearInterval(this.broadcastTimer);
