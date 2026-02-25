@@ -1,100 +1,147 @@
 
 
-# Liquidity Strategy Lab
+# Discovery Atlas: New Features and Optimization Ideas
 
-A new experimental lab where you design, backtest, and compare LP strategies over simulated (or historical-style synthetic) price paths. The lab uses your chosen invariant and fee structure to evaluate how different active management rules perform vs passive LPing.
+## Part 1: New Features
 
----
+### 1. Pareto Frontier Visualizer
+Add an interactive Pareto frontier chart to the Live Dashboard showing the trade-off surface between competing objectives (e.g., Fees vs. IL, Utilization vs. Drawdown). Users can click any point on the frontier to inspect that candidate. This makes multi-objective optimization tangible -- instead of a single opaque score, users see *why* certain designs dominate others.
 
-## Core Concept
+**Implementation:**
+- New component `src/components/labs/ParetoFrontier.tsx`
+- Scatter plot (recharts) with selectable X/Y axis metrics from the 7-metric vector
+- Highlight dominated vs. non-dominated candidates with color coding
+- Click-to-select wired into existing `selectCandidate`
 
-You define **LP strategies** as sets of rules (when to enter/exit ranges, how to rebalance, whether to hedge), then run them against Monte Carlo price simulations using the AMM engine. The lab produces detailed performance breakdowns: fee income, IL, net PnL, Sharpe ratio, and more -- letting you find the optimal strategy for a given invariant design.
+### 2. Custom Invariant Family Designer
+Let users define their own invariant family by drawing a liquidity curve shape (click-to-place control points on a canvas), then inject it into the evolution engine as a 4th family. The engine will mutate the control point positions during evolution, discovering optimized versions of the user's idea.
 
----
+**Implementation:**
+- New component `src/components/labs/CustomFamilyDesigner.tsx`
+- Spline interpolation from control points to 64-bin density
+- Register as a new entry in `INVARIANT_FAMILIES` dynamically
+- Persist custom families in sessionStorage
 
-## Tab Structure (sidebar navigation with Previous/Next buttons, matching existing lab pattern)
+### 3. Regime Transition Stress Test
+Add a new regime type that *switches* between low-vol and high-vol mid-path (simulating real market regime changes). This tests how robust a candidate is when conditions shift suddenly -- a critical real-world concern that the current static regimes miss.
 
-### 1. Strategy Editor
-- **Preset strategies** to start from: Passive Hold, Range Rebalancer, Volatility Tracker, Mean Reversion
-- Each strategy is defined by editable parameters:
-  - **Range width** (e.g., +/-10% around spot)
-  - **Rebalance trigger** (deviation threshold before repositioning)
-  - **Rebalance cooldown** (minimum time between adjustments)
-  - **Exit conditions** (stop-loss threshold, max IL tolerance)
-  - **Hedge ratio** (0-100%, simulates delta-neutral hedging cost)
-- Up to 3 strategies can be configured side-by-side for comparison
-- Session persistence (same pattern as Advanced Mode's `sessionStorage`)
+**Implementation:**
+- Add `"regime-shift"` to `RegimeId` and `REGIMES` in discovery-engine
+- `generatePricePath` detects regime-shift and swaps volatility/jump params at a random midpoint
+- New column in results tables showing regime-shift resilience score
 
-### 2. Simulation Config
-- Market parameters: volatility, drift, jump probability, jump size (reuses Monte Carlo conventions)
-- Number of paths and time horizon
-- Initial capital allocation
-- Fee structure: loads from session if saved, or uses default
-- Invariant selection: loads from session or picks constant-product default
-- "Run Backtest" button triggers the simulation
+### 4. Head-to-Head Arena
+A dedicated view where users pick 2 candidates from the archive and watch them compete in real-time on the same price path. An animated chart shows both LP values diverging step-by-step, with commentary on why one wins at each moment.
 
-### 3. Results Dashboard
-- **Equity curves**: overlay of all strategies' cumulative PnL over time (line chart)
-- **Fee vs IL attribution**: stacked area chart showing fee income vs impermanent loss per day
-- **Return distribution**: histogram of final returns per strategy
-- **Key metrics table**: Mean Return, Sharpe Ratio, Max Drawdown, Win Rate, Avg Rebalance Count, Total Fees Earned, Total IL, Net PnL
-- **Rebalance events timeline**: scatter overlay on the equity curve showing when each strategy rebalanced
+**Implementation:**
+- New component `src/components/labs/ArenaView.tsx`
+- Runs `simulatePath` on both candidates with the same seeded price path
+- Animated recharts line chart with play/pause controls
+- Side panel showing per-step metric deltas
 
-### 4. Compare (AMMComparison)
-- Reuses the existing `AMMComparison` component to import a library AMM and compare strategy performance across different invariant shapes
+### 5. Evolution Replay / Time Travel
+Record the champion history per regime across generations. Users can scrub a timeline slider to see how the best design evolved over time -- watching the liquidity shape morph from random noise into an optimized distribution.
 
-### 5. Deploy
-- Export strategy config + backtest results as JSON
-- Reuses `DeploymentExport` component pattern with strategy metadata included
-
----
-
-## New Files
-
-| File | Purpose |
-|------|---------|
-| `src/pages/LiquidityStrategyLab.tsx` | Main page, sidebar + tab routing (follows MultiAssetLab pattern) |
-| `src/components/labs/StrategyEditor.tsx` | Strategy preset picker + parameter editors for up to 3 strategies |
-| `src/components/labs/StrategyBacktest.tsx` | Simulation config panel + "Run Backtest" trigger |
-| `src/components/labs/StrategyResults.tsx` | Results dashboard with equity curves, attribution charts, metrics table |
-| `src/lib/strategy-engine.ts` | Pure computation: strategy simulation loop, rebalance logic, metric calculations |
-
-## Modified Files
-
-| File | Change |
-|------|--------|
-| `src/App.tsx` | Add route `/labs/strategy` |
-| `src/pages/Labs.tsx` | Add Liquidity Strategy Lab card with icon and description |
+**Implementation:**
+- Store champion snapshots (bins + score + generation) in a ring buffer (last 500)
+- New `src/components/labs/EvolutionReplay.tsx` with a slider + animated bin visualization
+- Shows score trajectory chart alongside the morphing shape
 
 ---
 
-## Technical Details
+## Part 2: Latency Optimizations
 
-### Strategy Engine (`strategy-engine.ts`)
-- Runs on top of the existing `amm-engine.ts` primitives (`createPool`, `executeTrade`, `executeArbitrage`, `gbmStep`, `calcIL`, `lpValue`, `hodlValue`)
-- For each simulated day on each path:
-  1. Step the external price via GBM
-  2. Execute arbitrage to align pool price
-  3. Check strategy rules (is price outside range? has cooldown elapsed?)
-  4. If rebalance triggered: withdraw liquidity, reposition at new range, record gas/slippage cost
-  5. Accumulate fees, track IL, compute equity
-- Outputs per-path time series and aggregate statistics
+### 1. Web Worker for Engine Tick
+The discovery engine currently runs `evaluateCandidate` on the main thread (each call runs 4-8 Monte Carlo paths with 96 steps each). Moving this to a Web Worker eliminates UI jank entirely.
 
-### Strategy Presets
-```text
-Passive Hold:     range=infinite, no rebalancing
-Range Rebalancer: range=+/-15%, rebalance when price exits range
-Volatility Track: range=2x rolling vol, adjusts width dynamically
-Mean Reversion:   widens range on high vol, narrows on low vol
-```
+**Implementation:**
+- New `src/workers/discovery-worker.ts` using `postMessage` API
+- `useDiscoveryEngine` sends tick requests to the worker, receives state updates back
+- Main thread only handles rendering -- zero simulation compute
 
-### Session Integration
-- Reads `advanced_invariant` and `advanced_fees` from sessionStorage (same keys as Advanced Mode)
-- Stores strategy configs under `strategy_lab_config`
-- The Deploy tab includes strategy parameters alongside invariant/fee data
+### 2. Batch Evaluation with Typed Arrays
+Currently each candidate evaluation allocates multiple `Float64Array` paths independently. Batch all candidates in a generation into a single pre-allocated buffer, reducing GC pressure and improving cache locality.
 
-### UI Pattern
-- Follows the exact same sidebar layout as MultiAssetLab and TimeVarianceLab
-- Uses the same `surface-elevated` card styling, `ChevronUp`/`ChevronDown` sidebar collapse, and `Previous`/`Next` navigation buttons
-- Charts use `useChartColors()` hook and recharts (consistent with all other labs)
+**Implementation:**
+- Pre-allocate a shared `Float64Array` buffer for all paths in a generation
+- Reuse path buffers across evaluations with index offsets
+- Estimated 30-40% reduction in GC pauses
+
+### 3. Reduce Path Length for Early Rejection
+Most bad candidates are identifiable within the first 30 steps. Add a two-phase evaluation: run a short 32-step "screening" path first, and only promote candidates that pass a minimum threshold to the full 96-step evaluation.
+
+**Implementation:**
+- New `screenCandidate` function: 1 path, 32 steps, check if score is within 2x of current champion
+- Only ~25% of candidates proceed to full `evaluateCandidate`
+- 3-4x speedup in generations per second
+
+### 4. Edge Function: Parallel Regime Evaluation
+The cron job currently runs one regime per invocation. Run all 3 regimes in parallel using `Promise.all`, tripling throughput per cron tick.
+
+**Implementation:**
+- Refactor `atlas-engine` generate action to accept `regime: "all"`
+- Use `Promise.all([evaluateRegime("low-vol"), evaluateRegime("high-vol"), evaluateRegime("jump-diffusion")])`
+
+---
+
+## Part 3: ML/Algorithm Improvements
+
+### 1. CMA-ES (Covariance Matrix Adaptation)
+Replace the naive "mutate random bins" approach with CMA-ES, a state-of-the-art derivative-free optimizer. CMA-ES learns the correlation structure between bins and adapts its mutation distribution, converging much faster on complex fitness landscapes.
+
+**Implementation:**
+- New `src/lib/cma-es.ts` implementing the (mu/mu_w, lambda)-CMA-ES algorithm
+- Maintains a covariance matrix C and step-size sigma per regime population
+- Replace `mutateBins` calls in `runGeneration` with CMA-ES sampling
+- Expected 5-10x faster convergence to local optima
+
+### 2. Surrogate Model (Bayesian Optimization)
+Training a lightweight surrogate model (Gaussian Process or random forest) on the (params -> score) mapping accumulated in the archive. Use it to predict promising regions of parameter space before running expensive Monte Carlo evaluations.
+
+**Implementation:**
+- New `src/lib/surrogate-model.ts` with a simple RBF kernel GP
+- Every 50 generations, fit the surrogate on the archive
+- Use Expected Improvement (EI) acquisition function to propose 30% of new candidates
+- Remaining 70% from standard mutation (keeps diversity)
+
+### 3. Novelty Search + Quality-Diversity (MAP-Elites)
+The current algorithm converges toward a single optimum per regime. MAP-Elites maintains a grid of *diverse* high-quality solutions indexed by behavioral features (e.g., entropy x symmetry). This discovers fundamentally different AMM designs rather than minor variations of one winner.
+
+**Implementation:**
+- New `src/lib/map-elites.ts`
+- 2D grid indexed by (entropy, peakConcentration) from `FeatureDescriptor`
+- Each cell stores the best-scoring candidate with those features
+- Mutation draws parents from occupied cells, preferring under-explored regions
+- The coverage grid in `GeometryObservatory` already visualizes this -- wire it to real MAP-Elites data
+
+### 4. Crossover Operator
+Currently only mutation is used. Add a crossover operator that blends bins from two elite parents, enabling the algorithm to combine good features from different families (e.g., the center mass of a "piecewise-bands" parent with the tail structure of a "tail-shielded" parent).
+
+**Implementation:**
+- `crossoverBins(parentA, parentB)`: uniform crossover per-bin with 50% probability, then normalize
+- `crossoverParams`: blend family parameters when parents share the same family
+- Use crossover for 30% of children, mutation for the rest
+
+### 5. Adaptive Mutation Rate
+Instead of a fixed `EXPLORATION_RATE = 0.15`, adapt it based on population diversity. When the population converges (low entropy across candidate scores), increase exploration. When diversity is high, focus on exploitation.
+
+**Implementation:**
+- Compute score entropy each generation
+- `dynamicExplorationRate = 0.05 + 0.25 * (1 - normalizedEntropy)`
+- Log rate changes as `exploration-spike` activity events (already supported)
+
+---
+
+## Suggested Implementation Priority
+
+| Priority | Item | Impact |
+|----------|------|--------|
+| 1 | Web Worker for engine tick | Eliminates UI jank immediately |
+| 2 | Early rejection screening | 3-4x generation throughput |
+| 3 | CMA-ES optimizer | 5-10x faster convergence |
+| 4 | Crossover operator | Better exploration, easy to add |
+| 5 | Pareto Frontier Visualizer | High user value, moderate effort |
+| 6 | MAP-Elites | Discovers diverse designs |
+| 7 | Head-to-Head Arena | Fun, engaging feature |
+| 8 | Surrogate model | Advanced but highest long-term impact |
 
