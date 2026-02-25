@@ -796,11 +796,15 @@ function computeAdaptiveProfile(bins: Float64Array, params: Record<string, numbe
 /** Run one generation of the evolutionary search for a single regime */
 export function runGeneration(
   population: PopulationState,
-  regimeConfig: RegimeConfig
+  regimeConfig: RegimeConfig,
+  options?: { recommendation?: MlRecommendation | null }
 ): { newPopulation: PopulationState; newCandidates: Candidate[]; events: ActivityEntry[] } {
   const events: ActivityEntry[] = [];
   const gen = population.generation + 1;
   const allCandidates: Candidate[] = [];
+  const recommendation = options?.recommendation;
+  const guidanceEnabled = Boolean(recommendation && recommendation.confidence >= 0.2 && recommendation.weakestAxes.length > 0);
+  let guidedMutations = 0;
 
   // If first generation, create initial population
   if (population.candidates.length === 0) {
@@ -858,7 +862,13 @@ export function runGeneration(
         const parent = elites[i % elites.length];
         const childFamily = INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0];
         const childParams = childFamily.mutateParams(parent.familyParams);
-        const childBins = childFamily.generateBins(childParams);
+        let childBins = childFamily.generateBins(childParams);
+        if (guidanceEnabled && recommendation && Math.random() < 0.65) {
+          const merged = blendBins(childBins, parent.bins, 0.35);
+          childBins = mutateRemediateWeaknesses(merged, recommendation.weakestAxes, 0.08 + recommendation.confidence * 0.14);
+          childBins = mutateAmplifyStrengths(childBins, recommendation.weakestAxes, 0.03 + recommendation.confidence * 0.05);
+          guidedMutations++;
+        }
         const { metrics, stability } = evaluateCandidate(childBins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
         const features = computeFeatures(childBins);
         const score = scoreCandidate(metrics, stability);
@@ -937,7 +947,7 @@ export function runGeneration(
   events.push({
     timestamp: Date.now(), regime: regimeConfig.id,
     type: "generation-complete",
-    message: `Generation ${gen} complete for ${regimeConfig.label}: ${allCandidates.length} candidates evaluated`,
+    message: `Generation ${gen} complete for ${regimeConfig.label}: ${allCandidates.length} candidates evaluated${guidanceEnabled ? ` (${guidedMutations} ML-guided mutations)` : ""}`,
     generation: gen,
   });
 
@@ -1131,6 +1141,19 @@ export interface MetricAnalysis {
   weakestMetric: keyof NormalizedMetrics;
 }
 
+export interface MlRecommendation {
+  weakestAxes: (keyof NormalizedMetrics)[];
+  confidence: number;
+  targetCoverage: number;
+}
+
+function percentileRank(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.floor(p * Math.max(0, sorted.length - 1));
+  return sorted[idx];
+}
+
 /** Normalize raw metrics to [0,1] where 1 = best for spider graph display */
 export function normalizeMetrics(metrics: MetricVector, stability: number): NormalizedMetrics {
   return {
@@ -1171,6 +1194,55 @@ export function analyzeMetricProfile(
   const spiderCoverage = geoMean * 0.7 + minVal * 0.3;
 
   return { normalized, spiderCoverage, strengths, weaknesses, dominantMetric, weakestMetric };
+}
+
+/**
+ * Learn aggregate weaknesses from high spider-coverage candidates.
+ * Atlas uses this output to bias the next generation.
+ */
+export function learnMlRecommendation(candidates: Candidate[]): MlRecommendation | null {
+  if (candidates.length < 12) return null;
+
+  const analyses = candidates.map((candidate) => {
+    const analysis = analyzeMetricProfile(candidate.metrics, candidate.stability);
+    return {
+      normalized: analysis.normalized,
+      spiderCoverage: analysis.spiderCoverage,
+    };
+  });
+
+  const threshold = percentileRank(analyses.map((entry) => entry.spiderCoverage), 0.8);
+  const successful = analyses.filter((entry) => entry.spiderCoverage >= threshold);
+  if (successful.length < 4) return null;
+
+  const means: Record<keyof NormalizedMetrics, number> = {
+    fees: 0,
+    utilization: 0,
+    lpValue: 0,
+    lowSlippage: 0,
+    lowArbLeak: 0,
+    stability: 0,
+    lowDrawdown: 0,
+  };
+
+  for (const entry of successful) {
+    for (const key of Object.keys(means) as (keyof NormalizedMetrics)[]) {
+      means[key] += entry.normalized[key];
+    }
+  }
+  for (const key of Object.keys(means) as (keyof NormalizedMetrics)[]) {
+    means[key] /= successful.length;
+  }
+
+  const weakestAxes = (Object.keys(means) as (keyof NormalizedMetrics)[])
+    .sort((a, b) => means[a] - means[b])
+    .slice(0, 3);
+
+  return {
+    weakestAxes,
+    confidence: Math.min(0.99, successful.length / analyses.length),
+    targetCoverage: successful.reduce((sum, entry) => sum + entry.spiderCoverage, 0) / successful.length,
+  };
 }
 
 /**
