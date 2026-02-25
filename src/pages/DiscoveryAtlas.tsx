@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Activity, Map, Fingerprint, Radio, Wifi, HardDrive, Loader2,
-  FlaskConical, Radar, Zap, Layers, Repeat,
+  FlaskConical, Radar, Zap, Layers,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -12,13 +12,11 @@ import DesignDetail from "@/components/labs/DesignDetail";
 import GeometryObservatory from "@/components/labs/GeometryObservatory";
 import ExperimentsTab from "@/components/labs/ExperimentsTab";
 import FamilyDirectory from "@/components/labs/FamilyDirectory";
-import StudioLoopPanel from "@/components/labs/StudioLoopPanel";
 import MethodologyTab from "@/components/labs/MethodologyTab";
-import LabHelpLink from "@/components/labs/LabHelpLink";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "directory" | "studio-loop" | "observatory" | "experiments" | "methodology" | "detail";
+type View = "dashboard" | "atlas" | "directory" | "observatory" | "experiments" | "methodology" | "detail";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
 type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
@@ -230,16 +228,6 @@ const DiscoveryAtlas = () => {
     setActiveView("detail");
   }, [selectCandidate]);
 
-  const handleImportStudioCandidate = useCallback((candidate: Candidate) => {
-    ingestExperimentCandidates([{
-      ...candidate,
-      source: "user-designed",
-      contributor: "studio",
-      experimentId: candidate.experimentId ?? "studio",
-      objectiveType: candidate.objectiveType ?? "studio",
-    }], `Studio import: ${candidate.id} evaluated and mapped to atlas`);
-    setActiveView("atlas");
-  }, [ingestExperimentCandidates]);
 
   const handleBackFromDetail = useCallback(() => {
     clearSelection();
@@ -270,20 +258,10 @@ const DiscoveryAtlas = () => {
     { id: "dashboard" as const, label: "Live Dashboard", icon: Activity },
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
     { id: "directory" as const, label: "Family Directory", icon: Layers },
-    { id: "studio-loop" as const, label: "Studio Loop", icon: Repeat },
     { id: "observatory" as const, label: "Geometry Observatory", icon: Radar },
     { id: "experiments" as const, label: "Experiments", icon: FlaskConical },
     { id: "methodology" as const, label: "Methodology", icon: Radar },
   ];
-  const tabToMethodSection: Record<Exclude<View, "detail">, string> = {
-    dashboard: "method-dashboard",
-    atlas: "method-atlas",
-    directory: "method-directory",
-    "studio-loop": "method-studio-loop",
-    observatory: "method-observatory",
-    experiments: "method-experiments",
-    methodology: "method-overview",
-  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -309,31 +287,26 @@ const DiscoveryAtlas = () => {
             >
               <BadgeIcon className="w-3 h-3" />
               <span className="text-[9px] font-medium">{badge.label}</span>
-              <LabHelpLink href="#method-sync" label="Sync modes and persistence" className="ml-1" />
             </button>
           ) : (
             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${badge.className}`}>
               <BadgeIcon className={`w-3 h-3 ${syncMode === "loading" ? "animate-spin" : ""}`} />
               <span className="text-[9px] font-medium">{badge.label}</span>
-              <LabHelpLink href="#method-sync" label="Sync modes and persistence" className="ml-1" />
             </div>
           )}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-success/5 border border-success/20">
             <Radio className="w-3 h-3 text-success animate-pulse" />
             <span className="text-[9px] font-medium text-success">LIVE</span>
-            <LabHelpLink href="#method-overview" label="System overview" className="ml-1" />
           </div>
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary border border-border">
             <span className="text-[9px] font-mono text-muted-foreground">
               Gen {state.totalGenerations} | {(state.archiveSize ?? state.archive.length).toLocaleString()} archived
             </span>
-            <LabHelpLink href="#method-dashboard" label="Generation counter and archive" className="ml-1" />
           </div>
           {genRate !== null && (
             <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary border border-border">
               <Zap className="w-3 h-3 text-warning" />
               <span className="text-[9px] font-mono text-muted-foreground">{genRate} gen/s</span>
-              <LabHelpLink href="#method-dashboard" label="Generation-rate computation" className="ml-1" />
             </div>
           )}
           <ThemeToggle />
@@ -349,10 +322,6 @@ const DiscoveryAtlas = () => {
               <button key={tab.id} onClick={() => setActiveView(tab.id)} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                 <Icon className="w-3.5 h-3.5" />
                 {tab.label}
-                <LabHelpLink
-                  href={`#${tabToMethodSection[tab.id]}`}
-                  label={`${tab.label} methodology`}
-                />
               </button>
             );
           })}
@@ -360,7 +329,6 @@ const DiscoveryAtlas = () => {
             <button onClick={() => setActiveView("detail")} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${activeView === "detail" ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
               <Fingerprint className="w-3.5 h-3.5" />
               Design Detail
-              <LabHelpLink href="#method-detail" label="Design detail methodology" />
             </button>
           )}
         </div>
@@ -412,7 +380,6 @@ const DiscoveryAtlas = () => {
           {activeView === "dashboard" && <motion.div key="dashboard" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><LiveDashboard state={state} onSelectCandidate={handleSelectCandidate} /></motion.div>}
           {activeView === "atlas" && <motion.div key="atlas" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><AtlasSurface state={{ ...state, archive: filteredArchive }} onSelectCandidate={handleSelectCandidate} /></motion.div>}
           {activeView === "directory" && <motion.div key="directory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><FamilyDirectory state={{ ...state, archive: filteredArchive }} /></motion.div>}
-          {activeView === "studio-loop" && <motion.div key="studio-loop" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><StudioLoopPanel state={state} onImportStudioCandidate={handleImportStudioCandidate} /></motion.div>}
           {activeView === "observatory" && <motion.div key="observatory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}><GeometryObservatory state={state} onIngestCandidates={ingestExperimentCandidates} /></motion.div>}
           {activeView === "experiments" && (
             <ExperimentsTab
