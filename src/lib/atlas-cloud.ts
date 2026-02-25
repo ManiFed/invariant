@@ -279,6 +279,7 @@ export async function backupAtlasState(state: EngineState): Promise<{ success: b
     "low-vol": state.populations["low-vol"].candidates.map(serializeCandidateForBackup),
     "high-vol": state.populations["high-vol"].candidates.map(serializeCandidateForBackup),
     "jump-diffusion": state.populations["jump-diffusion"].candidates.map(serializeCandidateForBackup),
+    "regime-shift": (state.populations["regime-shift"]?.candidates ?? []).map(serializeCandidateForBackup),
   };
 
   try {

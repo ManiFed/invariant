@@ -12,24 +12,28 @@ const REGIME_COLORS: Record<RegimeId, string> = {
   "low-vol": "hsl(142, 72%, 45%)",
   "high-vol": "hsl(38, 92%, 50%)",
   "jump-diffusion": "hsl(0, 72%, 55%)",
+  "regime-shift": "hsl(270, 65%, 55%)",
 };
 
 const REGIME_LABELS: Record<RegimeId, string> = {
   "low-vol": "Low Vol",
   "high-vol": "High Vol",
   "jump-diffusion": "Jump Diff",
+  "regime-shift": "Regime Shift",
 };
 
 const FAMILY_COLORS: Record<InvariantFamilyId, string> = {
   "piecewise-bands": "hsl(205, 85%, 56%)",
   "amplified-hybrid": "hsl(284, 76%, 60%)",
   "tail-shielded": "hsl(162, 72%, 42%)",
+  "custom": "hsl(45, 90%, 55%)",
 };
 
 const FAMILY_LABELS: Record<InvariantFamilyId, string> = {
   "piecewise-bands": "Piecewise",
   "amplified-hybrid": "Amplified",
   "tail-shielded": "Tail Shielded",
+  "custom": "Custom",
 };
 
 interface AtlasSurfaceProps {

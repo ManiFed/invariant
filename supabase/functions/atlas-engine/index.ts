@@ -21,7 +21,7 @@ const EVAL_PATHS = 10;
 const PATH_STEPS = 200;
 const DT = 1 / 365;
 
-type RegimeId = "low-vol" | "high-vol" | "jump-diffusion";
+type RegimeId = "low-vol" | "high-vol" | "jump-diffusion" | "regime-shift";
 
 interface RegimeConfig {
   id: RegimeId;
@@ -36,6 +36,7 @@ const REGIMES: RegimeConfig[] = [
   { id: "low-vol", volatility: 0.3, drift: 0, jumpIntensity: 0, jumpMean: 0, jumpStd: 0 },
   { id: "high-vol", volatility: 1.0, drift: 0, jumpIntensity: 0, jumpMean: 0, jumpStd: 0 },
   { id: "jump-diffusion", volatility: 0.6, drift: 0, jumpIntensity: 5, jumpMean: -0.05, jumpStd: 0.15 },
+  { id: "regime-shift", volatility: 0.3, drift: 0, jumpIntensity: 0, jumpMean: 0, jumpStd: 0 },
 ];
 
 interface MetricVector {
@@ -141,12 +142,28 @@ function priceImpact(bins: Float64Array, refLogPrice: number, tradeSize: number,
 function generatePricePath(regime: RegimeConfig, steps: number, dt: number): Float64Array {
   const path = new Float64Array(steps + 1);
   path[0] = 0;
+
+  const isRegimeShift = regime.id === "regime-shift";
+  const shiftPoint = isRegimeShift ? Math.floor(steps * (0.3 + Math.random() * 0.4)) : steps + 1;
+
+  let volatility = isRegimeShift ? 0.3 : regime.volatility;
+  let jumpIntensity = isRegimeShift ? 0 : regime.jumpIntensity;
+  let jumpMean = regime.jumpMean;
+  let jumpStd = regime.jumpStd;
+
   for (let t = 1; t <= steps; t++) {
-    const diffusion = (regime.drift - 0.5 * regime.volatility * regime.volatility) * dt +
-      regime.volatility * Math.sqrt(dt) * randn();
+    if (isRegimeShift && t === shiftPoint) {
+      volatility = 1.0;
+      jumpIntensity = 5;
+      jumpMean = -0.05;
+      jumpStd = 0.15;
+    }
+
+    const diffusion = (regime.drift - 0.5 * volatility * volatility) * dt +
+      volatility * Math.sqrt(dt) * randn();
     let jumpComponent = 0;
-    if (regime.jumpIntensity > 0 && Math.random() < regime.jumpIntensity * dt) {
-      jumpComponent = regime.jumpMean + regime.jumpStd * randn();
+    if (jumpIntensity > 0 && Math.random() < jumpIntensity * dt) {
+      jumpComponent = jumpMean + jumpStd * randn();
     }
     path[t] = path[t - 1] + diffusion + jumpComponent;
   }
@@ -347,6 +364,44 @@ function mutateBins(parent: Float64Array, intensity: number = 0.1): Float64Array
   for (let i = 0; i < NUM_BINS; i++) child[i] = Math.max(0, child[i]);
   normalizeBins(child);
   return child;
+}
+
+/** Crossover: uniform per-bin swap between two parents */
+function crossoverBins(parentA: Float64Array, parentB: Float64Array): Float64Array {
+  const child = new Float64Array(NUM_BINS);
+  for (let i = 0; i < NUM_BINS; i++) {
+    child[i] = Math.random() < 0.5 ? parentA[i] : parentB[i];
+  }
+  normalizeBins(child);
+  return child;
+}
+
+/** Early rejection: run a short 32-step screen before full evaluation */
+function screenCandidate(bins: Float64Array, regime: RegimeConfig, championScore: number): boolean {
+  const path = generatePricePath(regime, 32, DT);
+  const metrics = simulatePath(bins, path);
+  const quickScore = scoreCandidate(metrics, 0);
+  return quickScore < championScore * 2.5; // must be within 2.5x of champion
+}
+
+/** Adaptive exploration rate based on population score diversity */
+function adaptiveExplorationRate(scores: number[]): number {
+  if (scores.length < 3) return EXPLORATION_RATE;
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const range = max - min;
+  if (range < 1e-6) return 0.35;
+  const buckets = new Array(8).fill(0);
+  for (const s of scores) {
+    const idx = Math.min(Math.floor(((s - min) / range) * 8), 7);
+    buckets[idx]++;
+  }
+  let entropy = 0;
+  for (const c of buckets) {
+    if (c > 0) { const p = c / scores.length; entropy -= p * Math.log2(p); }
+  }
+  const normalizedEntropy = entropy / Math.log2(8);
+  return 0.05 + 0.25 * (1 - normalizedEntropy);
 }
 
 // ─── Main Handler ────────────────────────────────────────────────────────────
