@@ -1023,8 +1023,18 @@ export function computeCoverage(candidates: Candidate[], gridSize: number = 10):
   totalCells: number;
   occupiedCells: number;
 } {
-  const density: number[][] = Array.from({ length: gridSize }, () => new Array(gridSize).fill(0));
   const embedded = embedCandidates(candidates);
+
+  return computeCoverageFromEmbedding(embedded, gridSize);
+}
+
+export function computeCoverageFromEmbedding(embedded: { x: number; y: number }[], gridSize: number = 10): {
+  coverage: number;
+  densityMap: number[][];
+  totalCells: number;
+  occupiedCells: number;
+} {
+  const density: number[][] = Array.from({ length: gridSize }, () => new Array(gridSize).fill(0));
 
   for (const pt of embedded) {
     const gx = Math.min(Math.floor(pt.x * gridSize), gridSize - 1);

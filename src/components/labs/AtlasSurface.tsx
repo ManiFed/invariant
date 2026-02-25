@@ -1,12 +1,12 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect, useDeferredValue } from "react";
 import { motion } from "framer-motion";
-import { Map as MapIcon, Layers, Eye, ZoomIn, Pause, Play, RotateCcw, Radar as RadarIcon } from "lucide-react";
+import { Map as MapIcon, Layers, Eye, ZoomIn, Pause, Play, RotateCcw, Radar as RadarIcon, BrainCircuit, Target } from "lucide-react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import type { EngineState, RegimeId, Candidate, InvariantFamilyId } from "@/lib/discovery-engine";
-import { embedCandidates, computeCoverage } from "@/lib/discovery-engine";
+import { embedCandidates, computeCoverageFromEmbedding, normalizeMetrics } from "@/lib/discovery-engine";
 
 const REGIME_COLORS: Record<RegimeId, string> = {
   "low-vol": "hsl(142, 72%, 45%)",
@@ -38,6 +38,63 @@ interface AtlasSurfaceProps {
 }
 
 const GRID_SIZE = 16;
+
+const SPIDER_KEYS = ["fees", "utilization", "lpValue", "lowSlippage", "lowArbLeak", "stability", "lowDrawdown"] as const;
+
+type SpiderKey = (typeof SPIDER_KEYS)[number];
+
+type LearnedZone = {
+  centerX: number;
+  centerY: number;
+  spreadX: number;
+  spreadY: number;
+  confidence: number;
+  targetCoverage: number;
+  weakestAxes: SpiderKey[];
+};
+
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.floor(p * Math.max(0, sorted.length - 1));
+  return sorted[idx];
+}
+
+function learnSuccessZone(candidates: Candidate[], embedded: { x: number; y: number }[]): LearnedZone | null {
+  if (candidates.length < 20 || embedded.length !== candidates.length) return null;
+
+  const samples = candidates.map((candidate, i) => {
+    const metrics = normalizeMetrics(candidate.metrics, candidate.stability);
+    const values = SPIDER_KEYS.map((key) => metrics[key]);
+    const geo = Math.pow(values.reduce((acc, value) => acc * Math.max(value, 1e-6), 1), 1 / values.length);
+    const minVal = Math.min(...values);
+    const coverage = geo * 0.7 + minVal * 0.3;
+    return { candidate, embedding: embedded[i], metrics, coverage };
+  });
+
+  const threshold = percentile(samples.map((sample) => sample.coverage), 0.8);
+  const successful = samples.filter((sample) => sample.coverage >= threshold);
+  if (successful.length < 4) return null;
+
+  const centerX = successful.reduce((acc, sample) => acc + sample.embedding.x, 0) / successful.length;
+  const centerY = successful.reduce((acc, sample) => acc + sample.embedding.y, 0) / successful.length;
+  const spreadX = Math.max(0.05, Math.sqrt(successful.reduce((acc, sample) => acc + (sample.embedding.x - centerX) ** 2, 0) / successful.length));
+  const spreadY = Math.max(0.05, Math.sqrt(successful.reduce((acc, sample) => acc + (sample.embedding.y - centerY) ** 2, 0) / successful.length));
+
+  const successMeans: Record<SpiderKey, number> = SPIDER_KEYS.reduce((acc, key) => {
+    acc[key] = successful.reduce((sum, sample) => sum + sample.metrics[key], 0) / successful.length;
+    return acc;
+  }, {} as Record<SpiderKey, number>);
+
+  const weakestAxes = [...SPIDER_KEYS]
+    .sort((a, b) => successMeans[a] - successMeans[b])
+    .slice(0, 3);
+
+  const targetCoverage = successful.reduce((acc, sample) => acc + sample.coverage, 0) / successful.length;
+  const confidence = Math.min(0.99, successful.length / Math.max(1, samples.length));
+
+  return { centerX, centerY, spreadX, spreadY, confidence, targetCoverage, weakestAxes };
+}
 
 // ─── Collective Spider Graph ────────────────────────────────────────────────
 
@@ -517,11 +574,12 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
 
   // Use frozen snapshot or live state
   const displayState = frozen && frozenState ? frozenState : state;
+  const deferredArchive = useDeferredValue(displayState.archive);
 
   const filteredCandidates = useMemo(() => {
-    if (filterRegime === "all") return displayState.archive;
-    return displayState.archive.filter(c => c.regime === filterRegime);
-  }, [displayState.archive, filterRegime]);
+    if (filterRegime === "all") return deferredArchive;
+    return deferredArchive.filter(c => c.regime === filterRegime);
+  }, [deferredArchive, filterRegime]);
 
   const embedding = useMemo(() => {
     if (filteredCandidates.length === 0) return [];
@@ -529,15 +587,25 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
   }, [filteredCandidates]);
 
   const coverage = useMemo(() => {
-    if (displayState.archive.length === 0) return { coverage: 0, densityMap: [], totalCells: 0, occupiedCells: 0 };
-    return computeCoverage(displayState.archive, GRID_SIZE);
-  }, [displayState.archive]);
+    if (embedding.length === 0) return { coverage: 0, densityMap: [], totalCells: 0, occupiedCells: 0 };
+    return computeCoverageFromEmbedding(embedding, GRID_SIZE);
+  }, [embedding]);
 
   const candidateMap = useMemo(() => {
     const lookup = new globalThis.Map<string, Candidate>();
     for (const c of filteredCandidates) lookup.set(c.id, c);
     return lookup;
   }, [filteredCandidates]);
+
+  const championIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const population of Object.values(displayState.populations)) {
+      if (population.champion?.id) ids.add(population.champion.id);
+    }
+    return ids;
+  }, [displayState.populations]);
+
+  const learnedZone = useMemo(() => learnSuccessZone(filteredCandidates, embedding), [filteredCandidates, embedding]);
 
   const hoveredCandidate = hoveredId ? candidateMap.get(hoveredId) ?? null : null;
 
@@ -727,6 +795,46 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
         </div>
       </motion.div>
 
+      {learnedZone && (
+        <motion.div className="surface-elevated rounded-xl p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.04 }}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <BrainCircuit className="w-3.5 h-3.5 text-chart-3" />
+                <h4 className="text-xs font-semibold text-foreground">Basic ML Guidance Engine</h4>
+              </div>
+              <p className="text-[9px] text-muted-foreground">
+                Learns from top spider-coverage iterations and suggests where new AMMs should move to approach a full spider graph.
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[8px] text-muted-foreground">Model confidence</p>
+              <p className="text-lg font-mono font-semibold text-foreground">{(learnedZone.confidence * 100).toFixed(0)}%</p>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3 mt-3">
+            <div className="rounded-lg border border-border bg-secondary/40 p-2.5">
+              <p className="text-[8px] text-muted-foreground mb-1">Predicted success centroid</p>
+              <p className="text-[10px] font-mono text-foreground">X {learnedZone.centerX.toFixed(2)} · Y {learnedZone.centerY.toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/40 p-2.5">
+              <p className="text-[8px] text-muted-foreground mb-1">Target spider coverage</p>
+              <p className="text-[10px] font-mono text-foreground">{(learnedZone.targetCoverage * 100).toFixed(1)}%</p>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary/40 p-2.5">
+              <p className="text-[8px] text-muted-foreground mb-1">Improvement priorities</p>
+              <div className="flex items-center gap-1 flex-wrap">
+                {learnedZone.weakestAxes.map((axis) => (
+                  <span key={axis} className="text-[8px] px-1.5 py-0.5 rounded bg-warning/10 border border-warning/20 text-warning">
+                    <Target className="w-2.5 h-2.5 inline mr-1" />{axis}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Collective Spider Graph + Main Map side by side */}
       <div className="grid md:grid-cols-3 gap-4">
         {/* Spider graph */}
@@ -844,13 +952,39 @@ export default function AtlasSurface({ state, onSelectCandidate }: AtlasSurfaceP
               <text x={pad + 4} y={pad + plotH - 6} fontSize={7} fill="hsl(var(--muted-foreground))" opacity={0.5}>Symmetric+Uniform</text>
               <text x={pad + plotW - 4} y={pad + plotH - 6} fontSize={7} fill="hsl(var(--muted-foreground))" opacity={0.5} textAnchor="end">Symmetric+Peaked</text>
 
+              {learnedZone && (
+                <g>
+                  <ellipse
+                    cx={pad + learnedZone.centerX * plotW}
+                    cy={pad + plotH - learnedZone.centerY * plotH}
+                    rx={Math.min(plotW * 0.35, learnedZone.spreadX * plotW * 1.8)}
+                    ry={Math.min(plotH * 0.35, learnedZone.spreadY * plotH * 1.8)}
+                    fill="hsl(var(--chart-3))"
+                    fillOpacity={0.08}
+                    stroke="hsl(var(--chart-3))"
+                    strokeOpacity={0.35}
+                    strokeWidth={1}
+                    strokeDasharray="4 4"
+                  />
+                  <text
+                    x={pad + learnedZone.centerX * plotW}
+                    y={pad + plotH - learnedZone.centerY * plotH - 8}
+                    textAnchor="middle"
+                    fontSize={8}
+                    fill="hsl(var(--chart-3))"
+                  >
+                    ML success zone
+                  </text>
+                </g>
+              )}
+
               {/* Candidate points */}
               {embedding.map((pt, i) => {
                 const c = filteredCandidates[i];
                 if (!c) return null;
                 const cx = pad + Math.max(0, Math.min(1, pt.x)) * plotW;
                 const cy = pad + plotH - Math.max(0, Math.min(1, pt.y)) * plotH;
-                const isChampion = Object.values(displayState.populations).some(p => p.champion?.id === c.id);
+                const isChampion = championIds.has(c.id);
                 const isHovered = hoveredId === c.id;
                 const r = isChampion ? 5 : isHovered ? 4 : 2.5;
                 return (
