@@ -11,7 +11,7 @@ export type CloudStatus =
   | "unreachable"     // Can't reach Supabase at all
   | "loading";        // Still checking
 
-const MAX_CLOUD_ARCHIVE = 2000;
+const MAX_CLOUD_ARCHIVE = 5000;
 
 // ─── DB Row → Candidate conversion ──────────────────────────────────────────
 

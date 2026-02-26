@@ -68,6 +68,43 @@ interface CandidateRow {
   score: number;
 }
 
+const ARCHIVE_BATCH_SIZE = 12;
+const ARCHIVE_TOTAL_CAP = 5_000;
+
+function featureFamilyKey(features: FeatureDescriptor): string {
+  return [
+    Math.round(features.curvature * 20) / 20,
+    Math.round(features.entropy * 20) / 20,
+    Math.round(features.symmetry * 20) / 20,
+    Math.round(features.tailDensityRatio * 20) / 20,
+    Math.round(features.peakConcentration * 20) / 20,
+  ].join("|");
+}
+
+function selectDiverseArchive(candidates: CandidateRow[], count: number): CandidateRow[] {
+  const sorted = [...candidates].sort((a, b) => a.score - b.score);
+  const picked: CandidateRow[] = [];
+  const seenFamilies = new Set<string>();
+
+  for (const candidate of sorted) {
+    const familyKey = featureFamilyKey(candidate.features);
+    if (seenFamilies.has(familyKey)) continue;
+    seenFamilies.add(familyKey);
+    picked.push(candidate);
+    if (picked.length >= count) return picked;
+  }
+
+  if (picked.length >= count) return picked;
+  const pickedIds = new Set(picked.map((candidate) => candidate.id));
+  for (const candidate of sorted) {
+    if (pickedIds.has(candidate.id)) continue;
+    picked.push(candidate);
+    if (picked.length >= count) break;
+  }
+
+  return picked;
+}
+
 let counter = 0;
 function nextId(): string {
   return `s${++counter}_${Date.now().toString(36)}`;
@@ -509,9 +546,9 @@ Deno.serve(async (req) => {
       // Sort all candidates by score
       allCandidates.sort((a, b) => a.score - b.score);
 
-      // Top 5% go to archive (permanent storage for the atlas)
-      const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
-      const archiveCandidates = allCandidates.slice(0, archiveCount);
+      // Archive a larger, more diverse set each generation.
+      const archiveCount = Math.max(ARCHIVE_BATCH_SIZE, Math.ceil(allCandidates.length * 0.3));
+      const archiveCandidates = selectDiverseArchive(allCandidates, archiveCount);
 
       // Top POPULATION_SIZE are the new population
       const newPopulation = allCandidates.slice(0, POPULATION_SIZE);
@@ -539,7 +576,7 @@ Deno.serve(async (req) => {
 
       await supabase.from("atlas_candidates").insert(popRows);
 
-      // Insert archived candidates (top 5%)
+      // Insert archived candidates (diversified frontier set)
       const archiveRows = archiveCandidates.map(c => ({
         candidate_id: c.id,
         regime: c.regime,
@@ -565,20 +602,20 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         });
 
-      // Cap total archived candidates to prevent unbounded growth (keep most recent 50,000)
+      // Cap total archived candidates to prevent unbounded growth (keep most recent 5,000)
       const { count: totalArchived } = await supabase
         .from("atlas_candidates")
         .select("*", { count: "exact", head: true })
         .eq("is_archived", true);
 
-      if (totalArchived && totalArchived > 50000) {
+      if (totalArchived && totalArchived > ARCHIVE_TOTAL_CAP) {
         // Delete oldest archived beyond limit
         const { data: oldest } = await supabase
           .from("atlas_candidates")
           .select("id")
           .eq("is_archived", true)
           .order("created_at", { ascending: true })
-          .limit(totalArchived - 50000);
+          .limit(totalArchived - ARCHIVE_TOTAL_CAP);
 
         if (oldest && oldest.length > 0) {
           const idsToDelete = oldest.map((r: any) => r.id);
@@ -901,8 +938,8 @@ Deno.serve(async (req) => {
         }
 
         allCandidates.sort((a, b) => a.score - b.score);
-        const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
-        const archiveCandidates = allCandidates.slice(0, archiveCount);
+        const archiveCount = Math.max(ARCHIVE_BATCH_SIZE, Math.ceil(allCandidates.length * 0.3));
+        const archiveCandidates = selectDiverseArchive(allCandidates, archiveCount);
         const newPopulation = allCandidates.slice(0, POPULATION_SIZE);
 
         await supabase.from("atlas_candidates").delete().eq("regime", selectedRegime.id).eq("is_population", true);
@@ -1063,8 +1100,8 @@ Deno.serve(async (req) => {
         }
 
         allCandidates.sort((a, b) => a.score - b.score);
-        const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
-        const archiveCandidates = allCandidates.slice(0, archiveCount);
+        const archiveCount = Math.max(ARCHIVE_BATCH_SIZE, Math.ceil(allCandidates.length * 0.3));
+        const archiveCandidates = selectDiverseArchive(allCandidates, archiveCount);
         const newPopulation = allCandidates.slice(0, POPULATION_SIZE);
 
         await supabase.from("atlas_candidates").delete().eq("regime", regimeConfig.id).eq("is_population", true);

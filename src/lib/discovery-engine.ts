@@ -118,6 +118,7 @@ export interface PopulationState {
 
 export const ARCHIVE_ROUND_INTERVAL = 5;
 const ARCHIVE_MIN_SCORE_IMPROVEMENT = 0.005;
+const ARCHIVE_BATCH_LIMIT = 24;
 
 export function passesArchiveThreshold(candidate: Candidate): boolean {
   return (
@@ -156,7 +157,25 @@ export function selectArchiveCandidates(
     ? incumbentScore * (1 - ARCHIVE_MIN_SCORE_IMPROVEMENT)
     : Infinity;
   const improved = mergedBuffer.filter((candidate) => candidate.score < thresholdScore);
-  const archived = (improved.length > 0 ? improved : mergedBuffer.slice(0, 1)).slice(0, 8);
+  const archivePool = improved.length > 0 ? improved : mergedBuffer.slice(0, 1);
+  const bestByFamilyCombo = new Map<string, Candidate>();
+
+  for (const candidate of archivePool) {
+    const familyCombo = [
+      candidate.familyId,
+      candidate.poolType ?? "two-asset",
+      candidate.objectiveType ?? "default",
+      candidate.regime,
+    ].join("|");
+    const existing = bestByFamilyCombo.get(familyCombo);
+    if (!existing || candidate.score < existing.score) {
+      bestByFamilyCombo.set(familyCombo, candidate);
+    }
+  }
+
+  const archived = Array.from(bestByFamilyCombo.values())
+    .sort((a, b) => a.score - b.score)
+    .slice(0, ARCHIVE_BATCH_LIMIT);
 
   return { archived, nextBuffer: [] };
 }

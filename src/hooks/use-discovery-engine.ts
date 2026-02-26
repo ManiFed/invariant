@@ -24,8 +24,8 @@ import {
   loadAtlasStateFromDB,
 } from "@/lib/atlas-persistence";
 
-const LOCAL_ARCHIVE_LIMIT = 2000;
-const CLOUD_ARCHIVE_LIMIT = 10000;
+const LOCAL_ARCHIVE_LIMIT = 5000;
+const CLOUD_ARCHIVE_LIMIT = 5000;
 const TICK_INTERVAL = 35;
 const PERSIST_INTERVAL = 3000;
 const CLOUD_KEEPALIVE_INTERVAL = 45000;
