@@ -405,7 +405,7 @@ const DiscoveryAtlas = () => {
                 onClick={() => setActiveView(tab.id)}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                {Icon && <Icon className="w-3.5 h-3.5" />}
                 {tab.label}
               </button>
             );
