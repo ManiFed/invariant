@@ -49,6 +49,8 @@ describe("learnMlRecommendation", () => {
     expect(recommendation?.weakestAxes).toHaveLength(3);
     expect(recommendation?.confidence).toBeGreaterThan(0);
     expect(recommendation?.targetCoverage).toBeGreaterThan(0);
+    expect(recommendation?.prioritizedFamilies).toHaveLength(2);
+    expect(Object.values(recommendation?.familyWeights ?? {}).reduce((sum, v) => sum + v, 0)).toBeCloseTo(1, 6);
   });
 
   it("returns null when there is not enough evidence", () => {
