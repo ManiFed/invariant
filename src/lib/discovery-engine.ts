@@ -113,6 +113,52 @@ export interface PopulationState {
   metricChampions: Record<ChampionMetric, Candidate | null>;
   generation: number;
   totalEvaluated: number;
+  archiveBuffer?: Candidate[];
+}
+
+export const ARCHIVE_ROUND_INTERVAL = 5;
+const ARCHIVE_MIN_SCORE_IMPROVEMENT = 0.005;
+
+export function passesArchiveThreshold(candidate: Candidate): boolean {
+  return (
+    candidate.metrics.totalSlippage <= 0.045 &&
+    candidate.metrics.maxDrawdown <= 0.28 &&
+    candidate.metrics.arbLeakage <= 24 &&
+    candidate.stability <= 0.16
+  );
+}
+
+function dedupeById(candidates: Candidate[]): Candidate[] {
+  const seen = new Set<string>();
+  const deduped: Candidate[] = [];
+  for (const candidate of candidates) {
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    deduped.push(candidate);
+  }
+  return deduped;
+}
+
+export function selectArchiveCandidates(
+  previousBuffer: Candidate[] | undefined,
+  generationCandidates: Candidate[],
+  generation: number,
+  incumbentScore: number,
+): { archived: Candidate[]; nextBuffer: Candidate[] } {
+  const qualifiers = generationCandidates.filter(passesArchiveThreshold);
+  const mergedBuffer = dedupeById([...(previousBuffer ?? []), ...qualifiers]).sort((a, b) => a.score - b.score);
+
+  if (generation % ARCHIVE_ROUND_INTERVAL !== 0) {
+    return { archived: [], nextBuffer: mergedBuffer };
+  }
+
+  const thresholdScore = Number.isFinite(incumbentScore)
+    ? incumbentScore * (1 - ARCHIVE_MIN_SCORE_IMPROVEMENT)
+    : Infinity;
+  const improved = mergedBuffer.filter((candidate) => candidate.score < thresholdScore);
+  const archived = (improved.length > 0 ? improved : mergedBuffer.slice(0, 1)).slice(0, 8);
+
+  return { archived, nextBuffer: [] };
 }
 
 /** Activity log entry */
@@ -966,9 +1012,12 @@ export function runGeneration(
     });
   }
 
-  // Only archive top 5% of candidates (by score) to save memory
-  const archiveCount = Math.max(2, Math.ceil(allCandidates.length * 0.05));
-  const topCandidates = allCandidates.slice(0, archiveCount);
+  const { archived: topCandidates, nextBuffer } = selectArchiveCandidates(
+    population.archiveBuffer,
+    allCandidates,
+    gen,
+    prevChampionScore,
+  );
 
   return {
     newPopulation: {
@@ -978,6 +1027,7 @@ export function runGeneration(
       metricChampions,
       generation: gen,
       totalEvaluated: population.totalEvaluated + allCandidates.length,
+      archiveBuffer: nextBuffer,
     },
     newCandidates: topCandidates,
     events,
