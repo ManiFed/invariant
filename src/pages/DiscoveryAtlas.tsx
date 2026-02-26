@@ -617,7 +617,7 @@ const DiscoveryAtlas = () => {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-              <MethodologyTab />
+              <MethodologyTab archive={state.archive} onSelectCandidate={handleSelectCandidate} />
             </motion.div>
           )}
           {activeView === "detail" && detailCandidate && (

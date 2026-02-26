@@ -1,4 +1,6 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
+import { type Candidate } from "@/lib/discovery-engine";
 
 const block = "rounded-lg border border-border bg-card p-4 md:p-5";
 
@@ -9,7 +11,31 @@ const fadeUp = {
   transition: { duration: 0.35 },
 };
 
-const MethodologyTab = () => {
+type MethodologyTabProps = {
+  archive: Candidate[];
+  onSelectCandidate: (id: string) => void;
+};
+
+const MethodologyTab = ({ archive, onSelectCandidate }: MethodologyTabProps) => {
+  const uniqueFamilies = new Set(archive.map((candidate) => candidate.familyId)).size;
+  const uniqueRegimes = new Set(archive.map((candidate) => candidate.regime)).size;
+  const uniqueContributors = new Set(archive.map((candidate) => candidate.contributor).filter(Boolean)).size;
+  const bestLpCandidate =
+    archive.length > 0
+      ? archive.reduce((best, current) =>
+          current.metrics.lpValueVsHodl > best.metrics.lpValueVsHodl ? current : best,
+        )
+      : null;
+  const bestSlippageCandidate =
+    archive.length > 0
+      ? archive.reduce((best, current) =>
+          current.metrics.totalSlippage < best.metrics.totalSlippage ? current : best,
+        )
+      : null;
+  const leaderboard = [...archive]
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 10);
+
   return (
     <div className="space-y-6 text-sm text-muted-foreground leading-relaxed">
       <motion.section {...fadeUp} className={block}>
@@ -24,11 +50,95 @@ const MethodologyTab = () => {
           className="mt-3 text-xs bg-secondary/60 rounded-md p-3 overflow-x-auto text-foreground"
         >
 {`x_t = state at generation t
-P_{t+1} = \mathcal{M}(\mathcal{S}(P_t), R)          # select + mutate by regime R
-C_{t+1} = \mathcal{E}(P_{t+1})                      # evaluate all candidates
-A_{t+1} = A_t \cup C_{t+1}                          # append to archive
-\hat c_{t+1} = arg min_{c \in C_{t+1}} J(c)         # objective-specific champion`}
+P_{t+1} = M(S(P_t), R)                        # select + mutate by regime R
+C_{t+1} = E(P_{t+1})                            # evaluate all candidates
+A_{t+1} = A_t U C_{t+1}                          # append to archive
+c_hat_{t+1} = arg min_{c in C_{t+1}} J(c)         # objective-specific champion`}
         </motion.pre>
+      </motion.section>
+
+      <motion.section {...fadeUp} className={block}>
+        <h3 className="text-base font-semibold text-foreground">Outcomes dashboard</h3>
+        <p className="mt-2">A live summary of what Discover Lab has achieved so far across the global archive.</p>
+        <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-md border border-border p-3 bg-background/40">
+            <p className="text-xs uppercase tracking-wide">Discovered AMMs</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{archive.length.toLocaleString()}</p>
+          </div>
+          <div className="rounded-md border border-border p-3 bg-background/40">
+            <p className="text-xs uppercase tracking-wide">Families explored</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{uniqueFamilies}</p>
+          </div>
+          <div className="rounded-md border border-border p-3 bg-background/40">
+            <p className="text-xs uppercase tracking-wide">Market regimes covered</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{uniqueRegimes}</p>
+          </div>
+          <div className="rounded-md border border-border p-3 bg-background/40">
+            <p className="text-xs uppercase tracking-wide">Active contributors</p>
+            <p className="mt-1 text-lg font-semibold text-foreground">{uniqueContributors}</p>
+          </div>
+        </div>
+        <div className="mt-3 grid md:grid-cols-2 gap-3">
+          <div className="rounded-md border border-border p-3 bg-secondary/30">
+            <p className="font-medium text-foreground">Best LP vs HODL</p>
+            {bestLpCandidate ? (
+              <button
+                onClick={() => onSelectCandidate(bestLpCandidate.id)}
+                className="mt-1 text-left text-xs text-primary hover:underline"
+              >
+                {bestLpCandidate.id} · {bestLpCandidate.metrics.lpValueVsHodl.toFixed(4)}
+              </button>
+            ) : (
+              <p className="mt-1 text-xs">No candidates available yet.</p>
+            )}
+          </div>
+          <div className="rounded-md border border-border p-3 bg-secondary/30">
+            <p className="font-medium text-foreground">Lowest total slippage</p>
+            {bestSlippageCandidate ? (
+              <button
+                onClick={() => onSelectCandidate(bestSlippageCandidate.id)}
+                className="mt-1 text-left text-xs text-primary hover:underline"
+              >
+                {bestSlippageCandidate.id} · {bestSlippageCandidate.metrics.totalSlippage.toFixed(6)}
+              </button>
+            ) : (
+              <p className="mt-1 text-xs">No candidates available yet.</p>
+            )}
+          </div>
+        </div>
+      </motion.section>
+
+      <motion.section {...fadeUp} className={block}>
+        <h3 className="text-base font-semibold text-foreground">Top 10 discovered AMMs leaderboard</h3>
+        <p className="mt-2">Ranked by composite score (lower is better). Click any candidate to inspect full design detail.</p>
+        <div className="mt-3 rounded-md border border-border overflow-hidden">
+          <div className="grid grid-cols-[56px_1fr_120px_120px_120px] gap-2 px-3 py-2 text-xs font-medium bg-secondary/40 text-foreground">
+            <span>Rank</span>
+            <span>Candidate</span>
+            <span>Score</span>
+            <span>LP/HODL</span>
+            <span>Slippage</span>
+          </div>
+          {leaderboard.map((candidate, index) => (
+            <div
+              key={candidate.id}
+              className="grid grid-cols-[56px_1fr_120px_120px_120px] gap-2 px-3 py-2 text-xs border-t border-border/60"
+            >
+              <span className="text-foreground font-medium">#{index + 1}</span>
+              <button onClick={() => onSelectCandidate(candidate.id)} className="text-left text-primary hover:underline">
+                {candidate.id}
+              </button>
+              <span>{candidate.score.toFixed(4)}</span>
+              <span>{candidate.metrics.lpValueVsHodl.toFixed(4)}</span>
+              <span>{candidate.metrics.totalSlippage.toFixed(6)}</span>
+            </div>
+          ))}
+          {leaderboard.length === 0 && <p className="px-3 py-4 text-xs">No discovered AMMs yet.</p>}
+        </div>
+        <p className="mt-2 text-xs">
+          Need deeper comparisons? Visit the <Link to="/labs/discover" className="text-primary hover:underline">Discover Atlas</Link> map and
+          open Design Detail for any leaderboard entry.
+        </p>
       </motion.section>
 
       <motion.section {...fadeUp} className={block}>
