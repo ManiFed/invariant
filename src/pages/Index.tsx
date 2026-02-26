@@ -106,7 +106,7 @@ const Index = () => {
             <h3 className="text-sm font-semibold text-foreground mb-2">Support the Project</h3>
             <p className="text-[11px] text-muted-foreground mb-3">Free and open. Consider supporting development.</p>
             <a
-              href="https://buy.stripe.com/test_placeholder"
+              href="https://buy.stripe.com/7sYcN68a34gv8nO0FB3wQ00"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
