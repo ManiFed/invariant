@@ -30,10 +30,11 @@ import MethodologyTab from "@/components/labs/MethodologyTab";
 import ParetoFrontier from "@/components/labs/ParetoFrontier";
 import ArenaView from "@/components/labs/ArenaView";
 import EvolutionReplay from "@/components/labs/EvolutionReplay";
+import AMMFinderTab from "@/components/labs/AMMFinderTab";
 import { useDiscoveryEngine, type SyncMode } from "@/hooks/use-discovery-engine";
 import { type Candidate, type RegimeId, REGIMES, createInitialState, runGeneration } from "@/lib/discovery-engine";
 
-type View = "dashboard" | "atlas" | "geometry" | "competition" | "experiments" | "methodology" | "detail";
+type View = "dashboard" | "atlas" | "geometry" | "competition" | "experiments" | "methodology" | "finder" | "detail";
 type GeometrySubview = "directory" | "observatory";
 type CompetitionSubview = "pareto" | "arena" | "replay";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
@@ -338,6 +339,7 @@ const DiscoveryAtlas = () => {
     { id: "atlas" as const, label: "Atlas Map", icon: Map },
     { id: "geometry" as const, label: "Geometry & Families" },
     { id: "experiments" as const, label: "Experiments" },
+    { id: "finder" as const, label: "Find My AMM", icon: Blend },
     { id: "methodology" as const, label: "Methodology" },
   ];
 
@@ -618,6 +620,17 @@ const DiscoveryAtlas = () => {
               transition={{ duration: 0.2 }}
             >
               <MethodologyTab archive={state.archive} onSelectCandidate={handleSelectCandidate} />
+            </motion.div>
+          )}
+          {activeView === "finder" && (
+            <motion.div
+              key="finder"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AMMFinderTab state={state} onSelectCandidate={handleSelectCandidate} />
             </motion.div>
           )}
           {activeView === "detail" && detailCandidate && (
