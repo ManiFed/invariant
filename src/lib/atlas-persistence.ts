@@ -15,6 +15,8 @@ const DB_NAME = "invariant-atlas";
 const DB_VERSION = 1;
 const STATE_STORE = "engine-state";
 const STATE_KEY = "current";
+const MAX_PERSISTED_ARCHIVE = 2000;
+const MAX_ACTIVITY_LOG = 200;
 
 // ─── IndexedDB setup ──────────────────────────────────────────────────────────
 
@@ -138,6 +140,7 @@ interface SerializedState {
 export async function saveAtlasState(state: EngineState): Promise<void> {
   try {
     const db = await openDB();
+    const archive = state.archive.slice(-MAX_PERSISTED_ARCHIVE);
     const serialized: SerializedState = {
       populations: {
         "low-vol": serializePopulation(state.populations["low-vol"]),
@@ -145,8 +148,8 @@ export async function saveAtlasState(state: EngineState): Promise<void> {
         "jump-diffusion": serializePopulation(state.populations["jump-diffusion"]),
         "regime-shift": serializePopulation(state.populations["regime-shift"]),
       },
-      archive: state.archive.map(serializeCandidate),
-      activityLog: state.activityLog,
+      archive: archive.map(serializeCandidate),
+      activityLog: state.activityLog.slice(-MAX_ACTIVITY_LOG),
       totalGenerations: state.totalGenerations,
       savedAt: Date.now(),
     };
@@ -187,6 +190,10 @@ export async function loadAtlasStateFromDB(): Promise<EngineState | null> {
       metricChampions: { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null },
       generation: 0, totalEvaluated: 0,
     });
+    const archive = result.archive.length > MAX_PERSISTED_ARCHIVE
+      ? result.archive.slice(-MAX_PERSISTED_ARCHIVE)
+      : result.archive;
+
     return {
       populations: {
         "low-vol": result.populations["low-vol"] ? deserializePopulation(result.populations["low-vol"]) : emptyPop("low-vol"),
@@ -194,8 +201,8 @@ export async function loadAtlasStateFromDB(): Promise<EngineState | null> {
         "jump-diffusion": result.populations["jump-diffusion"] ? deserializePopulation(result.populations["jump-diffusion"]) : emptyPop("jump-diffusion"),
         "regime-shift": result.populations["regime-shift"] ? deserializePopulation(result.populations["regime-shift"]) : emptyPop("regime-shift"),
       },
-      archive: result.archive.map(deserializeCandidate),
-      activityLog: result.activityLog || [],
+      archive: archive.map(deserializeCandidate),
+      activityLog: (result.activityLog || []).slice(-MAX_ACTIVITY_LOG),
       running: true,
       totalGenerations: result.totalGenerations,
     };

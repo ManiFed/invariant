@@ -11,6 +11,8 @@ export type CloudStatus =
   | "unreachable"     // Can't reach Supabase at all
   | "loading";        // Still checking
 
+const MAX_CLOUD_ARCHIVE = 2000;
+
 // ─── DB Row → Candidate conversion ──────────────────────────────────────────
 
 interface CandidateRow {
@@ -153,7 +155,7 @@ export async function loadAtlasState(): Promise<{
       .select("*")
       .eq("is_archived", true)
       .order("created_at", { ascending: false })
-      .limit(10000);
+      .limit(MAX_CLOUD_ARCHIVE);
 
     if (archiveError) throw archiveError;
 
@@ -274,7 +276,7 @@ export async function backupAtlasState(state: EngineState): Promise<{ success: b
     return { success: true };
   }
 
-  const archive = state.archive.slice(-10000).map(serializeCandidateForBackup);
+  const archive = state.archive.slice(-MAX_CLOUD_ARCHIVE).map(serializeCandidateForBackup);
   const populations: Record<RegimeId, CloudBackupCandidate[]> = {
     "low-vol": state.populations["low-vol"].candidates.map(serializeCandidateForBackup),
     "high-vol": state.populations["high-vol"].candidates.map(serializeCandidateForBackup),

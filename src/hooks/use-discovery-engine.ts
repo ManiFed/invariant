@@ -33,6 +33,19 @@ const CLOUD_BACKUP_INTERVAL = 60000; // Backup to cloud every 60s
 const CLOUD_STALE_AFTER_MS = 90000;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
 
+function clampArchive<T>(archive: T[], limit = LOCAL_ARCHIVE_LIMIT): T[] {
+  if (archive.length <= limit) return archive;
+  return archive.slice(-limit);
+}
+
+function normalizeLoadedState(next: EngineState): EngineState {
+  return {
+    ...next,
+    archive: clampArchive(next.archive),
+    activityLog: next.activityLog.slice(-200),
+  };
+}
+
 export type SyncMode = "live" | "persisted" | "memory" | "loading";
 
 export function useDiscoveryEngine() {
@@ -82,10 +95,7 @@ export function useDiscoveryEngine() {
 
       const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig, { recommendation });
 
-      const newArchive = [...prev.archive, ...newCandidates];
-      if (newArchive.length > LOCAL_ARCHIVE_LIMIT) {
-        newArchive.splice(0, newArchive.length - LOCAL_ARCHIVE_LIMIT);
-      }
+      const newArchive = clampArchive([...prev.archive, ...newCandidates]);
 
       return {
         ...prev,
@@ -130,7 +140,7 @@ export function useDiscoveryEngine() {
     const refreshFromCloud = async () => {
       const { state: cloudState } = await loadAtlasState();
       if (cancelled || !cloudState) return;
-      setState(cloudState);
+      setState(normalizeLoadedState(cloudState));
     };
 
     (async () => {
@@ -140,13 +150,14 @@ export function useDiscoveryEngine() {
         // onRemoteState: adopt the leader's state
         (archive, totalGenerations, extras: RemoteStateExtras) => {
           setState(prev => {
-            const populations = buildPopulationsFromArchive(archive, extras.populationInfo);
+            const trimmedArchive = clampArchive(archive);
+            const populations = buildPopulationsFromArchive(trimmedArchive, extras.populationInfo);
             return {
               ...prev,
-              archive,
+              archive: trimmedArchive,
               populations,
               totalGenerations,
-              activityLog: extras.activityLog,
+              activityLog: extras.activityLog.slice(-200),
               archiveSize: extras.archiveSize,
             };
           });
@@ -184,7 +195,7 @@ export function useDiscoveryEngine() {
             })();
 
             if (pickedState && pickedState.archive.length > 0) {
-              setState(pickedState);
+              setState(normalizeLoadedState(pickedState));
             }
           }
         }
@@ -206,7 +217,7 @@ export function useDiscoveryEngine() {
       setRole("leader");
       const persistedState = await loadAtlasStateFromDB();
       if (!cancelled && persistedState && persistedState.archive.length > 0) {
-        setState(persistedState);
+        setState(normalizeLoadedState(persistedState));
       }
       setSyncMode("persisted");
     })();
@@ -329,10 +340,7 @@ export function useDiscoveryEngine() {
     if (candidates.length === 0) return;
 
     setState(prev => {
-      const archive = [...prev.archive, ...candidates];
-      if (archive.length > LOCAL_ARCHIVE_LIMIT) {
-        archive.splice(0, archive.length - LOCAL_ARCHIVE_LIMIT);
-      }
+      const archive = clampArchive([...prev.archive, ...candidates]);
 
       const activityLog = [
         ...prev.activityLog,
