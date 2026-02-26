@@ -859,7 +859,7 @@ export default function GeometryObservatory({ state, onIngestCandidates }: Geome
 
     // Update convergence tracking
     setConvergenceData(prev => {
-      const step = prev.length + 1;
+      const step = prev.length > 0 ? prev[prev.length - 1].step + 1 : 1;
       const projectedBranches = branches.map((b) => {
         if (b.id !== selected.id) return b;
         return {
