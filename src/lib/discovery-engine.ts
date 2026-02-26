@@ -752,23 +752,32 @@ export function scoreCandidate(metrics: MetricVector, stability: number): number
 
   const normalized = normalizeMetrics(metrics, stability);
   const axisValues = Object.values(normalized);
+  const axisMean = axisValues.reduce((sum, value) => sum + value, 0) / axisValues.length;
   const weakestAxis = Math.min(...axisValues);
+  const strongestAxis = Math.max(...axisValues);
   const spiderCoverage = Math.pow(
     axisValues.reduce((prod, value) => prod * Math.max(value, 0.02), 1),
     1 / axisValues.length,
   );
+  const axisImbalance = Math.sqrt(
+    axisValues.reduce((sum, value) => sum + (value - axisMean) ** 2, 0) / axisValues.length,
+  );
+  // Preserve specialist AMM edges while still pushing them to fill weak spider axes.
+  const specialistEdge = Math.max(0, strongestAxis - axisMean);
 
   const score =
-    -metrics.totalFees * 1.8 +           // maximize fees
-    metrics.totalSlippage * 1.1 +         // minimize slippage
-    metrics.arbLeakage * 1.5 +            // minimize arb leakage
-    -metrics.liquidityUtilization * 2.6 + // maximize utilization
-    -(metrics.lpValueVsHodl - 1) * 4.8 +  // maximize LP value vs HODL
-    metrics.maxDrawdown * 2.2 +           // minimize drawdown
-    metrics.volatilityOfReturns * 1.0 +   // minimize vol of returns
-    stability * 1.8 +                     // minimize instability
-    -spiderCoverage * 4.0 +               // occupy as much spider graph as possible
-    (1 - weakestAxis) * 3.0;              // force weakest non-optimized path upward
+    -metrics.totalFees * 1.6 +            // maximize fees
+    metrics.totalSlippage * 1.0 +         // minimize slippage
+    metrics.arbLeakage * 1.3 +            // minimize arb leakage
+    -metrics.liquidityUtilization * 2.2 + // maximize utilization
+    -(metrics.lpValueVsHodl - 1) * 4.2 +  // maximize LP value vs HODL
+    metrics.maxDrawdown * 1.9 +           // minimize drawdown
+    metrics.volatilityOfReturns * 0.9 +   // minimize vol of returns
+    stability * 1.6 +                     // minimize instability
+    -spiderCoverage * 6.5 +               // fill as much of the spider graph as possible
+    (1 - weakestAxis) * 5.5 +             // aggressively lift weakest axis
+    axisImbalance * 3.0 +                 // reduce skew across axes
+    -specialistEdge * 1.4;                // keep what makes specialist AMMs distinct
 
   return score;
 }
