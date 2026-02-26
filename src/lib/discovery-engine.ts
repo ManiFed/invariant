@@ -292,11 +292,12 @@ function nextId(): string {
 export function createRandomCandidate(
   regime: RegimeId,
   generation: number,
-  familyId?: InvariantFamilyId
+  familyId?: InvariantFamilyId,
+  familyWeights?: Partial<Record<InvariantFamilyId, number>>,
 ): { bins: Float64Array; familyId: InvariantFamilyId; familyParams: Record<string, number> } {
   const family = familyId
     ? INVARIANT_FAMILIES.find((f) => f.id === familyId) ?? INVARIANT_FAMILIES[0]
-    : INVARIANT_FAMILIES[Math.floor(Math.random() * INVARIANT_FAMILIES.length)];
+    : sampleFamilyByWeights(familyWeights);
   const familyParams = family.sampleParams();
   const bins = family.generateBins(familyParams);
   return { bins, familyId: family.id, familyParams };
@@ -752,23 +753,32 @@ export function scoreCandidate(metrics: MetricVector, stability: number): number
 
   const normalized = normalizeMetrics(metrics, stability);
   const axisValues = Object.values(normalized);
+  const axisMean = axisValues.reduce((sum, value) => sum + value, 0) / axisValues.length;
   const weakestAxis = Math.min(...axisValues);
+  const strongestAxis = Math.max(...axisValues);
   const spiderCoverage = Math.pow(
     axisValues.reduce((prod, value) => prod * Math.max(value, 0.02), 1),
     1 / axisValues.length,
   );
+  const axisImbalance = Math.sqrt(
+    axisValues.reduce((sum, value) => sum + (value - axisMean) ** 2, 0) / axisValues.length,
+  );
+  // Preserve specialist AMM edges while still pushing them to fill weak spider axes.
+  const specialistEdge = Math.max(0, strongestAxis - axisMean);
 
   const score =
-    -metrics.totalFees * 1.8 +           // maximize fees
-    metrics.totalSlippage * 1.1 +         // minimize slippage
-    metrics.arbLeakage * 1.5 +            // minimize arb leakage
-    -metrics.liquidityUtilization * 2.6 + // maximize utilization
-    -(metrics.lpValueVsHodl - 1) * 4.8 +  // maximize LP value vs HODL
-    metrics.maxDrawdown * 2.2 +           // minimize drawdown
-    metrics.volatilityOfReturns * 1.0 +   // minimize vol of returns
-    stability * 1.8 +                     // minimize instability
-    -spiderCoverage * 4.0 +               // occupy as much spider graph as possible
-    (1 - weakestAxis) * 3.0;              // force weakest non-optimized path upward
+    -metrics.totalFees * 1.6 +            // maximize fees
+    metrics.totalSlippage * 1.0 +         // minimize slippage
+    metrics.arbLeakage * 1.3 +            // minimize arb leakage
+    -metrics.liquidityUtilization * 2.2 + // maximize utilization
+    -(metrics.lpValueVsHodl - 1) * 4.2 +  // maximize LP value vs HODL
+    metrics.maxDrawdown * 1.9 +           // minimize drawdown
+    metrics.volatilityOfReturns * 0.9 +   // minimize vol of returns
+    stability * 1.6 +                     // minimize instability
+    -spiderCoverage * 6.5 +               // fill as much of the spider graph as possible
+    (1 - weakestAxis) * 5.5 +             // aggressively lift weakest axis
+    axisImbalance * 3.0 +                 // reduce skew across axes
+    -specialistEdge * 1.4;                // keep what makes specialist AMMs distinct
 
   return score;
 }
@@ -850,12 +860,14 @@ export function runGeneration(
   const allCandidates: Candidate[] = [];
   const recommendation = options?.recommendation;
   const guidanceEnabled = Boolean(recommendation && recommendation.confidence >= 0.2 && recommendation.weakestAxes.length > 0);
+  const familyGuidanceEnabled = Boolean(recommendation && recommendation.confidence >= 0.25);
+  const familyWeights = familyGuidanceEnabled ? recommendation?.familyWeights : undefined;
   let guidedMutations = 0;
 
   // If first generation, create initial population
   if (population.candidates.length === 0) {
     for (let i = 0; i < POPULATION_SIZE; i++) {
-      const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
+      const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen, undefined, familyWeights);
       if (!validateInvariantFamily({ familyId, familyParams, bins })) continue;
       const { metrics, stability, equityCurve } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
       const features = computeFeatures(bins);
@@ -881,7 +893,7 @@ export function runGeneration(
     // Safety: if persisted/synced state has too few candidates, bootstrap with randoms
     if (elites.length === 0) {
       for (let i = 0; i < POPULATION_SIZE; i++) {
-        const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
+        const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen, undefined, familyWeights);
         const { metrics, stability } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
         const features = computeFeatures(bins);
         const score = scoreCandidate(metrics, stability);
@@ -906,9 +918,15 @@ export function runGeneration(
       const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * adaptiveExplorationRate);
       for (let i = 0; i < numChildren; i++) {
         const parent = elites[i % elites.length];
-        const childFamily = INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0];
-        const childParams = childFamily.mutateParams(parent.familyParams);
+        const switchFamily = familyGuidanceEnabled && familyWeights && Math.random() < 0.35;
+        const childFamily = switchFamily
+          ? sampleFamilyByWeights(familyWeights)
+          : (INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0]);
+        const childParams = switchFamily ? childFamily.sampleParams() : childFamily.mutateParams(parent.familyParams);
         let childBins = childFamily.generateBins(childParams);
+        if (switchFamily) {
+          childBins = blendBins(childBins, parent.bins, 0.3);
+        }
         if (guidanceEnabled && recommendation && Math.random() < 0.65) {
           const merged = blendBins(childBins, parent.bins, 0.35);
           childBins = mutateRemediateWeaknesses(merged, recommendation.weakestAxes, 0.08 + recommendation.confidence * 0.14);
@@ -934,7 +952,7 @@ export function runGeneration(
       // Inject random exploratory candidates
       const numExplore = POPULATION_SIZE - numChildren;
       for (let i = 0; i < numExplore; i++) {
-        const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen);
+        const { bins, familyId, familyParams } = createRandomCandidate(regimeConfig.id, gen, undefined, familyWeights);
         const { metrics, stability } = evaluateCandidate(bins, regimeConfig, TRAINING_PATHS, EVAL_PATHS);
         const features = computeFeatures(bins);
         const score = scoreCandidate(metrics, stability);
@@ -993,7 +1011,7 @@ export function runGeneration(
   events.push({
     timestamp: Date.now(), regime: regimeConfig.id,
     type: "generation-complete",
-    message: `Generation ${gen} complete for ${regimeConfig.label}: ${allCandidates.length} candidates evaluated${guidanceEnabled ? ` (${guidedMutations} ML-guided mutations)` : ""}`,
+    message: `Generation ${gen} complete for ${regimeConfig.label}: ${allCandidates.length} candidates evaluated${guidanceEnabled ? ` (${guidedMutations} ML-guided mutations)` : ""}${familyGuidanceEnabled && recommendation?.prioritizedFamilies.length ? `; focus families: ${recommendation.prioritizedFamilies.join(", ")}` : ""}`,
     generation: gen,
   });
 
@@ -1195,6 +1213,34 @@ export interface MlRecommendation {
   weakestAxes: (keyof NormalizedMetrics)[];
   confidence: number;
   targetCoverage: number;
+  familyWeights: Record<InvariantFamilyId, number>;
+  prioritizedFamilies: InvariantFamilyId[];
+}
+
+function createUniformFamilyWeights(): Record<InvariantFamilyId, number> {
+  const equalWeight = 1 / INVARIANT_FAMILIES.length;
+  return INVARIANT_FAMILIES.reduce((acc, family) => {
+    acc[family.id] = equalWeight;
+    return acc;
+  }, {} as Record<InvariantFamilyId, number>);
+}
+
+function sampleFamilyByWeights(weights?: Partial<Record<InvariantFamilyId, number>>): InvariantFamilyDefinition {
+  if (!weights) return INVARIANT_FAMILIES[Math.floor(Math.random() * INVARIANT_FAMILIES.length)];
+
+  const weightedFamilies = INVARIANT_FAMILIES
+    .map((family) => ({ family, weight: Math.max(0, weights[family.id] ?? 0) }))
+    .sort((a, b) => b.weight - a.weight);
+  const totalWeight = weightedFamilies.reduce((sum, entry) => sum + entry.weight, 0);
+  if (totalWeight <= 0) return INVARIANT_FAMILIES[Math.floor(Math.random() * INVARIANT_FAMILIES.length)];
+
+  const threshold = Math.random() * totalWeight;
+  let cumulative = 0;
+  for (const entry of weightedFamilies) {
+    cumulative += entry.weight;
+    if (threshold <= cumulative) return entry.family;
+  }
+  return weightedFamilies[weightedFamilies.length - 1]?.family ?? INVARIANT_FAMILIES[0];
 }
 
 function percentileRank(values: number[], p: number): number {
@@ -1256,6 +1302,7 @@ export function learnMlRecommendation(candidates: Candidate[]): MlRecommendation
   const analyses = candidates.map((candidate) => {
     const analysis = analyzeMetricProfile(candidate.metrics, candidate.stability);
     return {
+      familyId: candidate.familyId,
       normalized: analysis.normalized,
       spiderCoverage: analysis.spiderCoverage,
     };
@@ -1288,10 +1335,40 @@ export function learnMlRecommendation(candidates: Candidate[]): MlRecommendation
     .sort((a, b) => means[a] - means[b])
     .slice(0, 3);
 
+  const familySignals = INVARIANT_FAMILIES.reduce((acc, family) => {
+    const familyEntries = successful.filter((entry) => entry.familyId === family.id);
+    if (familyEntries.length === 0) {
+      acc[family.id] = 0.02;
+      return acc;
+    }
+
+    const weakAxisLift = weakestAxes.reduce((sum, axis) => sum + familyEntries.reduce((axisSum, entry) => axisSum + entry.normalized[axis], 0) / familyEntries.length, 0) / weakestAxes.length;
+    const avgCoverage = familyEntries.reduce((sum, entry) => sum + entry.spiderCoverage, 0) / familyEntries.length;
+    const presence = familyEntries.length / successful.length;
+    acc[family.id] = weakAxisLift * 0.52 + avgCoverage * 0.33 + (1 - presence) * 0.15;
+    return acc;
+  }, {} as Record<InvariantFamilyId, number>);
+
+  const totalSignal = Object.values(familySignals).reduce((sum, value) => sum + value, 0);
+  const uniform = createUniformFamilyWeights();
+  const familyWeights = totalSignal > 0
+    ? (Object.keys(familySignals) as InvariantFamilyId[]).reduce((acc, familyId) => {
+      acc[familyId] = familySignals[familyId] / totalSignal;
+      return acc;
+    }, {} as Record<InvariantFamilyId, number>)
+    : uniform;
+
+  const prioritizedFamilies = [...INVARIANT_FAMILIES]
+    .sort((a, b) => familyWeights[b.id] - familyWeights[a.id])
+    .map((family) => family.id)
+    .slice(0, 2);
+
   return {
     weakestAxes,
     confidence: Math.min(0.99, successful.length / analyses.length),
     targetCoverage: successful.reduce((sum, entry) => sum + entry.spiderCoverage, 0) / successful.length,
+    familyWeights,
+    prioritizedFamilies,
   };
 }
 
