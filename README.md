@@ -3,13 +3,24 @@
 
 ## Deploying Forecast Lab as a standalone Railway service
 
-Use the dedicated forecasting scripts so `src/forecasting` can be deployed independently from the main app:
+Use one of these Railway setups:
+
+### Option A (recommended): service root = `src/forecasting`
+
+This avoids Railpack auto-detection issues by giving Railway a local `package.json` in the service root.
+
+1. In Railway, set the service Root Directory to `src/forecasting`.
+2. Build command: `npm run build`
+3. Start command: `npm run start`
+4. Optional: Railway can also read `src/forecasting/railway.toml`.
+
+### Option B: service root = repository root
 
 1. Build command: `npm ci && npm run build:forecasting`
 2. Start command: `npm run start:forecasting`
-3. Set `VITE_FORECAST_BASE_PATH` to an empty value (already handled by `build:forecasting`) so Forecast Lab routes are served from `/`.
+3. Optional: Railway can read `railway.forecasting.toml`.
 
-You can also point Railway at `railway.forecasting.toml` for the same settings.
+`build:forecasting` already sets `VITE_FORECAST_BASE_PATH` to empty so Forecast Lab routes are served from `/` in standalone mode.
 
 ---
 

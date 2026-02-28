@@ -1,0 +1,10 @@
+{
+  "name": "invariant-forecasting-service",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd ../.. && npm ci && npm run build:forecasting",
+    "start": "cd ../.. && npm run start:forecasting",
+    "dev": "cd ../.. && npm run dev:forecasting"
+  }
+}
