@@ -174,7 +174,7 @@ function buildPopulationsFromArchive(
   archive: Candidate[],
   populationInfo?: Record<RegimeId, SyncPopulationInfo>,
 ): Record<RegimeId, PopulationState> {
-  const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
+  const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
   const pops = {} as Record<RegimeId, PopulationState>;
   const candidateMap = new Map(archive.map(c => [c.id, c]));
 
@@ -364,7 +364,7 @@ export class AtlasSync {
     // Collect all important candidate IDs (champions, metric champions)
     // These MUST be included in the snapshot so followers display identical data
     const importantIds = new Set<string>();
-    const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
+    const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
     const populationSnapshots = {} as Record<RegimeId, SyncPopulationInfo>;
 
     for (const rid of regimes) {
