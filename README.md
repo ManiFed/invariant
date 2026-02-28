@@ -10,8 +10,8 @@ Use one of these Railway setups:
 This avoids Railpack auto-detection issues by giving Railway a local `package.json` in the service root.
 
 1. In Railway, set the service Root Directory to `src/forecasting`.
-2. Build command: `npm --prefix ../.. run build:forecasting`
-3. Start command: `npm --prefix ../.. run start:forecasting`
+2. Build command: `npm run build:forecasting`
+3. Start command: `npm run start:forecasting`
 4. Optional: Railway can also read `src/forecasting/railway.toml` for the same root-prefixed commands.
 
 ### Option B: service root = repository root
