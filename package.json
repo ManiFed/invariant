@@ -11,7 +11,10 @@
     "start": "node server.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:forecasting": "VITE_FORECAST_BASE_PATH= vite --config vite.forecasting.config.ts",
+    "build:forecasting": "VITE_FORECAST_BASE_PATH= vite build --config vite.forecasting.config.ts",
+    "start:forecasting": "DIST_DIR=dist-forecasting node server.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

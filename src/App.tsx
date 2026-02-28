@@ -21,6 +21,7 @@ import Lessons from "./forecasting/pages/Lessons";
 import Arena from "./forecasting/pages/Arena";
 import Drills from "./forecasting/pages/Drills";
 import Profile from "./forecasting/pages/Profile";
+import { forecastRoute } from "./forecasting/lib/routes";
 
 const queryClient = new QueryClient();
 
@@ -44,11 +45,11 @@ const App = () => (
           <Route path="/labs/discovery" element={<DiscoveryAtlas />} />
           <Route path="/labs/strategy" element={<LiquidityStrategyLab />} />
           {/* Forecast Lab — separate service */}
-          <Route path="/forecast" element={<ForecastIndex />} />
-          <Route path="/forecast/lessons" element={<Lessons />} />
-          <Route path="/forecast/arena" element={<Arena />} />
-          <Route path="/forecast/drills" element={<Drills />} />
-          <Route path="/forecast/profile" element={<Profile />} />
+          <Route path={forecastRoute()} element={<ForecastIndex />} />
+          <Route path={forecastRoute("/lessons")} element={<Lessons />} />
+          <Route path={forecastRoute("/arena")} element={<Arena />} />
+          <Route path={forecastRoute("/drills")} element={<Drills />} />
+          <Route path={forecastRoute("/profile")} element={<Profile />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <FloatingAIChat />
