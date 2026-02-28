@@ -68,7 +68,7 @@ const RESEARCH_OBJECTIVES = [
 ] as const;
 
 const scoreBar = (value: number) => `${Math.max(4, Math.min(100, value * 100))}%`;
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/amm-chat`;
+const CHAT_URL = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "") + "/api/ai/chat";
 
 // ─── AI Assistant Messages ──────────────────────────────────────────────────
 
@@ -161,7 +161,6 @@ export default function ExperimentsTab({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
           context: "You are assisting with AMM experiment design in the Experiments tab.",
