@@ -1,5 +1,18 @@
 # Methodology & Documentation
 
+
+## Deploying Forecast Lab as a standalone Railway service
+
+Use the dedicated forecasting scripts so `src/forecasting` can be deployed independently from the main app:
+
+1. Build command: `npm ci && npm run build:forecasting`
+2. Start command: `npm run start:forecasting`
+3. Set `VITE_FORECAST_BASE_PATH` to an empty value (already handled by `build:forecasting`) so Forecast Lab routes are served from `/`.
+
+You can also point Railway at `railway.forecasting.toml` for the same settings.
+
+---
+
 Complete technical reference for Invariant Studio's simulation engine, mathematical models, and risk metrics.
 
 ---

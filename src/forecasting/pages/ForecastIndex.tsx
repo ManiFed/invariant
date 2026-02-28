@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, Target, BookOpen, Crosshair, BarChart3, Dumbbell, Brain } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AsciiCalibrationHero } from "@/forecasting/components/AsciiCalibrationHero";
+import { forecastRoute } from "@/forecasting/lib/routes";
 
 const ForecastIndex = () => {
   const navigate = useNavigate();
@@ -62,14 +63,14 @@ const ForecastIndex = () => {
             icon={<BookOpen className="w-5 h-5" />}
             badge="Start Here"
             badgeColor="border-success/30 text-success"
-            onClick={() => navigate("/forecast/lessons")}
+            onClick={() => navigate(forecastRoute("/lessons"))}
           />
 
           <NavCard
             title="Forecasting Arena"
             description="Make predictions on real questions, track your accuracy over time"
             icon={<Target className="w-5 h-5" />}
-            onClick={() => navigate("/forecast/arena")}
+            onClick={() => navigate(forecastRoute("/arena"))}
           />
 
           <NavCard
@@ -78,28 +79,28 @@ const ForecastIndex = () => {
             icon={<Dumbbell className="w-5 h-5" />}
             badge="Core"
             badgeColor="border-warning/30 text-warning"
-            onClick={() => navigate("/forecast/drills")}
+            onClick={() => navigate(forecastRoute("/drills"))}
           />
 
           <NavCard
             title="Skill Profile"
             description="Brier score, calibration error, overconfidence index, and progression"
             icon={<BarChart3 className="w-5 h-5" />}
-            onClick={() => navigate("/forecast/profile")}
+            onClick={() => navigate(forecastRoute("/profile"))}
           />
 
           <NavCard
             title="Calibration Test"
             description="Rapid-fire factual questions to measure your calibration curve"
             icon={<Crosshair className="w-5 h-5" />}
-            onClick={() => navigate("/forecast/drills?tab=calibration")}
+            onClick={() => navigate(`${forecastRoute("/drills")}?tab=calibration`)}
           />
 
           <NavCard
             title="How It Works"
             description="Scoring methodology, Brier scores, log scores, and skill tiers"
             icon={<Brain className="w-5 h-5" />}
-            onClick={() => navigate("/forecast/lessons?module=5")}
+            onClick={() => navigate(`${forecastRoute("/lessons")}?module=5`)}
           />
         </motion.div>
       </section>
