@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const distDir = path.join(__dirname, 'dist');
+const distDir = path.join(__dirname, process.env.DIST_DIR || 'dist');
 const port = Number(process.env.PORT || 4173);
 
 const MIME_TYPES = {
@@ -45,16 +45,19 @@ const server = createServer(async (req, res) => {
     // Fallback to SPA index.html below.
   }
 
-  const indexPath = path.join(distDir, 'index.html');
+  const spaEntrypoints = ['index.html', 'forecasting.html'];
+  const entrypoint = spaEntrypoints
+    .map((filename) => path.join(distDir, filename))
+    .find((filename) => existsSync(filename));
 
-  if (!existsSync(indexPath)) {
+  if (!entrypoint) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end('dist/index.html not found. Run "npm run build" before starting the server.');
+    res.end('No SPA entrypoint found in dist directory. Run the corresponding build command before starting the server.');
     return;
   }
 
-  sendFile(res, indexPath);
+  sendFile(res, entrypoint);
 });
 
 server.listen(port, '0.0.0.0', () => {

@@ -1,5 +1,29 @@
 # Methodology & Documentation
 
+
+## Deploying Forecast Lab as a standalone Railway service
+
+Use one of these Railway setups:
+
+### Option A (recommended): service root = `src/forecasting`
+
+This avoids Railpack auto-detection issues by giving Railway a local `package.json` in the service root.
+
+1. In Railway, set the service Root Directory to `src/forecasting`.
+2. Build command: `npm run build`
+3. Start command: `npm run start`
+4. Optional: Railway can also read `src/forecasting/railway.toml`.
+
+### Option B: service root = repository root
+
+1. Build command: `npm ci && npm run build:forecasting`
+2. Start command: `npm run start:forecasting`
+3. Optional: Railway can read `railway.forecasting.toml`.
+
+`build:forecasting` already sets `VITE_FORECAST_BASE_PATH` to empty so Forecast Lab routes are served from `/` in standalone mode.
+
+---
+
 Complete technical reference for Invariant Studio's simulation engine, mathematical models, and risk metrics.
 
 ---
