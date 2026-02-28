@@ -3,8 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "build": "npm --prefix ../.. run build:forecasting",
-    "start": "npm --prefix ../.. run start:forecasting",
-    "dev": "npm --prefix ../.. run dev:forecasting"
+    "build": "node scripts/run-from-root.mjs build:forecasting",
+    "start": "node scripts/run-from-root.mjs start:forecasting",
+    "dev": "node scripts/run-from-root.mjs dev:forecasting"
   }
 }

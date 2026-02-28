@@ -14,22 +14,12 @@ The project now uses an internal Node API (instead of hosted functions) for AI c
 
 ## Deploying Forecast Lab as a standalone Railway service
 
-Use one of these Railway setups:
+Use repository-root deployment for Forecast Lab (required):
 
-### Option A (recommended): service root = `src/forecasting`
-
-This avoids Railpack auto-detection issues by giving Railway a local `package.json` in the service root.
-
-1. In Railway, set the service Root Directory to `src/forecasting`.
-2. Build command: `npm run build`
-3. Start command: `npm run start`
-4. Optional: Railway can also read `src/forecasting/railway.toml` for the same commands.
-
-### Option B: service root = repository root
-
-1. Build command: `npm ci && npm run build:forecasting`
-2. Start command: `npm run start:forecasting`
-3. Optional: Railway can read `railway.forecasting.toml`.
+1. In Railway, set the service Root Directory to the repository root (`/`).
+2. Build command: `npm ci && npm run build:forecasting`
+3. Start command: `npm run start:forecasting`
+4. Optional: Railway can read `railway.forecasting.toml` for the same commands.
 
 `build:forecasting` already sets `VITE_FORECAST_BASE_PATH` to empty so Forecast Lab routes are served from `/` in standalone mode.
 
