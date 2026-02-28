@@ -38,7 +38,8 @@ while (true) {
 if (!rootDir) {
   console.error(
     `Could not find a parent package.json with a \"${scriptName}\" script. ` +
-      'Run this service from the repository checkout so Forecast Lab can use the shared build config.'
+      'Forecast Lab currently depends on the repository-root build config. ' +
+      'If this is a Railway deploy, set the service Root Directory to the repository root and use railway.forecasting.toml.'
   );
   process.exit(1);
 }
