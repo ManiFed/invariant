@@ -1,19 +1,12 @@
-// Atlas Cloud Storage — Supabase integration for the Invariant Atlas
-// Loads candidates from the database and subscribes to real-time updates.
-// Falls back to IndexedDB persistence if Supabase is unavailable.
+// Atlas Cloud Storage — PostgreSQL-backed Atlas API integration.
+// Falls back to IndexedDB persistence if API is unavailable.
 
-import { supabase } from "@/integrations/supabase/client";
 import type { Candidate, RegimeId, MetricVector, FeatureDescriptor, EngineState, PopulationState, ChampionMetric } from "@/lib/discovery-engine";
 
-export type CloudStatus =
-  | "connected"       // Supabase tables exist and are reachable
-  | "no-tables"       // Supabase reachable but tables don't exist
-  | "unreachable"     // Can't reach Supabase at all
-  | "loading";        // Still checking
+export type CloudStatus = "connected" | "no-tables" | "unreachable" | "loading";
 
 const MAX_CLOUD_ARCHIVE = 5000;
-
-// ─── DB Row → Candidate conversion ──────────────────────────────────────────
+const ATLAS_API_BASE = (import.meta.env.VITE_ATLAS_API_BASE as string | undefined) ?? "/api/atlas";
 
 interface CandidateRow {
   id: number;
@@ -56,59 +49,28 @@ export function rowToCandidate(row: CandidateRow): Candidate {
   };
 }
 
-// ─── Table bootstrap: try to create tables via edge function ─────────────────
-
-async function tryBootstrapTables(): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.functions.invoke("atlas-engine", {
-      body: { action: "bootstrap" },
-    });
-    if (error) return false;
-    return data?.success === true;
-  } catch {
-    return false;
+async function atlasApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${ATLAS_API_BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
   }
+  return response.json() as Promise<T>;
 }
-
-// ─── Check if Supabase is reachable and tables exist ─────────────────────────
 
 export async function checkCloudStatus(): Promise<CloudStatus> {
   try {
-    // Try a simple query with a short timeout via AbortController
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const { error } = await (supabase as any)
-      .from("atlas_state")
-      .select("id")
-      .limit(1)
-      .abortSignal(controller.signal);
-
-    clearTimeout(timeout);
-
-    if (!error) return "connected";
-
-    // Check if the error is "relation does not exist" (table missing)
-    const msg = (error as any)?.message || error?.code || "";
-    if (msg.includes("42P01") || msg.includes("does not exist") || msg.includes("relation")) {
-      // Tables don't exist — try to bootstrap via edge function
-      const bootstrapped = await tryBootstrapTables();
-      if (bootstrapped) {
-        // Wait a moment for tables to be available
-        await new Promise(r => setTimeout(r, 1000));
-        return "connected";
-      }
-      return "no-tables";
-    }
-
-    // Other errors: probably permission or network issues
-    return "unreachable";
+    const data = await atlasApi<{ status: CloudStatus }>("/status");
+    return data.status;
   } catch {
     return "unreachable";
   }
 }
-
-// ─── Load initial state from Supabase ────────────────────────────────────────
 
 const EMPTY_METRIC_CHAMPIONS: Record<ChampionMetric, Candidate | null> = {
   fees: null, utilization: null, lpValue: null, lowSlippage: null,
@@ -129,55 +91,23 @@ function computeMetricChampionsFromCandidates(candidates: Candidate[]): Record<C
   return result;
 }
 
-export async function loadAtlasState(): Promise<{
-  state: EngineState | null;
-  cloudStatus: CloudStatus;
-}> {
+export async function loadAtlasState(): Promise<{ state: EngineState | null; cloudStatus: CloudStatus }> {
   const status = await checkCloudStatus();
-
-  if (status !== "connected") {
-    return { state: null, cloudStatus: status };
-  }
+  if (status !== "connected") return { state: null, cloudStatus: status };
 
   try {
-    // Load global state
-    const { data: globalState, error: stateError } = await (supabase as any)
-      .from("atlas_state")
-      .select("*")
-      .eq("id", "global")
-      .single();
+    const data = await atlasApi<{ state: { globalState: { total_generations: number } | null; archivedRows: CandidateRow[]; populations: Record<string, CandidateRow[]> } }>("/state");
+    const { globalState, archivedRows, populations: cloudPopulations } = data.state;
 
-    if (stateError) throw stateError;
-
-    // Load all archived candidates (these are the ones shown on the map)
-    const { data: archivedRows, error: archiveError } = await (supabase as any)
-      .from("atlas_candidates")
-      .select("*")
-      .eq("is_archived", true)
-      .order("created_at", { ascending: false })
-      .limit(MAX_CLOUD_ARCHIVE);
-
-    if (archiveError) throw archiveError;
-
-    // Load current population for each regime
     const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
     const populations: Record<RegimeId, PopulationState> = {} as Record<RegimeId, PopulationState>;
 
     for (const regime of regimes) {
-      const { data: popRows } = await (supabase as any)
-        .from("atlas_candidates")
-        .select("*")
-        .eq("regime", regime)
-        .eq("is_population", true)
-        .order("score", { ascending: true });
-
-      const candidates = (popRows || []).map(rowToCandidate);
+      const popRows = cloudPopulations[regime] ?? [];
+      const candidates = popRows.map(rowToCandidate);
       const champion = candidates.length > 0 ? candidates[0] : null;
 
-      const regimeArchived = (archivedRows || [])
-        .filter((r: CandidateRow) => r.regime === regime)
-        .map(rowToCandidate);
-
+      const regimeArchived = archivedRows.filter((r) => r.regime === regime).map(rowToCandidate);
       const allRegimeCandidates = [...candidates, ...regimeArchived];
       const metricChampions = allRegimeCandidates.length > 0
         ? computeMetricChampionsFromCandidates(allRegimeCandidates)
@@ -189,11 +119,11 @@ export async function loadAtlasState(): Promise<{
         champion,
         metricChampions,
         generation: champion?.generation || 0,
-        totalEvaluated: (popRows?.length || 0) + regimeArchived.length,
+        totalEvaluated: popRows.length + regimeArchived.length,
       };
     }
 
-    const archive = (archivedRows || []).map(rowToCandidate);
+    const archive = archivedRows.slice(-MAX_CLOUD_ARCHIVE).map(rowToCandidate);
 
     return {
       state: {
@@ -201,7 +131,7 @@ export async function loadAtlasState(): Promise<{
         archive,
         activityLog: [],
         running: true,
-        totalGenerations: (globalState as any)?.total_generations || 0,
+        totalGenerations: globalState?.total_generations || 0,
       },
       cloudStatus: "connected",
     };
@@ -210,20 +140,13 @@ export async function loadAtlasState(): Promise<{
   }
 }
 
-// ─── Trigger server-side generation ──────────────────────────────────────────
-
-export async function triggerGeneration(regime?: RegimeId): Promise<{
-  success: boolean;
-  generation?: number;
-  error?: string;
-}> {
+export async function triggerGeneration(regime?: RegimeId): Promise<{ success: boolean; generation?: number; error?: string }> {
   try {
-    const { data, error } = await supabase.functions.invoke("atlas-engine", {
-      body: { action: "generate", regime },
+    const data = await atlasApi<{ success: boolean; generation: number }>("/generate", {
+      method: "POST",
+      body: JSON.stringify({ regime }),
     });
-
-    if (error) throw error;
-    return { success: true, generation: data.generation };
+    return { success: data.success, generation: data.generation };
   } catch (e) {
     return { success: false, error: (e as Error).message };
   }
@@ -267,14 +190,8 @@ function serializeCandidateForBackup(candidate: Candidate): CloudBackupCandidate
   };
 }
 
-/**
- * Persist the currently visible Atlas state to Supabase so the map can recover
- * even after all browser tabs close.
- */
 export async function backupAtlasState(state: EngineState): Promise<{ success: boolean; error?: string }> {
-  if (state.archive.length === 0 && state.totalGenerations === 0) {
-    return { success: true };
-  }
+  if (state.archive.length === 0 && state.totalGenerations === 0) return { success: true };
 
   const archive = state.archive.slice(-MAX_CLOUD_ARCHIVE).map(serializeCandidateForBackup);
   const populations: Record<RegimeId, CloudBackupCandidate[]> = {
@@ -285,69 +202,18 @@ export async function backupAtlasState(state: EngineState): Promise<{ success: b
   };
 
   try {
-    const { data, error } = await supabase.functions.invoke("atlas-engine", {
-      body: {
-        action: "backup-state",
-        totalGenerations: state.totalGenerations,
-        archive,
-        populations,
-      },
+    const data = await atlasApi<{ success: boolean; error?: string }>("/backup", {
+      method: "POST",
+      body: JSON.stringify({ totalGenerations: state.totalGenerations, archive, populations }),
     });
-
-    if (error) throw error;
-    if (!data?.success) {
-      return { success: false, error: data?.error || "unknown backup failure" };
-    }
-    return { success: true };
+    return data.success ? { success: true } : { success: false, error: data.error ?? "unknown backup failure" };
   } catch (e) {
     return { success: false, error: (e as Error).message };
   }
 }
 
-// ─── Subscribe to real-time updates ──────────────────────────────────────────
-
-export function subscribeToAtlas(
-  onNewCandidates: (candidates: Candidate[]) => void,
-  onStateUpdate: (totalGenerations: number) => void,
-) {
-  const candidateChannel = supabase
-    .channel("atlas-candidates-realtime")
-    .on(
-      "postgres_changes" as any,
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "atlas_candidates",
-        filter: "is_archived=eq.true",
-      },
-      (payload: any) => {
-        if (payload.new) {
-          const candidate = rowToCandidate(payload.new as CandidateRow);
-          onNewCandidates([candidate]);
-        }
-      }
-    )
-    .subscribe();
-
-  const stateChannel = supabase
-    .channel("atlas-state-realtime")
-    .on(
-      "postgres_changes" as any,
-      {
-        event: "*",
-        schema: "public",
-        table: "atlas_state",
-      },
-      (payload: any) => {
-        if (payload.new?.total_generations) {
-          onStateUpdate(payload.new.total_generations);
-        }
-      }
-    )
-    .subscribe();
-
+export function subscribeToAtlas() {
   return () => {
-    supabase.removeChannel(candidateChannel);
-    supabase.removeChannel(stateChannel);
+    // Realtime sync is handled by AtlasSync (BroadcastChannel + localStorage).
   };
 }

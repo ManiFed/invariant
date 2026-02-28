@@ -1,5 +1,16 @@
 # Methodology & Documentation
 
+## Backend environment variables
+
+The project now uses an internal Node API (instead of hosted functions) for AI chat and Atlas persistence.
+
+- `OPENROUTER_API_KEY`: API key used by `/api/ai/chat`
+- `OPENROUTER_MODEL` (optional): OpenRouter model name (default: `openai/gpt-4o-mini`)
+- `OPENROUTER_BASE_URL` (optional): API base URL (default: `https://openrouter.ai/api/v1`)
+- `DATABASE_URL`: PostgreSQL connection string used by `/api/atlas/*`
+
+> Note: Install `pg` in runtime environments where Atlas PostgreSQL persistence is enabled.
+
 
 ## Deploying Forecast Lab as a standalone Railway service
 
