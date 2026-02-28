@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { type Candidate, type EngineState, REGIMES } from "@/lib/discovery-engine";
 
@@ -15,6 +15,15 @@ type PreferenceConfig = {
   description: string;
 };
 
+type ScoringRuleId = "balanced" | "fee-max" | "capital-preservation" | "lp-outperformance";
+
+type ScoringRule = {
+  id: ScoringRuleId;
+  label: string;
+  description: string;
+  weights: Record<PreferenceKey, number>;
+};
+
 const PREFERENCE_CONFIG: PreferenceConfig[] = [
   { key: "fees", label: "Fee Generation", description: "Prefer AMMs that generate more trading fees." },
   { key: "lpValue", label: "LP Value", description: "Prefer AMMs that outperform simple HODL." },
@@ -23,6 +32,36 @@ const PREFERENCE_CONFIG: PreferenceConfig[] = [
   { key: "stability", label: "Stability", description: "Prefer AMMs with steadier cross-path behavior." },
   { key: "utilization", label: "Utilization", description: "Prefer AMMs with higher capital usage." },
 ];
+
+const SCORING_RULES: ScoringRule[] = [
+  {
+    id: "balanced",
+    label: "Balanced",
+    description: "General-purpose ranking with equal priority on growth, execution, and resilience.",
+    weights: { fees: 1, lpValue: 1, lowSlippage: 1, lowDrawdown: 1, stability: 1, utilization: 1 },
+  },
+  {
+    id: "fee-max",
+    label: "Fee Maximizer",
+    description: "Prioritize fee generation and utilization over capital protection.",
+    weights: { fees: 2.2, lpValue: 1.1, lowSlippage: 0.8, lowDrawdown: 0.7, stability: 0.8, utilization: 1.8 },
+  },
+  {
+    id: "capital-preservation",
+    label: "Capital Preservation",
+    description: "Prefer low-drawdown and low-slippage structures with stable path behavior.",
+    weights: { fees: 0.8, lpValue: 1, lowSlippage: 1.8, lowDrawdown: 2.3, stability: 1.7, utilization: 0.7 },
+  },
+  {
+    id: "lp-outperformance",
+    label: "LP Outperformance",
+    description: "Target AMMs that most improve LP value vs passive HODL.",
+    weights: { fees: 0.9, lpValue: 2.4, lowSlippage: 0.9, lowDrawdown: 1, stability: 1.1, utilization: 1.2 },
+  },
+];
+
+const LOCAL_ARCHIVE_STORAGE_KEY = "atlas.finder.localArchive.v1";
+const LOCAL_ARCHIVE_SIZE = 36;
 
 const metricValue = (candidate: Candidate, key: PreferenceKey): number => {
   if (key === "fees") return candidate.metrics.totalFees;
@@ -46,6 +85,9 @@ const AMMFinderTab = ({ state, onSelectCandidate }: AMMFinderTabProps) => {
   });
   const [regime, setRegime] = useState<"all" | Candidate["regime"]>("all");
   const [poolType, setPoolType] = useState<"all" | "two-asset" | "multi-asset">("all");
+  const [scoringRule, setScoringRule] = useState<ScoringRuleId>("balanced");
+
+  const selectedRule = SCORING_RULES.find((rule) => rule.id === scoringRule) ?? SCORING_RULES[0];
 
   const scoredCandidates = useMemo(() => {
     const candidates = state.archive.filter((candidate) => {
@@ -78,14 +120,32 @@ const AMMFinderTab = ({ state, onSelectCandidate }: AMMFinderTabProps) => {
           const span = bounds.max - bounds.min;
           const normalized = span <= 1e-9 ? 0.5 : (metric - bounds.min) / span;
           const weight = weights[pref.key] / totalWeight;
-          return sum + normalized * weight;
+          return sum + normalized * weight * selectedRule.weights[pref.key];
         }, 0);
 
         return { candidate, weightedScore };
       })
-      .sort((a, b) => b.weightedScore - a.weightedScore)
-      .slice(0, 10);
-  }, [poolType, regime, state.archive, weights]);
+      .sort((a, b) => b.weightedScore - a.weightedScore);
+  }, [poolType, regime, selectedRule.weights, state.archive, weights]);
+
+  const topMatches = scoredCandidates.slice(0, 10);
+
+  useEffect(() => {
+    const archived = scoredCandidates.slice(0, LOCAL_ARCHIVE_SIZE).map(({ candidate }) => candidate.id);
+    const payload = {
+      scoringRule,
+      regime,
+      poolType,
+      archived,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(LOCAL_ARCHIVE_STORAGE_KEY, JSON.stringify(payload));
+  }, [poolType, regime, scoredCandidates, scoringRule]);
+
+  const localArchivePreview = useMemo(() => {
+    const archivedIds = new Set(scoredCandidates.slice(0, LOCAL_ARCHIVE_SIZE).map(({ candidate }) => candidate.id));
+    return state.archive.filter((candidate) => archivedIds.has(candidate.id)).slice(0, 8);
+  }, [scoredCandidates, state.archive]);
 
   return (
     <div className="space-y-5">
@@ -121,6 +181,22 @@ const AMMFinderTab = ({ state, onSelectCandidate }: AMMFinderTabProps) => {
 
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+            Scoring rule
+            <select
+              className="px-2 py-2 rounded-md border border-border bg-background text-xs"
+              value={scoringRule}
+              onChange={(event) => setScoringRule(event.target.value as ScoringRuleId)}
+            >
+              {SCORING_RULES.map((rule) => (
+                <option key={rule.id} value={rule.id}>
+                  {rule.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-[10px] text-muted-foreground">{selectedRule.description}</span>
+          </label>
+
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             Market regime
             <select
               className="px-2 py-2 rounded-md border border-border bg-background text-xs"
@@ -149,21 +225,25 @@ const AMMFinderTab = ({ state, onSelectCandidate }: AMMFinderTabProps) => {
             </select>
           </label>
         </div>
+
+        <div className="mt-3 rounded-md border border-chart-3/30 bg-chart-3/5 px-3 py-2 text-[11px] text-muted-foreground">
+          Using <span className="font-semibold text-foreground">{selectedRule.label}</span>, Atlas locally archives the top {LOCAL_ARCHIVE_SIZE} AMMs for this filter set.
+        </div>
       </section>
 
       <section className="space-y-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Search className="w-3.5 h-3.5" />
-          Showing top {scoredCandidates.length} matches from {state.archive.length.toLocaleString()} archived AMMs
+          Showing top {topMatches.length} matches from {state.archive.length.toLocaleString()} archived AMMs
         </div>
 
-        {scoredCandidates.length === 0 ? (
+        {topMatches.length === 0 ? (
           <div className="surface-elevated rounded-xl border border-border p-6 text-sm text-muted-foreground">
             No candidates match the selected filters yet. Try broadening regime/pool filters.
           </div>
         ) : (
           <div className="grid lg:grid-cols-2 gap-3">
-            {scoredCandidates.map(({ candidate, weightedScore }, index) => (
+            {topMatches.map(({ candidate, weightedScore }, index) => (
               <button
                 key={candidate.id}
                 onClick={() => onSelectCandidate(candidate.id)}
@@ -190,6 +270,26 @@ const AMMFinderTab = ({ state, onSelectCandidate }: AMMFinderTabProps) => {
                 </div>
               </button>
             ))}
+          </div>
+        )}
+
+        {localArchivePreview.length > 0 && (
+          <div className="surface-elevated rounded-xl border border-border p-4 space-y-2">
+            <h4 className="text-xs font-semibold text-foreground">Local archive snapshot ({localArchivePreview.length})</h4>
+            <div className="grid md:grid-cols-2 gap-2">
+              {localArchivePreview.map((candidate) => (
+                <button
+                  key={candidate.id}
+                  onClick={() => onSelectCandidate(candidate.id)}
+                  className="text-left rounded-md border border-border px-3 py-2 hover:border-foreground/30 transition-colors"
+                >
+                  <div className="text-[11px] font-medium text-foreground">{candidate.familyId}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {candidate.regime} • LP/HODL {fmt(candidate.metrics.lpValueVsHodl)}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </section>

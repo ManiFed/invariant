@@ -35,6 +35,7 @@ const App = () => (
           <Route path="/labs" element={<Labs />} />
           <Route path="/labs/multi-asset" element={<MultiAssetLab />} />
           <Route path="/labs/time-variance" element={<TimeVarianceLab />} />
+          <Route path="/labs/discover" element={<DiscoveryAtlas />} />
           <Route path="/labs/discovery" element={<DiscoveryAtlas />} />
           <Route path="/labs/strategy" element={<LiquidityStrategyLab />} />
           <Route path="*" element={<NotFound />} />
