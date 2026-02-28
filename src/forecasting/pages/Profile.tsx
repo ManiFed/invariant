@@ -15,6 +15,7 @@ import {
   calibrationBuckets,
   type SkillTier,
 } from "@/forecasting/lib/scoring";
+import { forecastRoute } from "@/forecasting/lib/routes";
 
 const TIER_CONFIG: Record<SkillTier, { color: string; icon: React.ReactNode; minResolved: number; description: string }> = {
   Novice: {
@@ -80,7 +81,7 @@ export default function Profile() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/forecast")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(forecastRoute())}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <span className="font-semibold text-foreground">Skill Profile</span>

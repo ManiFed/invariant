@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { SAMPLE_QUESTIONS, FORECAST_CATEGORIES, generateSampleForecasts } from "@/forecasting/lib/sample-data";
 import { brierScore, logScore } from "@/forecasting/lib/scoring";
 import type { ForecastQuestion } from "@/forecasting/lib/sample-data";
+import { forecastRoute } from "@/forecasting/lib/routes";
 
 interface UserForecast {
   questionId: string;
@@ -80,7 +81,7 @@ export default function Arena() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/forecast")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(forecastRoute())}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <span className="font-semibold text-foreground">Forecasting Arena</span>

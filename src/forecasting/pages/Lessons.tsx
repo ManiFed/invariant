@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { LESSON_MODULES } from "@/forecasting/lib/sample-data";
+import { forecastRoute } from "@/forecasting/lib/routes";
 
 interface QuizState {
   moduleId: string;
@@ -126,7 +127,7 @@ export default function Lessons() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/forecast")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate(forecastRoute())}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <span className="font-semibold text-foreground">Interactive Lessons</span>
