@@ -1,0 +1,10 @@
+{
+  "name": "invariant-forecasting-service",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node scripts/run-from-root.mjs build:forecasting",
+    "start": "node scripts/run-from-root.mjs start:forecasting",
+    "dev": "node scripts/run-from-root.mjs dev:forecasting"
+  }
+}
