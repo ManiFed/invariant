@@ -11,7 +11,12 @@ const port = Number(process.env.PORT || 4173);
 const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const DATABASE_URL = process.env.DATABASE_URL || '';
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRESQL_URL ||
+  '';
 
 let pool = null;
 if (DATABASE_URL) {

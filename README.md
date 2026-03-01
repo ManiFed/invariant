@@ -7,7 +7,7 @@ The project now uses an internal Node API (instead of hosted functions) for AI c
 - `OPENROUTER_API_KEY`: API key used by `/api/ai/chat`
 - `OPENROUTER_MODEL` (optional): OpenRouter model name (default: `openai/gpt-4o-mini`)
 - `OPENROUTER_BASE_URL` (optional): API base URL (default: `https://openrouter.ai/api/v1`)
-- `DATABASE_URL`: PostgreSQL connection string used by `/api/atlas/*`
+- `DATABASE_URL` (or `POSTGRES_URL` / `POSTGRES_PRISMA_URL` / `POSTGRESQL_URL`): PostgreSQL connection string used by `/api/atlas/*`
 
 > Note: Install `pg` in runtime environments where Atlas PostgreSQL persistence is enabled.
 
@@ -30,7 +30,8 @@ Add these in **Railway → Service → Variables**:
 | Variable | Required? | Example | Used by |
 | --- | --- | --- | --- |
 | `OPENROUTER_API_KEY` | **Yes** (for AI chat) | `sk-or-v1-...` | `POST /api/ai/chat` |
-| `DATABASE_URL` | **Yes** (for Atlas persistence) | `postgresql://user:pass@host:5432/db` | `/api/atlas/*` |
+| `DATABASE_URL` *(preferred)* | **Yes** (for Atlas persistence) | `postgresql://user:pass@host:5432/db` | `/api/atlas/*` |
+| `POSTGRES_URL` / `POSTGRES_PRISMA_URL` / `POSTGRESQL_URL` | Optional fallback names | `postgres://...` | `/api/atlas/*` |
 | `OPENROUTER_MODEL` | Optional | `openai/gpt-4o-mini` | AI model selection |
 | `OPENROUTER_BASE_URL` | Optional | `https://openrouter.ai/api/v1` | OpenRouter endpoint |
 | `PORT` | No (Railway sets automatically) | `3000` | Server listen port |
@@ -38,7 +39,7 @@ Add these in **Railway → Service → Variables**:
 
 If `OPENROUTER_API_KEY` is missing, `/api/ai/chat` returns `503 OPENROUTER_API_KEY is not configured`.
 
-If `DATABASE_URL` is missing, Atlas endpoints return `503 DATABASE_URL is not configured`.
+If none of `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or `POSTGRESQL_URL` are set, Atlas endpoints return `503 DATABASE_URL is not configured`.
 
 ---
 
