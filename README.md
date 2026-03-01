@@ -23,6 +23,23 @@ Use repository-root deployment for Forecast Lab (required):
 
 `build:forecasting` already sets `VITE_FORECAST_BASE_PATH` to empty so Forecast Lab routes are served from `/` in standalone mode.
 
+### Railway environment variable checklist
+
+Add these in **Railway → Service → Variables**:
+
+| Variable | Required? | Example | Used by |
+| --- | --- | --- | --- |
+| `OPENROUTER_API_KEY` | **Yes** (for AI chat) | `sk-or-v1-...` | `POST /api/ai/chat` |
+| `DATABASE_URL` | **Yes** (for Atlas persistence) | `postgresql://user:pass@host:5432/db` | `/api/atlas/*` |
+| `OPENROUTER_MODEL` | Optional | `openai/gpt-4o-mini` | AI model selection |
+| `OPENROUTER_BASE_URL` | Optional | `https://openrouter.ai/api/v1` | OpenRouter endpoint |
+| `PORT` | No (Railway sets automatically) | `3000` | Server listen port |
+| `DIST_DIR` | No (set by `start:forecasting`) | `dist-forecasting` | Static asset directory |
+
+If `OPENROUTER_API_KEY` is missing, `/api/ai/chat` returns `503 OPENROUTER_API_KEY is not configured`.
+
+If `DATABASE_URL` is missing, Atlas endpoints return `503 DATABASE_URL is not configured`.
+
 ---
 
 Complete technical reference for Invariant Studio's simulation engine, mathematical models, and risk metrics.
