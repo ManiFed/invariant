@@ -538,23 +538,49 @@ function executeRandomTrade(state: SimState): void {
   state.tradeCount++;
 }
 
+export interface ArbitrageStepResult {
+  nextLogPrice: number;
+  feeDelta: number;
+  arbLeakageDelta: number;
+}
+
+/**
+ * Apply one arbitrage rebalancing step from current AMM log-price toward the external log-price.
+ * Returns incremental fee/leakage plus the updated AMM log-price.
+ */
+export function applyArbitrageStep(
+  currentLogPrice: number,
+  externalLogPrice: number,
+  regime?: RegimeConfig,
+): ArbitrageStepResult {
+  const deviation = Math.abs(currentLogPrice - externalLogPrice);
+  if (deviation < ARB_THRESHOLD) {
+    return { nextLogPrice: currentLogPrice, feeDelta: 0, arbLeakageDelta: 0 };
+  }
+
+  const arbResponsiveness = Math.min(Math.max(regime?.arbResponsiveness ?? 1, 0.05), 1);
+  const arbSize = deviation * TOTAL_LIQUIDITY * 0.1;
+  const feeDelta = arbSize * FEE_RATE;
+  const arbLeakageDelta = arbSize * deviation - feeDelta;
+
+  if (arbLeakageDelta <= 0) {
+    return { nextLogPrice: currentLogPrice, feeDelta: 0, arbLeakageDelta: 0 };
+  }
+
+  const correction = (externalLogPrice - currentLogPrice) * arbResponsiveness;
+  return {
+    nextLogPrice: currentLogPrice + correction,
+    feeDelta,
+    arbLeakageDelta,
+  };
+}
+
 /** Execute arbitrage step: realign AMM price to external reference */
 function executeArbitrage(state: SimState, externalLogPrice: number, regime?: RegimeConfig): void {
-  const deviation = Math.abs(state.currentLogPrice - externalLogPrice);
-  if (deviation < ARB_THRESHOLD) return;
-  const arbResponsiveness = Math.min(Math.max(regime?.arbResponsiveness ?? 1, 0.05), 1);
-
-  // Compute the optimal arb trade size to close the gap
-  const arbSize = deviation * TOTAL_LIQUIDITY * 0.1;
-  const fee = arbSize * FEE_RATE;
-  const arbProfit = arbSize * deviation - fee;
-
-  if (arbProfit > 0) {
-    state.arbLeakage += arbProfit;
-    state.totalFees += fee;
-    const correction = (externalLogPrice - state.currentLogPrice) * arbResponsiveness;
-    state.currentLogPrice += correction;
-  }
+  const step = applyArbitrageStep(state.currentLogPrice, externalLogPrice, regime);
+  state.currentLogPrice = step.nextLogPrice;
+  state.totalFees += step.feeDelta;
+  state.arbLeakage += step.arbLeakageDelta;
 }
 
 /** Compute LP value at current state */
@@ -580,9 +606,8 @@ function simulatePath(bins: Float64Array, pricePath: Float64Array, regime?: Regi
       executeRandomTrade(state);
     }
 
-    // Arbitrage correction
+    // Arbitrage correction (partial, regime-dependent reversion toward external price)
     executeArbitrage(state, pricePath[t], regime);
-    state.currentLogPrice = pricePath[t];
 
     // Track values
     const lpVal = computeLpValue(state, pricePath[t]);
