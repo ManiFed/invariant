@@ -105,10 +105,11 @@ buy ideal output  = |tradeSize| / exp(refLogPrice)
 sell ideal output = |tradeSize| * exp(refLogPrice)
 slippage = min(1, |1 - output/idealOutput|)
 
-if |ammLogPrice - externalLogPrice| >= ARB_THRESHOLD:
+deviation = |ammLogPrice - externalLogPrice|
+if deviation >= ARB_THRESHOLD:
   arbSize = deviation * TOTAL_LIQUIDITY * 0.1
-  arbFee  = arbSize * FEE_RATE
-  arbProfit = arbSize*deviation - arbFee
+  arbFee = arbSize * FEE_RATE
+  arbProfit = arbSize * deviation - arbFee
   if arbProfit > 0:
     arbLeakage += arbProfit
     totalFees += arbFee
@@ -182,7 +183,7 @@ utilization  = liquidityUtilization
 lpValue      = min(lpValueVsHodl, 1.2) / 1.2
 lowSlippage  = max(0, 1 - totalSlippage * 10)
 lowArbLeak   = max(0, 1 - arbLeakage / 50)
-stabilityN   = max(0, 1 - stability * 5)
+stability    = max(0, 1 - stability * 5)
 lowDrawdown  = max(0, 1 - maxDrawdown * 5)`}
         />
         <div className="mt-3">
@@ -223,7 +224,7 @@ if population empty:
   attempt POPULATION_SIZE random candidates
   keep only candidates passing validateInvariantFamily
 else:
-  elites = best floor(POPULATION_SIZE * ELITE_FRACTION)
+  elites = best max(2, floor(POPULATION_SIZE * ELITE_FRACTION))
   if elites empty: bootstrap random candidates
 
   championCoverage = spiderCoverage(population.champion)
