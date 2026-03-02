@@ -51,12 +51,14 @@ const DATABASE_URL =
   '';
 
 let pool = null;
+let dbInitError = '';
 if (DATABASE_URL) {
   try {
     const { Pool } = await import('pg');
     pool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
   } catch (error) {
-    console.warn('pg package not installed; Atlas PostgreSQL API disabled.');
+    dbInitError = error instanceof Error ? error.message : String(error);
+    console.warn(`Failed to initialize PostgreSQL client: ${dbInitError}`);
   }
 }
 
@@ -141,7 +143,12 @@ async function ensureAtlasTables() {
 }
 
 async function handleAtlasApi(req, res, pathname) {
-  if (!pool) return sendJson(res, 503, { status: 'unreachable', error: 'DATABASE_URL is not configured' });
+  if (!pool) {
+    const error = DATABASE_URL
+      ? `DATABASE_URL is set but PostgreSQL client failed to initialize${dbInitError ? `: ${dbInitError}` : ''}`
+      : 'DATABASE_URL is not configured';
+    return sendJson(res, 503, { status: 'unreachable', error });
+  }
 
   try {
     if (pathname === '/api/atlas/status' && req.method === 'GET') {
