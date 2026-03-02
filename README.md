@@ -12,6 +12,18 @@ The project now uses an internal Node API (instead of hosted functions) for AI c
 > Note: Install `pg` in runtime environments where Atlas PostgreSQL persistence is enabled.
 
 
+## Local setup when DATABASE_URL is missing
+
+If you see `DATABASE_URL is not configured`, do this from the repo root:
+
+1. Copy env template:
+   - `cp .env.example .env`
+2. Edit `.env` and set a real PostgreSQL URL in `DATABASE_URL`.
+3. Start the app with env loading (example):
+   - `node --env-file=.env server.mjs`
+
+If you do not have PostgreSQL yet, you can still run most of the UI, but Atlas persistence endpoints (`/api/atlas/*`) will return `503` until `DATABASE_URL` is set.
+
 ## Deploying Forecast Lab as a standalone Railway service
 
 Use repository-root deployment for Forecast Lab (required):
