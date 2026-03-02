@@ -1,10 +1,42 @@
 import { createServer } from 'node:http';
 import { createReadStream, existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+async function loadDotEnvFile() {
+  const dotenvPath = path.join(__dirname, '.env');
+  if (!existsSync(dotenvPath)) return;
+
+  const content = await readFile(dotenvPath, 'utf8');
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const exportLine = line.startsWith('export ') ? line.slice(7).trim() : line;
+    const separatorIndex = exportLine.indexOf('=');
+    if (separatorIndex <= 0) continue;
+
+    const key = exportLine.slice(0, separatorIndex).trim();
+    if (!key || process.env[key] !== undefined) continue;
+
+    let value = exportLine.slice(separatorIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+await loadDotEnvFile();
+
 const distDir = path.join(__dirname, process.env.DIST_DIR || 'dist');
 const port = Number(process.env.PORT || 4173);
 
