@@ -9,6 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function loadDotEnvFile() {
   const dotenvPath = path.join(__dirname, '.env');
+  console.log(`Looking for .env at: ${dotenvPath} (exists: ${existsSync(dotenvPath)})`);
   if (!existsSync(dotenvPath)) return;
 
   const content = await readFile(dotenvPath, 'utf8');
@@ -50,16 +51,23 @@ const DATABASE_URL =
   process.env.POSTGRESQL_URL ||
   '';
 
+console.log(`DATABASE_URL configured: ${DATABASE_URL ? 'yes' : 'no'}${DATABASE_URL ? ` (${DATABASE_URL.replace(/\/\/.*@/, '//***@')})` : ''}`);
+
 let pool = null;
 let dbInitError = '';
 if (DATABASE_URL) {
   try {
     const { Pool } = await import('pg');
     pool = new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    // Test the connection
+    await pool.query('SELECT 1');
+    console.log('PostgreSQL connection established successfully');
   } catch (error) {
     dbInitError = error instanceof Error ? error.message : String(error);
     console.warn(`Failed to initialize PostgreSQL client: ${dbInitError}`);
   }
+} else {
+  console.warn('No DATABASE_URL found. Atlas persistence will be unavailable.');
 }
 
 const MIME_TYPES = {
