@@ -233,9 +233,12 @@ export function simulateMEV(config: MEVSimConfig): MEVResult {
   // Protection score: higher concentrated liquidity = harder to sandwich
   const avgBin = bins.length > 0 ? bins.reduce((a, b) => a + b, 0) / bins.length : 0.5;
   const binVariance = bins.length > 0 ? bins.reduce((a, b) => a + (b - avgBin) ** 2, 0) / bins.length : 0.1;
-  const concentrationFactor = Math.min(1, binVariance * 10);
-  const extractionRatio = totalExtracted / Math.max(1, totalLpFees);
-  const protectionScore = Math.max(0, Math.min(100, 100 * (1 - extractionRatio) * (0.5 + concentrationFactor * 0.5)));
+  const concentrationFactor = Math.min(1, Math.sqrt(binVariance) * 5);
+  const extractionRatio = totalExtracted / Math.max(1, totalExtracted + totalLpFees);
+  // Score: low extraction ratio + high concentration = better protection
+  const protectionScore = Math.max(0, Math.min(100,
+    (1 - extractionRatio) * 60 + concentrationFactor * 40
+  ));
 
   return {
     events,
