@@ -150,7 +150,9 @@ export function useDiscoveryEngine() {
         // onRemoteState: adopt the leader's state
         (archive, totalGenerations, extras: RemoteStateExtras) => {
           setState(prev => {
-            const trimmedArchive = clampArchive(archive);
+            // Filter out any malformed candidates before processing
+            const safeArchive = archive.filter(c => c != null && typeof c.score === "number" && Number.isFinite(c.score));
+            const trimmedArchive = clampArchive(safeArchive);
             const populations = buildPopulationsFromArchive(trimmedArchive, extras.populationInfo);
             return {
               ...prev,
