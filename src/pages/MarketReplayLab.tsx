@@ -53,7 +53,7 @@ export default function MarketReplayLab() {
     if (!design) return;
     const res = replayMarket(design.bins, scenario, feeRate);
     setResult(res);
-    setPlayHead(0);
+    setPlayHead(res.events.length - 1);
     setPlaying(false);
   }, [designs, selectedDesign, scenario, feeRate]);
 
