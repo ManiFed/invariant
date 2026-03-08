@@ -257,6 +257,7 @@ export default function TeachingLab() {
               totalModules={activeModules.length}
               completedModules={completedModules}
               onNavigateModule={handleNavigateModule}
+              modules={activeModules}
             />
           </div>
         ) : (
