@@ -353,6 +353,7 @@ export const challenges: Challenge[] = [
       { metric: "il", label: "Impermanent loss", operator: "<", target: 8, unit: "%", weight: 2 },
     ],
     defaultParams: { reserveX: 200, reserveY: 400000, feeRate: 0.01, amplification: 1, concentrationLower: 0.2, concentrationUpper: 5 },
+    solutionParams: { reserveX: 800, reserveY: 1600000, feeRate: 0.015, amplification: 1, concentrationLower: 0.1, concentrationUpper: 5 },
     hints: [
       "Higher fee rates create a buffer during extreme moves.",
       "Very wide ranges ensure the pool never runs out of one asset.",
