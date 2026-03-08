@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown } from "lucide-react";
-import { COURSE_MODULES, type CourseStep } from "@/lib/course-content";
+import { COURSE_MODULES, type CourseStep, type CourseModule } from "@/lib/course-content";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
