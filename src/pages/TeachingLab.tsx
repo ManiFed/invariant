@@ -19,7 +19,6 @@ export default function TeachingLab() {
 
   // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
-  const [comingSoonLevel, setComingSoonLevel] = useState<"advanced" | null>(null);
 
   const handleSelectLevel = (level: CourseLevel) => {
     setSelectedLevel(level);
