@@ -219,6 +219,7 @@ export const challenges: Challenge[] = [
       { metric: "fee_revenue", label: "Daily fee revenue", operator: ">", target: 10, unit: "$", weight: 1 },
     ],
     defaultParams: { reserveX: 50, reserveY: 100000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 500, reserveY: 500000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "More liquidity = less slippage. But the fee rate matters too.",
       "Think about how much capital you're willing to deploy."
