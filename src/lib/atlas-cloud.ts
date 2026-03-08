@@ -99,7 +99,7 @@ export async function loadAtlasState(): Promise<{ state: EngineState | null; clo
     const data = await atlasApi<{ state: { globalState: { total_generations: number } | null; archivedRows: CandidateRow[]; populations: Record<string, CandidateRow[]> } }>("/state");
     const { globalState, archivedRows, populations: cloudPopulations } = data.state;
 
-    const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
+    const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
     const populations: Record<RegimeId, PopulationState> = {} as Record<RegimeId, PopulationState>;
 
     for (const regime of regimes) {
