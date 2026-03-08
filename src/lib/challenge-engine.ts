@@ -242,6 +242,7 @@ export const challenges: Challenge[] = [
       { metric: "slippage_5k", label: "Slippage on $5k trade", operator: "<", target: 1.5, unit: "%", weight: 2 },
     ],
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 300, reserveY: 600000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Higher fees earn more per trade but discourage volume.",
       "Try fee rates between 0.05% and 1% and compare revenue.",
