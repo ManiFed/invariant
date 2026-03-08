@@ -209,6 +209,8 @@ function serializeCandidateForBackup(candidate: Candidate): CloudBackupCandidate
 
 export async function backupAtlasState(state: EngineState): Promise<{ success: boolean; error?: string }> {
   if (state.archive.length === 0 && state.totalGenerations === 0) return { success: true };
+  const status = await checkCloudStatus();
+  if (status !== "connected") return { success: false, error: `Cloud status: ${status}` };
 
   const archive = state.archive.slice(-MAX_CLOUD_ARCHIVE).map(serializeCandidateForBackup);
   const populations: Record<RegimeId, CloudBackupCandidate[]> = {
