@@ -9,6 +9,7 @@ import CourseSidebar from "@/components/teaching/CourseSidebar";
 import CourseLevelPicker, { ComingSoonOverlay, type CourseLevel } from "@/components/teaching/CourseLevelPicker";
 import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
 import { INTERMEDIATE_MODULES, INTERMEDIATE_TAB_MAP } from "@/lib/intermediate-course-content";
+import { ADVANCED_MODULES, ADVANCED_TAB_MAP } from "@/lib/advanced-course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
 
