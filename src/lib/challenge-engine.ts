@@ -195,6 +195,7 @@ export const challenges: Challenge[] = [
       { metric: "fee_rate", label: "Fee rate", operator: "<=", target: 0.1, unit: "%", weight: 1 },
     ],
     defaultParams: { reserveX: 500000, reserveY: 500000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 1000, reserveY: 1500000, feeRate: 0.0005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Stablecoin pools work best with very deep liquidity.",
       "Lower fee rates help, but the real trick is the reserve depth.",
