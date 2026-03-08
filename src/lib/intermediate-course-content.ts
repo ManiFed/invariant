@@ -84,6 +84,18 @@ export const INTERMEDIATE_MODULES: CourseModule[] = [
           wrongExplanation: "Think about which direction the pool rebalances. As ETH price falls, traders sell ETH to the pool. Your USDC gets converted to ETH. Below the range, it's all ETH.",
         },
       },
+      {
+        type: "lesson",
+        title: "📝 Module 1 Recap",
+        content: [
+          "Let's review what we've covered about concentrated liquidity:",
+          "• Full-range liquidity (like Uniswap v2) spreads capital across all prices, but most of it sits idle far from the current price.",
+          "• Concentrated liquidity lets you pick a price range — capital efficiency can be 20x+ higher.",
+          "• The tradeoff: IL is amplified proportionally to your concentration. If price exits your range, you're 100% in one token and earn zero fees.",
+          "• Range width is a risk/reward dial: narrow = high fees but high IL risk, wide = safer but lower efficiency.",
+          "Next up: how to actually pick the right range.",
+        ],
+      },
     ],
   },
 
