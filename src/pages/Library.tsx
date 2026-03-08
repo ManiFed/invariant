@@ -1,10 +1,12 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, Star, Users, Award, X, Download, Search } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { ArrowLeft, Upload, Star, Users, Award, X, Download, Search, ThumbsUp } from "lucide-react";
+import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, AreaChart, Area } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useChartColors } from "@/hooks/use-chart-theme";
+import { loadLibraryAMMs, upvoteLibraryAMM, type LibraryAMM } from "@/lib/library-persistence";
+import { NUM_BINS, binPrice } from "@/lib/discovery-engine";
 
 interface AMMEntry {
   id: string;
