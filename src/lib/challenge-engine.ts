@@ -221,12 +221,17 @@ export const challenges: Challenge[] = [
       { metric: "slippage_100k", label: "Slippage on $100k trade", operator: "<", target: 0.5, unit: "%", weight: 2 },
       { metric: "fee_rate", label: "Fee rate", operator: "<=", target: 0.1, unit: "%", weight: 1 },
     ],
-    defaultParams: { reserveX: 500000, reserveY: 500000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
-    solutionParams: { reserveX: 1000, reserveY: 1500000, feeRate: 0.0005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    sliders: {
+      reserveX: { min: 100000, max: 100000000, step: 100000, format: (v: number) => `$${(v / 1e6).toFixed(1)}M` },
+      reserveY: { min: 100000, max: 100000000, step: 100000, format: (v: number) => `$${(v / 1e6).toFixed(1)}M` },
+    },
+    // slippage(50k) = 50000/(reserveX+50000). At 60M: 50000/60050000 ≈ 0.083% ✓
+    defaultParams: { reserveX: 5000000, reserveY: 5000000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 60000000, reserveY: 60000000, feeRate: 0.0005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
-      "Stablecoin pools work best with very deep liquidity.",
-      "Lower fee rates help, but the real trick is the reserve depth.",
-      "Try reserves of 1M+ on each side."
+      "Stablecoin pools work best with very deep liquidity — think tens of millions.",
+      "Lower fee rates help meet the fee constraint, but reserve depth is the key to low slippage.",
+      "For 0.1% slippage on a $50k trade, you need reserveX such that 50000/(reserveX+50000) < 0.001."
     ],
     evaluate(params) {
       const slip50k = simulateSlippage(params, 50000);
@@ -245,11 +250,16 @@ export const challenges: Challenge[] = [
       { metric: "slippage_10k", label: "Slippage on $10k trade", operator: "<", target: 2, unit: "%", weight: 3 },
       { metric: "fee_revenue", label: "Daily fee revenue", operator: ">", target: 10, unit: "$", weight: 1 },
     ],
+    sliders: {
+      reserveX: { min: 10, max: 2000, step: 10 },
+      reserveY: { min: 10000, max: 4000000, step: 10000 },
+    },
+    // Trade 10000 into reserveY side. slippage = 10000/(reserveY+10000). At 600k: ≈1.6% ✓
     defaultParams: { reserveX: 50, reserveY: 100000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
-    solutionParams: { reserveX: 500, reserveY: 500000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 500, reserveY: 1000000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
-      "More liquidity = less slippage. But the fee rate matters too.",
-      "Think about how much capital you're willing to deploy."
+      "More liquidity = less slippage. Try increasing reserves significantly.",
+      "A 0.5% fee rate is a good balance between revenue and trader friendliness."
     ],
     evaluate(params) {
       const slip = simulateSlippage(params, 10000);
@@ -268,11 +278,15 @@ export const challenges: Challenge[] = [
       { metric: "fee_30d", label: "30-day fee revenue", operator: ">", target: 500, unit: "$", weight: 3 },
       { metric: "slippage_5k", label: "Slippage on $5k trade", operator: "<", target: 1.5, unit: "%", weight: 2 },
     ],
+    sliders: {
+      reserveX: { min: 50, max: 1000, step: 10 },
+      reserveY: { min: 50000, max: 2000000, step: 10000 },
+    },
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
-    solutionParams: { reserveX: 300, reserveY: 600000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 500, reserveY: 1000000, feeRate: 0.008, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Higher fees earn more per trade but discourage volume.",
-      "Try fee rates between 0.05% and 1% and compare revenue.",
+      "Try fee rates between 0.05% and 1% — the sweet spot is usually around 0.5–0.8%.",
     ],
     evaluate(params) {
       const fees = simulateFeeRevenue(params, 30, 0.7);
@@ -294,12 +308,18 @@ export const challenges: Challenge[] = [
       { metric: "drawdown", label: "Max drawdown", operator: "<", target: 40, unit: "%", weight: 2 },
       { metric: "solvent", label: "Pool stays solvent", operator: ">=", target: 1, unit: "", weight: 3 },
     ],
+    sliders: {
+      reserveX: { min: 50, max: 2000, step: 10 },
+      reserveY: { min: 50000, max: 4000000, step: 10000 },
+      concentrationLower: { min: 5, max: 100, step: 5 },
+      concentrationUpper: { min: 100, max: 1000, step: 10 },
+    },
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.3, concentrationUpper: 3 },
-    solutionParams: { reserveX: 500, reserveY: 1000000, feeRate: 0.01, amplification: 1, concentrationLower: 0.1, concentrationUpper: 5 },
+    solutionParams: { reserveX: 1000, reserveY: 2000000, feeRate: 0.01, amplification: 1, concentrationLower: 0.1, concentrationUpper: 10 },
     hints: [
       "Wide price ranges reduce concentrated IL exposure.",
       "Higher fee rates help offset IL during volatile periods.",
-      "Think about what happens to reserves as price drops."
+      "Deep reserves and very wide ranges (10%–1000%) make the pool behave like vanilla constant product, which has predictable IL."
     ],
     evaluate(params) {
       const result = simulateCrash(params, 60);
@@ -317,16 +337,20 @@ export const challenges: Challenge[] = [
       { metric: "fees_90d", label: "90-day fee revenue", operator: ">", target: 2000, unit: "$", weight: 3 },
       { metric: "il_90d", label: "IL after 90 days", operator: "<", target: 8, unit: "%", weight: 2 },
     ],
+    sliders: {
+      reserveX: { min: 50, max: 2000, step: 10 },
+      reserveY: { min: 50000, max: 4000000, step: 10000 },
+    },
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
-    solutionParams: { reserveX: 300, reserveY: 600000, feeRate: 0.008, amplification: 1, concentrationLower: 0.7, concentrationUpper: 1.5 },
+    solutionParams: { reserveX: 800, reserveY: 1600000, feeRate: 0.01, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Volatile markets generate more arb volume → more fees.",
       "But volatile markets also mean more IL. Balance is key.",
-      "Concentrated ranges earn more fees when in range."
+      "Larger reserves generate larger absolute fee amounts. Try going bigger."
     ],
     evaluate(params) {
       const fees = simulateFeeRevenue(params, 90, 0.8);
-      const il = simulateIL(params, -30); // assume some price movement
+      const il = simulateIL(params, -30);
       return buildResult(this.constraints, [fees, il]);
     }
   },
@@ -341,27 +365,27 @@ export const challenges: Challenge[] = [
       { metric: "slippage_match", label: "Slippage ≤ $1M pool baseline", operator: "<=", target: 0.5, unit: "%", weight: 3 },
       { metric: "capital_used", label: "Total capital deployed", operator: "<=", target: 250000, unit: "$", weight: 3 },
     ],
-    defaultParams: { reserveX: 62.5, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.8, concentrationUpper: 1.25 },
-    solutionParams: { reserveX: 62.5, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.9, concentrationUpper: 1.1 },
+    sliders: {
+      reserveX: { min: 10, max: 200, step: 5 },
+      reserveY: { min: 10000, max: 400000, step: 5000 },
+      concentrationLower: { min: 50, max: 100, step: 1 },
+      concentrationUpper: { min: 100, max: 200, step: 1 },
+    },
+    defaultParams: { reserveX: 62, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.8, concentrationUpper: 1.25 },
+    solutionParams: { reserveX: 125, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.9, concentrationUpper: 1.1 },
     hints: [
       "Tight concentration ranges multiply capital efficiency.",
-      "A range of ±20% can give 5x+ capital efficiency.",
-      "But if price moves out of range, you earn nothing."
+      "A range of ±10% can give 10x+ capital efficiency.",
+      "Keep total capital (reserveX × price + reserveY) under $250k."
     ],
     evaluate(params) {
-      // Baseline: $1M constant product pool
       const basePool = createPool(250, 500000, params.feeRate);
       const { result: baseResult } = executeTrade(basePool, 25000, "buyY");
-      
       const { result: userResult } = executeTrade(
         createPool(params.reserveX, params.reserveY, params.feeRate),
         25000, "buyY"
       );
-      
       const totalCapital = params.reserveX * (params.reserveY / params.reserveX) + params.reserveY;
-      // Simplified: compare slippage ratios
-      const slippageRatio = userResult.slippagePct / Math.max(baseResult.slippagePct, 0.001);
-      
       return buildResult(this.constraints, [userResult.slippagePct, totalCapital]);
     }
   },
@@ -379,8 +403,14 @@ export const challenges: Challenge[] = [
       { metric: "drawdown", label: "Max drawdown", operator: "<", target: 35, unit: "%", weight: 3 },
       { metric: "il", label: "Impermanent loss", operator: "<", target: 8, unit: "%", weight: 2 },
     ],
+    sliders: {
+      reserveX: { min: 100, max: 5000, step: 50 },
+      reserveY: { min: 100000, max: 10000000, step: 50000 },
+      concentrationLower: { min: 5, max: 100, step: 5 },
+      concentrationUpper: { min: 100, max: 1000, step: 10 },
+    },
     defaultParams: { reserveX: 200, reserveY: 400000, feeRate: 0.01, amplification: 1, concentrationLower: 0.2, concentrationUpper: 5 },
-    solutionParams: { reserveX: 800, reserveY: 1600000, feeRate: 0.015, amplification: 1, concentrationLower: 0.1, concentrationUpper: 5 },
+    solutionParams: { reserveX: 2000, reserveY: 4000000, feeRate: 0.015, amplification: 1, concentrationLower: 0.05, concentrationUpper: 10 },
     hints: [
       "Higher fee rates create a buffer during extreme moves.",
       "Very wide ranges ensure the pool never runs out of one asset.",
@@ -403,8 +433,12 @@ export const challenges: Challenge[] = [
       { metric: "normal_slip", label: "Normal trade slippage", operator: "<", target: 1, unit: "%", weight: 2 },
       { metric: "fee_revenue", label: "Still earns decent fees", operator: ">", target: 300, unit: "$", weight: 1 },
     ],
+    sliders: {
+      reserveX: { min: 100, max: 5000, step: 50 },
+      reserveY: { min: 100000, max: 10000000, step: 50000 },
+    },
     defaultParams: { reserveX: 200, reserveY: 400000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
-    solutionParams: { reserveX: 800, reserveY: 1600000, feeRate: 0.01, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 2000, reserveY: 4000000, feeRate: 0.01, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Higher fees make sandwiches less profitable for attackers.",
       "Deep liquidity reduces the price impact of frontrunning.",
