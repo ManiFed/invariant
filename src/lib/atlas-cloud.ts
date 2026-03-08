@@ -49,6 +49,11 @@ export function rowToCandidate(row: CandidateRow): Candidate {
   };
 }
 
+let cachedCloudStatus: CloudStatus | null = null;
+let statusCheckedAt = 0;
+const STATUS_CACHE_TTL = 30_000; // re-check every 30s
+const STATUS_UNREACHABLE_TTL = 120_000; // wait longer before retrying if unreachable
+
 async function atlasApi<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${ATLAS_API_BASE}${path}`, {
     ...init,
@@ -60,14 +65,26 @@ async function atlasApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new Error(await response.text());
   }
+  // Validate that we got JSON back (not the SPA HTML fallback)
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(`Expected JSON but got ${contentType}`);
+  }
   return response.json() as Promise<T>;
 }
 
 export async function checkCloudStatus(): Promise<CloudStatus> {
+  const now = Date.now();
+  const ttl = cachedCloudStatus === "unreachable" ? STATUS_UNREACHABLE_TTL : STATUS_CACHE_TTL;
+  if (cachedCloudStatus && now - statusCheckedAt < ttl) return cachedCloudStatus;
   try {
     const data = await atlasApi<{ status: CloudStatus }>("/status");
+    cachedCloudStatus = data.status;
+    statusCheckedAt = now;
     return data.status;
   } catch {
+    cachedCloudStatus = "unreachable";
+    statusCheckedAt = now;
     return "unreachable";
   }
 }
@@ -141,6 +158,8 @@ export async function loadAtlasState(): Promise<{ state: EngineState | null; clo
 }
 
 export async function triggerGeneration(regime?: RegimeId): Promise<{ success: boolean; generation?: number; error?: string }> {
+  const status = await checkCloudStatus();
+  if (status !== "connected") return { success: false, error: `Cloud status: ${status}` };
   try {
     const data = await atlasApi<{ success: boolean; generation: number }>("/generate", {
       method: "POST",
@@ -192,6 +211,8 @@ function serializeCandidateForBackup(candidate: Candidate): CloudBackupCandidate
 
 export async function backupAtlasState(state: EngineState): Promise<{ success: boolean; error?: string }> {
   if (state.archive.length === 0 && state.totalGenerations === 0) return { success: true };
+  const status = await checkCloudStatus();
+  if (status !== "connected") return { success: false, error: `Cloud status: ${status}` };
 
   const archive = state.archive.slice(-MAX_CLOUD_ARCHIVE).map(serializeCandidateForBackup);
   const populations: Record<RegimeId, CloudBackupCandidate[]> = {
