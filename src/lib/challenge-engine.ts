@@ -120,15 +120,13 @@ function simulateMEV(params: ChallengeParams): number {
   
   // Frontrun: attacker buys Y
   const frontrunSize = victimSize * 2;
-  const { pool: p1 } = executeTrade(pool, frontrunSize, "buyY");
+  const { pool: p1, result: frontResult } = executeTrade(pool, frontrunSize, "buyY");
   
   // Victim trade
-  const priceBefore = poolPrice(p1);
   const { pool: p2, result: victimResult } = executeTrade(p1, victimSize, "buyY");
-  const priceAfter = poolPrice(p2);
   
-  // Backrun: attacker sells Y
-  const { pool: p3, result: backrunResult } = executeTrade(p2, backrunResult ? victimResult.output : victimSize, "buyX");
+  // Backrun: attacker sells Y (sell the Y they bought)
+  const { pool: p3 } = executeTrade(p2, frontResult.output, "buyX");
   
   // MEV extracted = slippage amplification from sandwich
   const normalPool = createPool(params.reserveX, params.reserveY, params.feeRate);

@@ -89,6 +89,15 @@ const Index = () => {
           />
 
           <NavCard
+            title="Challenges"
+            description="Solve AMM design puzzles — earn stars across beginner, intermediate, and expert tiers"
+            icon={<Target className="w-5 h-5" />}
+            badge="New"
+            badgeColor="border-warning/30 text-warning"
+            onClick={() => navigate("/challenges")}
+          />
+
+          <NavCard
             title="AMM Library"
             description="Browse featured and community-made AMM designs"
             icon={<Library className="w-5 h-5" />}
