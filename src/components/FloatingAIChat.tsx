@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, Sparkles, X, Zap } from "lucide-react";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
+import { useAmmyContext } from "@/lib/ammy-context";
 
 const ROUTE_CONTEXT: Record<string, string> = {
   "/": "the homepage of Invariant Studio",
