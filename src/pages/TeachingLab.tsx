@@ -162,8 +162,8 @@ export default function TeachingLab() {
     } else if (courseModule > 0) {
       const prevMod = courseModule - 1;
       setCourseModule(prevMod);
-      setCourseStep(COURSE_MODULES[prevMod].steps.length - 1);
-      const mappedTab = MODULE_TAB_MAP[COURSE_MODULES[prevMod].id] as LessonTab;
+      setCourseStep(activeModules[prevMod].steps.length - 1);
+      const mappedTab = activeTabMap[activeModules[prevMod].id] as LessonTab;
       if (mappedTab) setTab(mappedTab);
     }
   };
@@ -171,19 +171,19 @@ export default function TeachingLab() {
   const handleCompleteModule = () => {
     const next = courseModule + 1;
     setCompletedModules(m => Math.max(m, courseModule + 1));
-    if (next >= COURSE_MODULES.length) {
+    if (next >= activeModules.length) {
       setCourseActive(false);
     } else {
       setCourseModule(next);
       setCourseStep(0);
-      const mappedTab = MODULE_TAB_MAP[COURSE_MODULES[next].id] as LessonTab;
+      const mappedTab = activeTabMap[activeModules[next].id] as LessonTab;
       if (mappedTab) setTab(mappedTab);
     }
   };
 
   const handleSkipCourse = () => {
     setCourseActive(false);
-    setCompletedModules(COURSE_MODULES.length);
+    setCompletedModules(activeModules.length);
   };
 
   const handleNavigateModule = (idx: number) => {
