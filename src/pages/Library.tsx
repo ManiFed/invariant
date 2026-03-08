@@ -136,13 +136,32 @@ const Library = () => {
     e.target.value = "";
   };
 
+  // Convert DB AMMs to AMMEntry format for the grid
+  const dbAsEntries: AMMEntry[] = useMemo(() =>
+    dbAMMs.map(d => ({
+      id: d.id,
+      name: d.name,
+      description: d.description,
+      formula: d.formula,
+      category: "community" as const,
+      author: d.author,
+      params: d.params,
+      _dbId: d.id, // marker to identify DB entries
+    })),
+    [dbAMMs]
+  );
+
+  const allCommunity = useMemo(() => [...communityAMMs, ...dbAsEntries], [communityAMMs, dbAsEntries]);
+
   const allAMMs = useMemo(() => {
-    const all = [...FAMOUS_AMMS, ...FEATURED_AMMS, ...communityAMMs];
+    const all = [...FAMOUS_AMMS, ...FEATURED_AMMS, ...allCommunity];
     const filtered = activeFilter === "all" ? all : all.filter(a => a.category === activeFilter);
     if (!searchQuery.trim()) return filtered;
     const q = searchQuery.toLowerCase();
     return filtered.filter(a => a.name.toLowerCase().includes(q) || a.formula.toLowerCase().includes(q) || a.description.toLowerCase().includes(q));
-  }, [activeFilter, communityAMMs, searchQuery]);
+  }, [activeFilter, allCommunity, searchQuery]);
+
+  const communityCount = allCommunity.length;
 
   const handleDownload = (amm: AMMEntry) => {
     const json = JSON.stringify({ name: amm.name, description: amm.description, formula: amm.formula, author: amm.author, params: amm.params }, null, 2);
