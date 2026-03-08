@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Star, CheckCircle2, XCircle, Lightbulb, RotateCcw } from "lucide-react";
+import { ArrowLeft, Play, Star, CheckCircle2, XCircle, Lightbulb, RotateCcw, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
