@@ -101,8 +101,8 @@ function computeSwapOutput(
 export function simulateMEV(config: MEVSimConfig): MEVResult {
   const { bins, feeRate, numBlocks, swapsPerBlock, attackerBudget } = config;
   
-  let reserveX = 1000;
-  let reserveY = 2_000_000;
+  let reserveX = 100;
+  let reserveY = 200_000;
   const events: MEVEvent[] = [];
   const blockSummaries: BlockSummary[] = [];
   const cumulative: MEVResult["cumulativeExtraction"] = [];
