@@ -993,7 +993,22 @@ export function runGeneration(
   // Select the new population (best POPULATION_SIZE)
   allCandidates.sort((a, b) => a.score - b.score);
   const newPop = allCandidates.slice(0, POPULATION_SIZE);
-  const newChampion = newPop[0];
+  const newChampion = newPop[0] ?? null;
+
+  // If no candidates survived validation, return previous population unchanged
+  if (!newChampion) {
+    events.push({
+      timestamp: Date.now(), regime: regimeConfig.id,
+      type: "generation-complete",
+      message: `Generation ${gen} for ${regimeConfig.label}: no valid candidates produced`,
+      generation: gen,
+    });
+    return {
+      newPopulation: { ...population, generation: gen },
+      newCandidates: [],
+      events,
+    };
+  }
 
   // Compute per-metric champions from the full candidate set
   const metricChampions = computeMetricChampions(allCandidates, population.metricChampions);
