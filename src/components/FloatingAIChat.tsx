@@ -38,6 +38,7 @@ export default function FloatingAIChat() {
   const [mood, setMood] = useState(0);
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
+  const { pageContext } = useAmmyContext();
 
   // Cycle mood emoji every 8s
   useEffect(() => {
