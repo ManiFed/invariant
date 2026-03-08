@@ -312,13 +312,53 @@ async function handleAiApi(req, res, pathname) {
   }
 }
 
+// ─── Price History API (CoinGecko proxy with caching) ──────────────────────
+
+const priceCache = new Map(); // { key: { data, fetchedAt } }
+const PRICE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+async function handlePriceApi(req, res, pathname, searchParams) {
+  if (pathname !== '/api/price-history' || req.method !== 'GET') return false;
+
+  const coin = searchParams.get('coin') || 'ethereum';
+  const days = Math.min(365, Math.max(1, Number(searchParams.get('days') || 365)));
+  const cacheKey = `${coin}-${days}`;
+
+  const cached = priceCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < PRICE_CACHE_TTL) {
+    return sendJson(res, 200, { prices: cached.data });
+  }
+
+  try {
+    const url = `https://api.coingecko.com/api/v3/coins/${coin}/market_chart?vs_currency=usd&days=${days}&interval=daily`;
+    const upstream = await fetch(url, { headers: { Accept: 'application/json' } });
+
+    if (!upstream.ok) {
+      return sendJson(res, 502, { error: `CoinGecko returned ${upstream.status}` });
+    }
+
+    const json = await upstream.json();
+    const prices = (json.prices || []).map(([ts, price]) => ({ timestamp: ts, price }));
+
+    priceCache.set(cacheKey, { data: prices, fetchedAt: Date.now() });
+    return sendJson(res, 200, { prices });
+  } catch (error) {
+    return sendJson(res, 500, { error: error instanceof Error ? error.message : 'Price fetch failed' });
+  }
+}
+
 const server = createServer(async (req, res) => {
-  const requestPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  const requestUrl = req.url || '/';
+  const [pathPart, queryPart] = requestUrl.split('?');
+  const requestPath = decodeURIComponent(pathPart);
+  const searchParams = new URLSearchParams(queryPart || '');
   const normalized = path.normalize(requestPath).replace(/^([.][.][/\\])+/, '');
   const candidatePath = path.join(distDir, normalized);
 
   const aiHandled = await handleAiApi(req, res, requestPath);
   if (aiHandled) return;
+  const priceHandled = await handlePriceApi(req, res, requestPath, searchParams);
+  if (priceHandled) return;
   const atlasHandled = await handleAtlasApi(req, res, requestPath);
   if (atlasHandled) return;
 

@@ -298,6 +298,67 @@ export function useDiscoveryEngine() {
     };
   }, [syncMode]);
 
+  // ─── Fork seed injection from Library ─────────────────────────────────────
+
+  useEffect(() => {
+    if (syncMode === "loading") return;
+    const raw = localStorage.getItem("atlas-fork-seed");
+    if (!raw) return;
+    localStorage.removeItem("atlas-fork-seed");
+
+    try {
+      const seed = JSON.parse(raw);
+      const regime: RegimeId = seed.regime || "low-vol";
+      const familyId: InvariantFamilyId = seed.familyId || "piecewise-bands";
+
+      let bins: Float64Array;
+      if (seed.bins && Array.isArray(seed.bins) && seed.bins.length > 0) {
+        bins = new Float64Array(seed.bins);
+      } else {
+        const family = INVARIANT_FAMILIES.find(f => f.id === familyId) || INVARIANT_FAMILIES[0];
+        bins = family.generateBins(seed.familyParams || family.sampleParams());
+      }
+      normalizeBins(bins);
+
+      const forkCandidate: Candidate = {
+        id: `fork_${Date.now().toString(36)}`,
+        bins,
+        familyId,
+        familyParams: seed.familyParams || {},
+        regime,
+        generation: 0,
+        metrics: { totalFees: 0, totalSlippage: 0, arbLeakage: 0, liquidityUtilization: 0, lpValueVsHodl: 1, maxDrawdown: 0, volatilityOfReturns: 0 },
+        features: { curvature: 0, curvatureGradient: 0, entropy: 0, symmetry: 0, tailDensityRatio: 0, peakConcentration: 0, concentrationWidth: 0 },
+        stability: 0,
+        score: 0,
+        timestamp: Date.now(),
+        source: "user-designed",
+        contributor: seed.name || "Library Fork",
+      };
+
+      setState(prev => {
+        const pop = prev.populations[regime];
+        const newCandidates = [forkCandidate, ...pop.candidates.slice(0, pop.candidates.length - 1)];
+        return {
+          ...prev,
+          populations: {
+            ...prev.populations,
+            [regime]: { ...pop, candidates: newCandidates },
+          },
+          activityLog: [...prev.activityLog, {
+            timestamp: Date.now(),
+            regime,
+            type: "generation-complete" as const,
+            message: `Forked "${seed.name || "Library AMM"}" into ${regime} population`,
+            generation: pop.generation,
+          }].slice(-200),
+        };
+      });
+    } catch (e) {
+      console.warn("Failed to inject fork seed:", e);
+    }
+  }, [syncMode]);
+
   // ─── Start/stop engine based on sync mode and role ────────────────────────
 
   useEffect(() => {
