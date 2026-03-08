@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Play, Pause, SkipForward, RotateCcw, AlertTriangle, TrendingDown, TrendingUp, Minus, Info, Gauge, BarChart3, GitCompare } from "lucide-react";
