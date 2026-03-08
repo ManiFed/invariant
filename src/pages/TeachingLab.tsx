@@ -15,6 +15,18 @@ export default function TeachingLab() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
+  // Level selection state
+  const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
+  const [comingSoonLevel, setComingSoonLevel] = useState<"intermediate" | "advanced" | null>(null);
+
+  const handleSelectLevel = (level: CourseLevel) => {
+    if (level === "beginner") {
+      setSelectedLevel("beginner");
+    } else {
+      setComingSoonLevel(level);
+    }
+  };
+
   // Course state
   const [courseActive, setCourseActive] = useState(true);
   const [courseModule, setCourseModule] = useState(0);
