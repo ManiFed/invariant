@@ -40,8 +40,8 @@ export default function CompilerLab() {
   useEffect(() => {
     const design = designs.find(d => d.id === selectedDesign);
     if (!design) return;
-    const code = generateSolidity(design.name, design.formula, design.params, design.bins);
-    setSolidityCode(code);
+    const result = generateSolidity({ name: design.name, familyParams: design.params, bins: design.bins });
+    setSolidityCode(result.code);
     setCompiled(null);
     setTests(null);
     setDeployStatus(null);
