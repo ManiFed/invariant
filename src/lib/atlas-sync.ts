@@ -386,7 +386,45 @@ export class AtlasSync {
 
   sendGoodbye() {
     if (!this._connected || this._role !== "leader") return;
-    this.postEvent("leader-goodbye", { ts: Date.now() });
+    // Include a full state snapshot so followers can adopt the final state
+    const state = this.getState();
+    if (state.archive.length > 0 || state.totalGenerations > 0) {
+      const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
+      const importantIds = new Set<string>();
+      const populationSnapshots = {} as Record<RegimeId, SyncPopulationInfo>;
+      for (const rid of regimes) {
+        const pop = state.populations[rid];
+        if (pop.champion) importantIds.add(pop.champion.id);
+        const metricChampionIds: Record<ChampionMetric, string | null> = { fees: null, utilization: null, lpValue: null, lowSlippage: null, lowArbLeak: null, lowDrawdown: null, stability: null };
+        for (const [metric, candidate] of Object.entries(pop.metricChampions)) {
+          if (candidate) { importantIds.add(candidate.id); metricChampionIds[metric as ChampionMetric] = candidate.id; }
+        }
+        populationSnapshots[rid] = { generation: pop.generation, totalEvaluated: pop.totalEvaluated, championId: pop.champion?.id ?? null, metricChampionIds };
+      }
+      const candidateMap = new Map<string, Candidate>();
+      for (const id of importantIds) {
+        const inArchive = state.archive.find(c => c.id === id);
+        if (inArchive) { candidateMap.set(id, inArchive); continue; }
+        for (const rid of regimes) {
+          const pop = state.populations[rid];
+          if (pop.champion?.id === id) { candidateMap.set(id, pop.champion); break; }
+          for (const mc of Object.values(pop.metricChampions)) { if (mc?.id === id) { candidateMap.set(id, mc); break; } }
+        }
+      }
+      const remaining = MAX_SYNC_CANDIDATES - candidateMap.size;
+      if (remaining > 0) { for (const c of state.archive.slice(-remaining)) { if (!candidateMap.has(c.id)) candidateMap.set(c.id, c); } }
+      const snapshot: SyncSnapshot = {
+        totalGenerations: state.totalGenerations,
+        candidates: Array.from(candidateMap.values()).map(serializeCandidate),
+        archiveSize: state.archive.length,
+        populations: populationSnapshots,
+        activityLog: state.activityLog.slice(-50),
+        ts: Date.now(),
+      };
+      this.postEvent("leader-goodbye", snapshot);
+    } else {
+      this.postEvent("leader-goodbye", { ts: Date.now() });
+    }
   }
 
   cleanup() {
