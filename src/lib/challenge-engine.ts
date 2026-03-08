@@ -291,6 +291,7 @@ export const challenges: Challenge[] = [
       { metric: "il_90d", label: "IL after 90 days", operator: "<", target: 8, unit: "%", weight: 2 },
     ],
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 300, reserveY: 600000, feeRate: 0.008, amplification: 1, concentrationLower: 0.7, concentrationUpper: 1.5 },
     hints: [
       "Volatile markets generate more arb volume → more fees.",
       "But volatile markets also mean more IL. Balance is key.",
