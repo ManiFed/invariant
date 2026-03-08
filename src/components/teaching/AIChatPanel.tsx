@@ -55,7 +55,9 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    });
   }, [messages]);
 
   useEffect(() => { saveMessages(messages); }, [messages]);
