@@ -21,6 +21,7 @@ import CompilerLab from "./pages/CompilerLab";
 import Challenges from "./pages/Challenges";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
+import { AmmyContextProvider } from "./lib/ammy-context";
 import ForecastIndex from "./forecasting/pages/ForecastIndex";
 import Lessons from "./forecasting/pages/Lessons";
 import Arena from "./forecasting/pages/Arena";
