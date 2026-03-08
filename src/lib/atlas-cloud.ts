@@ -158,6 +158,8 @@ export async function loadAtlasState(): Promise<{ state: EngineState | null; clo
 }
 
 export async function triggerGeneration(regime?: RegimeId): Promise<{ success: boolean; generation?: number; error?: string }> {
+  const status = await checkCloudStatus();
+  if (status !== "connected") return { success: false, error: `Cloud status: ${status}` };
   try {
     const data = await atlasApi<{ success: boolean; generation: number }>("/generate", {
       method: "POST",
