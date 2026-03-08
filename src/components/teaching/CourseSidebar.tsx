@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown } from "lucide-react";
-import { COURSE_MODULES, type CourseStep } from "@/lib/course-content";
+import { COURSE_MODULES, type CourseStep, type CourseModule } from "@/lib/course-content";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
@@ -17,6 +17,7 @@ interface Props {
   totalModules: number;
   completedModules: number;
   onNavigateModule: (idx: number) => void;
+  modules?: CourseModule[];
 }
 
 function MiniCalculator() {
@@ -369,12 +370,206 @@ function LessonVisual({ visual }: { visual?: string }) {
         <div className="text-center text-[9px] font-mono text-warning mt-1">The question: do fees &gt; IL?</div>
       </div>
     ),
+    // ── Intermediate visuals ──
+    "concentrated-range": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 200 100" className="w-full max-w-[220px]" fill="none">
+          <path d="M 10 85 Q 30 60 50 45 Q 70 35 100 28 Q 130 22 160 18 Q 180 16 195 15" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" opacity="0.3" fill="none" />
+          <rect x="65" y="12" width="70" height="78" rx="4" fill="hsl(var(--chart-1))" opacity="0.12" stroke="hsl(var(--chart-1))" strokeWidth="1" strokeDasharray="3 2" />
+          <path d="M 65 42 Q 80 34 100 28 Q 120 23 135 20" stroke="hsl(var(--chart-1))" strokeWidth="2.5" fill="none" />
+          <circle cx="65" cy="42" r="3" fill="hsl(var(--chart-2))" />
+          <circle cx="135" cy="20" r="3" fill="hsl(var(--chart-2))" />
+          <text x="55" y="55" fontSize="6" fill="hsl(var(--chart-2))">pₗ</text>
+          <text x="135" y="14" fontSize="6" fill="hsl(var(--chart-2))">pᵤ</text>
+          <text x="82" y="70" fontSize="7" fill="hsl(var(--chart-1))">Your range</text>
+          <text x="15" y="95" fontSize="5" fill="hsl(var(--muted-foreground))">Full range (wasted capital) →</text>
+        </svg>
+      </div>
+    ),
+    "capital-efficiency-bars": (
+      <div className="py-3">
+        <div className="flex items-end justify-center gap-3 h-20">
+          {[
+            { label: "Full", eff: "1x", h: 10, color: "bg-muted-foreground/30" },
+            { label: "±20%", eff: "3x", h: 30, color: "bg-chart-2/50" },
+            { label: "±10%", eff: "6x", h: 55, color: "bg-chart-1/50" },
+            { label: "±5%", eff: "20x", h: 80, color: "bg-warning/50" },
+          ].map((d, i) => (
+            <motion.div key={d.label} className="flex flex-col items-center gap-0.5"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.15 }}>
+              <span className="text-[8px] font-mono text-warning">{d.eff}</span>
+              <motion.div className={`w-9 rounded-t ${d.color}`}
+                initial={{ height: 0 }} animate={{ height: `${d.h}px` }} transition={{ delay: i * 0.15 + 0.1, duration: 0.4 }} />
+              <span className="text-[8px] font-mono text-muted-foreground">{d.label}</span>
+            </motion.div>
+          ))}
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center mt-1">Range width → Capital efficiency</div>
+      </div>
+    ),
+    "amplified-il": (
+      <div className="py-3 space-y-2">
+        <div className="flex gap-2">
+          <div className="flex-1 rounded-lg bg-muted/50 border border-border p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">Full range IL</div>
+            <div className="text-sm font-mono text-chart-3">−5.7%</div>
+          </div>
+          <div className="flex-1 rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">±5% range IL</div>
+            <div className="text-sm font-mono text-destructive font-bold">−100%</div>
+          </div>
+        </div>
+        <motion.div className="text-center text-[9px] text-muted-foreground" animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }}>
+          Concentrated = amplified gains AND losses
+        </motion.div>
+      </div>
+    ),
+    "narrow-vs-wide": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 200 80" className="w-full max-w-[220px]" fill="none">
+          <rect x="80" y="5" width="40" height="70" rx="3" fill="hsl(var(--chart-1))" opacity="0.15" stroke="hsl(var(--chart-1))" strokeWidth="1" />
+          <text x="87" y="42" fontSize="6" fill="hsl(var(--chart-1))">±5%</text>
+          <text x="82" y="52" fontSize="5" fill="hsl(var(--chart-1))">High eff.</text>
+          <rect x="30" y="5" width="140" height="70" rx="3" fill="hsl(var(--chart-2))" opacity="0.08" stroke="hsl(var(--chart-2))" strokeWidth="1" strokeDasharray="3 2" />
+          <text x="35" y="16" fontSize="5" fill="hsl(var(--chart-2))">±50% — Safer, lower eff.</text>
+          <line x1="100" y1="0" x2="100" y2="80" stroke="hsl(var(--warning))" strokeWidth="1" strokeDasharray="2 2" />
+          <text x="90" y="78" fontSize="5" fill="hsl(var(--warning))">Current</text>
+        </svg>
+      </div>
+    ),
+    "fee-tier-spectrum": (
+      <div className="py-3">
+        <div className="flex items-end justify-center gap-2 h-16">
+          {[
+            { tier: "0.01%", vol: "Stables", h: 60, color: "bg-chart-1/50" },
+            { tier: "0.05%", vol: "Majors", h: 50, color: "bg-chart-2/50" },
+            { tier: "0.30%", vol: "General", h: 35, color: "bg-warning/50" },
+            { tier: "1.00%", vol: "Exotic", h: 15, color: "bg-chart-3/50" },
+          ].map((d, i) => (
+            <motion.div key={d.tier} className="flex flex-col items-center gap-0.5"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.12 }}>
+              <motion.div className={`w-10 rounded-t ${d.color}`}
+                initial={{ height: 0 }} animate={{ height: `${d.h}px` }} transition={{ delay: i * 0.12, duration: 0.4 }} />
+              <span className="text-[7px] font-mono text-foreground">{d.tier}</span>
+              <span className="text-[6px] text-muted-foreground">{d.vol}</span>
+            </motion.div>
+          ))}
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center mt-1">Volume distribution by fee tier</div>
+      </div>
+    ),
+    "lbp-weight-shift": (
+      <div className="py-3 space-y-2">
+        <div className="flex items-center gap-2 text-[9px]">
+          <div className="flex-1">
+            <div className="text-muted-foreground mb-0.5">Start: 95/5</div>
+            <div className="h-2.5 rounded-full bg-secondary overflow-hidden flex">
+              <motion.div className="h-full bg-chart-1/60 rounded-l-full" initial={{ width: 0 }} animate={{ width: "95%" }} transition={{ duration: 0.8 }} />
+              <div className="h-full bg-chart-2/60 flex-1 rounded-r-full" />
+            </div>
+          </div>
+        </div>
+        <motion.div className="text-center text-lg" animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity }}>⏳</motion.div>
+        <div className="flex items-center gap-2 text-[9px]">
+          <div className="flex-1">
+            <div className="text-muted-foreground mb-0.5">End: 50/50</div>
+            <div className="h-2.5 rounded-full bg-secondary overflow-hidden flex">
+              <motion.div className="h-full bg-chart-1/60 rounded-l-full" initial={{ width: "95%" }} animate={{ width: "50%" }} transition={{ duration: 1.5, delay: 0.5 }} />
+              <div className="h-full bg-chart-2/60 flex-1 rounded-r-full" />
+            </div>
+          </div>
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center">Weight shift creates natural selling pressure</div>
+      </div>
+    ),
+    "weighted-curve": (
+      <div className="py-3 flex flex-col items-center gap-2">
+        <div className="text-sm font-mono font-bold text-foreground">x<sup>w₁</sup> × y<sup>w₂</sup> = k</div>
+        <div className="flex gap-2 text-[9px]">
+          <div className="px-2 py-1 rounded bg-chart-1/10 border border-chart-1/20 font-mono">w₁ = 0.80</div>
+          <motion.div animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>→</motion.div>
+          <div className="px-2 py-1 rounded bg-chart-2/10 border border-chart-2/20 font-mono">w₁ = 0.50</div>
+        </div>
+        <div className="text-[9px] text-muted-foreground">Shifting weight changes the curve shape</div>
+      </div>
+    ),
+    "oracle-spot-vs-twap": (
+      <div className="py-3 space-y-2">
+        <div className="flex gap-2">
+          <div className="flex-1 rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">Spot (1 block)</div>
+            <motion.div className="text-sm font-mono text-destructive" animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}>
+              $9,999
+            </motion.div>
+            <div className="text-[8px] text-destructive/60">⚠️ Manipulable</div>
+          </div>
+          <div className="flex-1 rounded-lg bg-success/10 border border-success/20 p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">TWAP (30 min)</div>
+            <div className="text-sm font-mono text-success">$2,001</div>
+            <div className="text-[8px] text-success/60">✓ Robust</div>
+          </div>
+        </div>
+      </div>
+    ),
+    "twap-accumulator": (
+      <div className="py-3 space-y-1.5">
+        <div className="text-[9px] font-mono text-muted-foreground text-center mb-1">Price accumulator over blocks:</div>
+        {[
+          { block: "101", price: "$2,000", acc: "2,000" },
+          { block: "102", price: "$2,010", acc: "4,010" },
+          { block: "103", price: "$2,005", acc: "6,015" },
+          { block: "104", price: "$9,999", acc: "16,014" },
+          { block: "105", price: "$2,002", acc: "18,016" },
+        ].map((d, i) => (
+          <motion.div key={d.block} className={`flex items-center gap-2 text-[9px] ${i === 3 ? "text-destructive" : "text-muted-foreground"}`}
+            initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.12 }}>
+            <span className="font-mono w-8">#{d.block}</span>
+            <span className="font-mono w-14">{d.price}</span>
+            <span className="font-mono text-foreground">Σ={d.acc}</span>
+          </motion.div>
+        ))}
+        <div className="text-[9px] text-muted-foreground text-center mt-1">TWAP = Σ/n = $3,603 — manipulation diluted</div>
+      </div>
+    ),
+    "multi-hop-arb": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 180 100" className="w-full max-w-[200px]" fill="none">
+          <circle cx="90" cy="20" r="16" fill="hsl(var(--chart-1))" opacity="0.15" stroke="hsl(var(--chart-1))" strokeWidth="1" />
+          <text x="80" y="23" fontSize="7" fill="hsl(var(--chart-1))">ETH</text>
+          <circle cx="40" cy="75" r="16" fill="hsl(var(--chart-2))" opacity="0.15" stroke="hsl(var(--chart-2))" strokeWidth="1" />
+          <text x="28" y="78" fontSize="7" fill="hsl(var(--chart-2))">USDC</text>
+          <circle cx="140" cy="75" r="16" fill="hsl(var(--chart-3))" opacity="0.15" stroke="hsl(var(--chart-3))" strokeWidth="1" />
+          <text x="132" y="78" fontSize="7" fill="hsl(var(--chart-3))">DAI</text>
+          <line x1="78" y1="32" x2="52" y2="63" stroke="hsl(var(--warning))" strokeWidth="1.5" markerEnd="url(#arrowhead)" />
+          <line x1="56" y1="75" x2="124" y2="75" stroke="hsl(var(--warning))" strokeWidth="1.5" />
+          <line x1="148" y1="60" x2="100" y2="32" stroke="hsl(var(--warning))" strokeWidth="1.5" />
+          <text x="55" y="95" fontSize="6" fill="hsl(var(--warning))">Profitable cycle = arb ✓</text>
+        </svg>
+      </div>
+    ),
+    "sandwich-attack": (
+      <div className="py-3 space-y-1.5">
+        {[
+          { step: "① Frontrun", desc: "Bot buys 50 ETH", color: "text-destructive" },
+          { step: "② Your trade", desc: "You buy 10 ETH (worse price!)", color: "text-warning" },
+          { step: "③ Backrun", desc: "Bot sells 50 ETH for profit", color: "text-destructive" },
+        ].map((d, i) => (
+          <motion.div key={d.step} className="flex items-center gap-2 text-[9px]"
+            initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.2 }}>
+            <span className={`font-mono ${d.color}`}>{d.step}</span>
+            <span className="text-muted-foreground">{d.desc}</span>
+          </motion.div>
+        ))}
+        <div className="text-[9px] text-muted-foreground text-center mt-1">You pay more; bot profits from the difference</div>
+      </div>
+    ),
   };
 
   return visuals[visual] || null;
 }
 
-export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule }: Props) {
+export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules }: Props) {
+  const courseModules = modules || COURSE_MODULES;
   const [showAI, setShowAI] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -382,7 +577,7 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
   const [followUpAnswer, setFollowUpAnswer] = useState<number | null>(null);
   const [followUpAnswered, setFollowUpAnswered] = useState(false);
 
-  const mod = COURSE_MODULES[currentModule];
+  const mod = courseModules[currentModule];
   if (!mod) return null;
   const step = mod.steps[currentStep];
   if (!step) return null;
@@ -440,7 +635,7 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
             </PopoverTrigger>
             <PopoverContent side="bottom" align="start" className="w-56 p-1.5">
               <div className="flex flex-col gap-0.5">
-                {COURSE_MODULES.map((m, i) => {
+                {courseModules.map((m, i) => {
                   const isComplete = i < completedModules;
                   const isCurrent = i === currentModule;
                   const canClick = isComplete || isCurrent;

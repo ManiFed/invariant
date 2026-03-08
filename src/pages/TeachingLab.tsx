@@ -8,6 +8,7 @@ import LabLearning from "@/components/teaching/LabLearning";
 import CourseSidebar from "@/components/teaching/CourseSidebar";
 import CourseLevelPicker, { ComingSoonOverlay, type CourseLevel } from "@/components/teaching/CourseLevelPicker";
 import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
+import { INTERMEDIATE_MODULES, INTERMEDIATE_TAB_MAP } from "@/lib/intermediate-course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -17,23 +18,27 @@ export default function TeachingLab() {
 
   // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
-  const [comingSoonLevel, setComingSoonLevel] = useState<"intermediate" | "advanced" | null>(null);
+  const [comingSoonLevel, setComingSoonLevel] = useState<"advanced" | null>(null);
 
   const handleSelectLevel = (level: CourseLevel) => {
-    if (level === "beginner") {
-      setSelectedLevel("beginner");
+    if (level === "advanced") {
+      setComingSoonLevel("advanced");
     } else {
-      setComingSoonLevel(level);
+      setSelectedLevel(level);
     }
   };
+
+  // Resolve which modules/tab-map to use based on selected level
+  const activeModules = selectedLevel === "intermediate" ? INTERMEDIATE_MODULES : COURSE_MODULES;
+  const activeTabMap = selectedLevel === "intermediate" ? INTERMEDIATE_TAB_MAP : MODULE_TAB_MAP;
 
   // Course state
   const [courseActive, setCourseActive] = useState(true);
   const [courseModule, setCourseModule] = useState(0);
   const [courseStep, setCourseStep] = useState(0);
   const [completedModules, setCompletedModules] = useState(0);
-  const revealedSections = getRevealedSections(completedModules);
-  const courseComplete = completedModules >= COURSE_MODULES.length;
+  const revealedSections = getRevealedSections(completedModules, activeModules);
+  const courseComplete = completedModules >= activeModules.length;
 
   // Simulation state
   const [tab, setTab] = useState<LessonTab>("slippage");
@@ -157,8 +162,8 @@ export default function TeachingLab() {
     } else if (courseModule > 0) {
       const prevMod = courseModule - 1;
       setCourseModule(prevMod);
-      setCourseStep(COURSE_MODULES[prevMod].steps.length - 1);
-      const mappedTab = MODULE_TAB_MAP[COURSE_MODULES[prevMod].id] as LessonTab;
+      setCourseStep(activeModules[prevMod].steps.length - 1);
+      const mappedTab = activeTabMap[activeModules[prevMod].id] as LessonTab;
       if (mappedTab) setTab(mappedTab);
     }
   };
@@ -166,19 +171,19 @@ export default function TeachingLab() {
   const handleCompleteModule = () => {
     const next = courseModule + 1;
     setCompletedModules(m => Math.max(m, courseModule + 1));
-    if (next >= COURSE_MODULES.length) {
+    if (next >= activeModules.length) {
       setCourseActive(false);
     } else {
       setCourseModule(next);
       setCourseStep(0);
-      const mappedTab = MODULE_TAB_MAP[COURSE_MODULES[next].id] as LessonTab;
+      const mappedTab = activeTabMap[activeModules[next].id] as LessonTab;
       if (mappedTab) setTab(mappedTab);
     }
   };
 
   const handleSkipCourse = () => {
     setCourseActive(false);
-    setCompletedModules(COURSE_MODULES.length);
+    setCompletedModules(activeModules.length);
   };
 
   const handleNavigateModule = (idx: number) => {
@@ -249,9 +254,10 @@ export default function TeachingLab() {
               onGoBack={handleGoBack}
               onCompleteModule={handleCompleteModule}
               onSkipCourse={handleSkipCourse}
-              totalModules={COURSE_MODULES.length}
+              totalModules={activeModules.length}
               completedModules={completedModules}
               onNavigateModule={handleNavigateModule}
+              modules={activeModules}
             />
           </div>
         ) : (
@@ -292,7 +298,7 @@ export default function TeachingLab() {
           <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
           {!courseComplete && (
             <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
-              MODULE {courseModule + 1}/{COURSE_MODULES.length}
+              MODULE {courseModule + 1}/{activeModules.length}
             </span>
           )}
           {courseComplete && (
@@ -302,6 +308,12 @@ export default function TeachingLab() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setSelectedLevel(null); setComingSoonLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
+            className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Change Level
+          </button>
           {courseComplete && (
             <button
               onClick={() => { setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
@@ -357,9 +369,10 @@ export default function TeachingLab() {
               onGoBack={handleGoBack}
               onCompleteModule={handleCompleteModule}
               onSkipCourse={handleSkipCourse}
-              totalModules={COURSE_MODULES.length}
+              totalModules={activeModules.length}
               completedModules={completedModules}
               onNavigateModule={handleNavigateModule}
+              modules={activeModules}
             />
           ) : (
             <LabLearning
