@@ -7,6 +7,26 @@ import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
 
+// Deterministic shuffle: produces a stable permutation from a string seed
+function seededShuffle<T>(arr: T[], seed: string): { items: T[]; indexMap: number[] } {
+  // Simple hash from string
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
+  }
+  const indices = arr.map((_, i) => i);
+  // Fisher-Yates with seeded pseudo-random
+  for (let i = indices.length - 1; i > 0; i--) {
+    h = Math.abs(((h * 1103515245 + 12345) | 0));
+    const j = h % (i + 1);
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return {
+    items: indices.map(i => arr[i]),
+    indexMap: indices, // indexMap[displayIdx] = originalIdx
+  };
+}
+
 interface Props {
   currentModule: number;
   currentStep: number;
@@ -568,6 +588,70 @@ function LessonVisual({ visual }: { visual?: string }) {
   return visuals[visual] || null;
 }
 
+// Shuffled quiz component — shuffles options deterministically by question text
+function ShuffledQuiz({
+  question, options, correctIndex, explanation, wrongExplanation,
+  selectedAnswer, answered, onAnswer, isFollowUp,
+}: {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  wrongExplanation: string;
+  selectedAnswer: number | null;
+  answered: boolean;
+  onAnswer: (idx: number) => void;
+  isFollowUp?: boolean;
+}) {
+  const { items: shuffledOptions, indexMap } = useMemo(
+    () => seededShuffle(options, question),
+    [options, question]
+  );
+  const gotCorrect = selectedAnswer !== null && indexMap[selectedAnswer] === correctIndex;
+  const py = isFollowUp ? "py-1.5" : "py-2";
+
+  return (
+    <>
+      <div className="space-y-1">
+        {shuffledOptions.map((opt, displayIdx) => {
+          const origIdx = indexMap[displayIdx];
+          const isCorrect = origIdx === correctIndex;
+          const isSelected = selectedAnswer === displayIdx;
+          let optClass = "bg-background border-border text-foreground hover:bg-secondary cursor-pointer";
+          if (answered) {
+            if (isCorrect) optClass = "bg-success/10 border-success/30 text-success";
+            else if (isSelected && !isCorrect) optClass = "bg-destructive/10 border-destructive/30 text-destructive";
+            else optClass = "bg-background border-border text-muted-foreground opacity-50";
+          }
+          return (
+            <button
+              key={displayIdx}
+              onClick={() => onAnswer(displayIdx)}
+              disabled={answered}
+              className={`w-full text-left text-[10px] px-2.5 ${py} rounded-lg border transition-all ${optClass}`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {answered && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-2 rounded-lg text-[10px] leading-relaxed ${
+            gotCorrect
+              ? "bg-success/10 border border-success/20 text-foreground"
+              : "bg-destructive/10 border border-destructive/20 text-foreground"
+          }`}
+        >
+          {gotCorrect ? explanation : wrongExplanation}
+        </motion.div>
+      )}
+    </>
+  );
+}
+
 export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules }: Props) {
   const courseModules = modules || COURSE_MODULES;
   const [showAI, setShowAI] = useState(false);
@@ -726,41 +810,16 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                       <div className="p-2.5 rounded-lg bg-secondary border border-border">
                         <p className="text-[11px] font-medium text-foreground">{step.question}</p>
                       </div>
-                      <div className="space-y-1">
-                        {step.options.map((opt, i) => {
-                          const isCorrect = i === step.correctIndex;
-                          const isSelected = selectedAnswer === i;
-                          let optClass = "bg-background border-border text-foreground hover:bg-secondary cursor-pointer";
-                          if (answered) {
-                            if (isCorrect) optClass = "bg-success/10 border-success/30 text-success";
-                            else if (isSelected && !isCorrect) optClass = "bg-destructive/10 border-destructive/30 text-destructive";
-                            else optClass = "bg-background border-border text-muted-foreground opacity-50";
-                          }
-                          return (
-                            <button
-                              key={i}
-                              onClick={() => handleQuizAnswer(i)}
-                              disabled={answered}
-                              className={`w-full text-left text-[10px] px-2.5 py-2 rounded-lg border transition-all ${optClass}`}
-                            >
-                              {opt}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {answered && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className={`p-2 rounded-lg text-[10px] leading-relaxed ${
-                            selectedAnswer === step.correctIndex
-                              ? "bg-success/10 border border-success/20 text-foreground"
-                              : "bg-destructive/10 border border-destructive/20 text-foreground"
-                          }`}
-                        >
-                          {selectedAnswer === step.correctIndex ? step.explanation : step.wrongExplanation}
-                        </motion.div>
-                      )}
+                      <ShuffledQuiz
+                        question={step.question}
+                        options={step.options}
+                        correctIndex={step.correctIndex}
+                        explanation={step.explanation}
+                        wrongExplanation={step.wrongExplanation}
+                        selectedAnswer={selectedAnswer}
+                        answered={answered}
+                        onAnswer={handleQuizAnswer}
+                      />
                       {answered && step.followUpQuiz && !followUpActive && (
                         <button
                           onClick={() => setFollowUpActive(true)}
@@ -774,41 +833,17 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                           <div className="p-2 rounded-lg bg-secondary border border-border">
                             <p className="text-[10px] font-medium text-foreground">{step.followUpQuiz.question}</p>
                           </div>
-                          <div className="space-y-1">
-                            {step.followUpQuiz.options.map((opt, i) => {
-                              const isCorrect = i === step.followUpQuiz!.correctIndex;
-                              const isSelected = followUpAnswer === i;
-                              let optClass = "bg-background border-border text-foreground hover:bg-secondary cursor-pointer";
-                              if (followUpAnswered) {
-                                if (isCorrect) optClass = "bg-success/10 border-success/30 text-success";
-                                else if (isSelected && !isCorrect) optClass = "bg-destructive/10 border-destructive/30 text-destructive";
-                                else optClass = "bg-background border-border text-muted-foreground opacity-50";
-                              }
-                              return (
-                                <button
-                                  key={i}
-                                  onClick={() => handleFollowUpAnswer(i)}
-                                  disabled={followUpAnswered}
-                                  className={`w-full text-left text-[10px] px-2.5 py-1.5 rounded-lg border transition-all ${optClass}`}
-                                >
-                                  {opt}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {followUpAnswered && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 4 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className={`p-2 rounded-lg text-[10px] leading-relaxed ${
-                                followUpAnswer === step.followUpQuiz.correctIndex
-                                  ? "bg-success/10 border border-success/20 text-foreground"
-                                  : "bg-destructive/10 border border-destructive/20 text-foreground"
-                              }`}
-                            >
-                              {followUpAnswer === step.followUpQuiz.correctIndex ? step.followUpQuiz.explanation : step.followUpQuiz.wrongExplanation}
-                            </motion.div>
-                          )}
+                          <ShuffledQuiz
+                            question={step.followUpQuiz.question}
+                            options={step.followUpQuiz.options}
+                            correctIndex={step.followUpQuiz.correctIndex}
+                            explanation={step.followUpQuiz.explanation}
+                            wrongExplanation={step.followUpQuiz.wrongExplanation}
+                            selectedAnswer={followUpAnswer}
+                            answered={followUpAnswered}
+                            onAnswer={handleFollowUpAnswer}
+                            isFollowUp
+                          />
                         </motion.div>
                       )}
                       {step.calculatorNeeded && <MiniCalculator />}
