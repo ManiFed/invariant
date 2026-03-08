@@ -22,16 +22,12 @@ export default function TeachingLab() {
   const [comingSoonLevel, setComingSoonLevel] = useState<"advanced" | null>(null);
 
   const handleSelectLevel = (level: CourseLevel) => {
-    if (level === "advanced") {
-      setComingSoonLevel("advanced");
-    } else {
-      setSelectedLevel(level);
-    }
+    setSelectedLevel(level);
   };
 
   // Resolve which modules/tab-map to use based on selected level
-  const activeModules = selectedLevel === "intermediate" ? INTERMEDIATE_MODULES : COURSE_MODULES;
-  const activeTabMap = selectedLevel === "intermediate" ? INTERMEDIATE_TAB_MAP : MODULE_TAB_MAP;
+  const activeModules = selectedLevel === "advanced" ? ADVANCED_MODULES : selectedLevel === "intermediate" ? INTERMEDIATE_MODULES : COURSE_MODULES;
+  const activeTabMap = selectedLevel === "advanced" ? ADVANCED_TAB_MAP : selectedLevel === "intermediate" ? INTERMEDIATE_TAB_MAP : MODULE_TAB_MAP;
 
   // Course state
   const [courseActive, setCourseActive] = useState(true);
