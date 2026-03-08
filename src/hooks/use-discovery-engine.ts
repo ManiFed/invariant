@@ -212,7 +212,7 @@ export function useDiscoveryEngine() {
               return cloudState || persistedState;
             })();
 
-            if (pickedState && pickedState.archive.length > 0) {
+            if (hasRecoverableState(pickedState)) {
               setState(normalizeLoadedState(pickedState));
             }
           }
