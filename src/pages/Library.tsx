@@ -1,12 +1,14 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, Star, Users, Award, X, Download, Search, ThumbsUp } from "lucide-react";
+import { ArrowLeft, Upload, Star, Users, Award, X, Download, Search, ThumbsUp, Code, GitFork, Trophy, BarChart3 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, AreaChart, Area } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { loadLibraryAMMs, upvoteLibraryAMM, type LibraryAMM } from "@/lib/library-persistence";
 import { NUM_BINS, binPrice } from "@/lib/discovery-engine";
+import SolidityExportModal from "@/components/library/SolidityExportModal";
+import HistoricalBacktest from "@/components/library/HistoricalBacktest";
 
 interface AMMEntry {
   id: string;
@@ -41,19 +43,13 @@ function evalCurveForCard(amm: AMMEntry): { x: number; y: number }[] {
     const x = i * 5;
     try {
       let y: number;
-      
-      // Handle different curve types based on formula patterns
       if (amm.id === "curve-stableswap") {
-        // StableSwap: hybrid constant sum + constant product
         const A = amp || 100;
         y = (k - x) * A / (A + 1) + k / (A * x + k / A);
         y = Math.max(0.1, y);
       } else if (amm.id === "solidly-ve33") {
-        // x³y + xy³ = k → solve for y numerically
-        // Approximate: for equal weights near balance
-        const target = k * 100; // scale up
-        // Newton's method: f(y) = x³y + xy³ - target = 0
-        y = Math.sqrt(target / x); // initial guess
+        const target = k * 100;
+        y = Math.sqrt(target / x);
         for (let iter = 0; iter < 10; iter++) {
           const f = x * x * x * y + x * y * y * y - target;
           const fp = x * x * x + 3 * x * y * y;
@@ -62,11 +58,9 @@ function evalCurveForCard(amm: AMMEntry): { x: number; y: number }[] {
           if (y <= 0) { y = 0.1; break; }
         }
       } else if (amm.id === "cubic-mean") {
-        // x³ + y³ = k
         const rem = k * 1000 - x * x * x;
         y = rem > 0 ? Math.pow(rem, 1 / 3) : 0;
       } else if (amm.id === "uniswap-v3") {
-        // Concentrated: (√x - √pₐ)(√y - √pᵦ) = L²
         const sqrtPa = Math.sqrt(50);
         const L2 = k / 10;
         const sqrtX = Math.sqrt(x);
@@ -74,10 +68,8 @@ function evalCurveForCard(amm: AMMEntry): { x: number; y: number }[] {
         const sqrtY = L2 / (sqrtX - sqrtPa) + Math.sqrt(200);
         y = sqrtY * sqrtY;
       } else if (amm.id === "cpmm-sqrt") {
-        // √(x·y) = √k → x·y = k
         y = k / x;
       } else {
-        // General weighted: x^wA · y^wB = k
         y = Math.pow(k / Math.pow(x, wA), 1 / wB);
       }
 
@@ -89,6 +81,50 @@ function evalCurveForCard(amm: AMMEntry): { x: number; y: number }[] {
   return data;
 }
 
+// ─── Leaderboard helpers ──────────────────────────────────────────────────
+const REGIME_ORDER = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
+const RANK_STYLES = ["text-yellow-500", "text-zinc-400", "text-amber-700"];
+
+function groupByRegime(amms: LibraryAMM[]): Record<string, LibraryAMM[]> {
+  const groups: Record<string, LibraryAMM[]> = {};
+  for (const amm of amms) {
+    const r = amm.regime || "unknown";
+    if (!groups[r]) groups[r] = [];
+    groups[r].push(amm);
+  }
+  // Sort each group by score ascending (lower = better)
+  for (const key of Object.keys(groups)) {
+    groups[key].sort((a, b) => (a.score ?? Infinity) - (b.score ?? Infinity));
+  }
+  return groups;
+}
+
+// ─── Fork to Atlas ────────────────────────────────────────────────────────
+function forkToAtlas(amm: LibraryAMM, navigate: ReturnType<typeof useNavigate>) {
+  const seed = {
+    bins: amm.bins,
+    familyId: amm.family_id || "piecewise-bands",
+    familyParams: amm.family_params || {},
+    regime: amm.regime || "low-vol",
+    name: amm.name,
+  };
+  localStorage.setItem("atlas-fork-seed", JSON.stringify(seed));
+  navigate("/labs/discovery");
+}
+
+function forkFamousToAtlas(amm: AMMEntry, navigate: ReturnType<typeof useNavigate>) {
+  // Famous AMMs don't have bins — use a default piecewise-bands approximation
+  const seed = {
+    bins: null, // engine will generate from familyId
+    familyId: "piecewise-bands",
+    familyParams: { centerMass: 0.5, shoulder: 0.15, skew: 0 },
+    regime: "low-vol",
+    name: amm.name,
+  };
+  localStorage.setItem("atlas-fork-seed", JSON.stringify(seed));
+  navigate("/labs/discovery");
+}
+
 const Library = () => {
   const navigate = useNavigate();
   const colors = useChartColors();
@@ -98,9 +134,10 @@ const Library = () => {
   const [selectedAMM, setSelectedAMM] = useState<AMMEntry | null>(null);
   const [selectedDbAMM, setSelectedDbAMM] = useState<LibraryAMM | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"all" | "famous" | "featured" | "community">("all");
+  const [activeFilter, setActiveFilter] = useState<"all" | "famous" | "featured" | "community" | "leaderboard">("all");
+  const [solidityTarget, setSolidityTarget] = useState<{ name: string; familyId?: string; familyParams?: Record<string, number>; bins?: number[]; score?: number; regime?: string; author?: string } | null>(null);
+  const [showBacktest, setShowBacktest] = useState(false);
 
-  // Load community AMMs from database on mount
   useEffect(() => {
     loadLibraryAMMs().then(setDbAMMs);
   }, []);
@@ -136,7 +173,6 @@ const Library = () => {
     e.target.value = "";
   };
 
-  // Convert DB AMMs to AMMEntry format for the grid
   const dbAsEntries: AMMEntry[] = useMemo(() =>
     dbAMMs.map(d => ({
       id: d.id,
@@ -146,7 +182,6 @@ const Library = () => {
       category: "community" as const,
       author: d.author,
       params: d.params,
-      _dbId: d.id, // marker to identify DB entries
     })),
     [dbAMMs]
   );
@@ -154,12 +189,18 @@ const Library = () => {
   const allCommunity = useMemo(() => [...communityAMMs, ...dbAsEntries], [communityAMMs, dbAsEntries]);
 
   const allAMMs = useMemo(() => {
+    if (activeFilter === "leaderboard") return []; // leaderboard has its own rendering
     const all = [...FAMOUS_AMMS, ...FEATURED_AMMS, ...allCommunity];
     const filtered = activeFilter === "all" ? all : all.filter(a => a.category === activeFilter);
     if (!searchQuery.trim()) return filtered;
     const q = searchQuery.toLowerCase();
     return filtered.filter(a => a.name.toLowerCase().includes(q) || a.formula.toLowerCase().includes(q) || a.description.toLowerCase().includes(q));
   }, [activeFilter, allCommunity, searchQuery]);
+
+  const leaderboardData = useMemo(() => {
+    if (activeFilter !== "leaderboard") return {};
+    return groupByRegime(dbAMMs.filter(d => d.score != null));
+  }, [activeFilter, dbAMMs]);
 
   const communityCount = allCommunity.length;
 
@@ -200,18 +241,19 @@ const Library = () => {
               placeholder="Search AMMs..."
               className="w-full bg-secondary border border-border rounded-lg pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring" />
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             {([
               { id: "all" as const, label: "All", icon: Star },
               { id: "famous" as const, label: "Famous", icon: Star },
               { id: "featured" as const, label: "Featured", icon: Award },
               { id: "community" as const, label: "Community", icon: Users },
+              { id: "leaderboard" as const, label: "Leaderboard", icon: Trophy },
             ]).map(t => (
               <button key={t.id} onClick={() => { setActiveFilter(t.id); setSearchQuery(""); }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  activeFilter === t.id && !searchQuery ? "bg-foreground/5 text-foreground border border-foreground/20" : "text-muted-foreground hover:text-foreground border border-transparent"
+                  activeFilter === t.id ? "bg-foreground/5 text-foreground border border-foreground/20" : "text-muted-foreground hover:text-foreground border border-transparent"
                 }`}>
-                {t.id !== "all" && <t.icon className="w-3 h-3" />} {t.label}
+                <t.icon className="w-3 h-3" /> {t.label}
                 {t.id === "community" && communityCount > 0 && (
                   <span className="text-[9px] font-mono bg-primary/10 text-primary px-1 rounded">{communityCount}</span>
                 )}
@@ -220,34 +262,94 @@ const Library = () => {
           </div>
         </div>
 
-        {/* AMM Grid */}
-        {allAMMs.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-sm text-muted-foreground mb-2">
-              {activeFilter === "community" ? "No community AMMs yet." : "No results found."}
-            </p>
-            {activeFilter === "community" && (
-              <button onClick={() => fileInputRef.current?.click()}
-                className="text-xs text-primary hover:underline">Upload your first AMM →</button>
+        {/* Leaderboard View */}
+        {activeFilter === "leaderboard" && (
+          <div className="space-y-6">
+            {Object.keys(leaderboardData).length === 0 ? (
+              <div className="text-center py-16">
+                <Trophy className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No scored designs yet. Publish designs from the Discovery Atlas to see them ranked here.</p>
+              </div>
+            ) : (
+              REGIME_ORDER.filter(r => leaderboardData[r]?.length > 0).map(regime => (
+                <div key={regime}>
+                  <h2 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-primary" />
+                    {regime}
+                    <span className="text-muted-foreground font-normal">({leaderboardData[regime].length} designs)</span>
+                  </h2>
+                  <div className="border border-border rounded-xl overflow-hidden">
+                    {leaderboardData[regime].map((amm, idx) => (
+                      <motion.div
+                        key={amm.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        className={`flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-accent/50 transition-colors ${idx > 0 ? "border-t border-border" : ""}`}
+                        onClick={() => setSelectedDbAMM(amm)}
+                      >
+                        <div className="w-8 text-center">
+                          {idx < 3 ? (
+                            <span className={`text-lg font-black ${RANK_STYLES[idx]}`}>#{idx + 1}</span>
+                          ) : (
+                            <span className="text-xs font-mono text-muted-foreground">#{idx + 1}</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">{amm.name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{amm.family_id || "unknown"} · by {amm.author}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-mono font-bold text-foreground">{amm.score?.toFixed(4)}</p>
+                          <p className="text-[9px] text-muted-foreground">score</p>
+                        </div>
+                        <div className="text-right hidden sm:block">
+                          <p className="text-xs font-mono text-foreground">{amm.stability?.toFixed(4)}</p>
+                          <p className="text-[9px] text-muted-foreground">stability</p>
+                        </div>
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <ThumbsUp className="w-3 h-3" />
+                          <span className="text-[10px] font-mono">{amm.upvotes}</span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              ))
             )}
           </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allAMMs.map((amm, i) => (
-              <AMM_Card key={amm.id} amm={amm} colors={colors} index={i} onClick={() => {
-                const dbMatch = dbAMMs.find(d => d.id === amm.id);
-                if (dbMatch) {
-                  setSelectedDbAMM(dbMatch);
-                } else {
-                  setSelectedAMM(amm);
-                }
-              }} />
-            ))}
-          </div>
+        )}
+
+        {/* AMM Grid */}
+        {activeFilter !== "leaderboard" && (
+          allAMMs.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-sm text-muted-foreground mb-2">
+                {activeFilter === "community" ? "No community AMMs yet." : "No results found."}
+              </p>
+              {activeFilter === "community" && (
+                <button onClick={() => fileInputRef.current?.click()}
+                  className="text-xs text-primary hover:underline">Upload your first AMM →</button>
+              )}
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {allAMMs.map((amm, i) => (
+                <AMM_Card key={amm.id} amm={amm} colors={colors} index={i} onClick={() => {
+                  const dbMatch = dbAMMs.find(d => d.id === amm.id);
+                  if (dbMatch) {
+                    setSelectedDbAMM(dbMatch);
+                  } else {
+                    setSelectedAMM(amm);
+                  }
+                }} />
+              ))}
+            </div>
+          )
         )}
       </div>
 
-      {/* Detail Modal */}
+      {/* Famous/Featured Detail Modal */}
       <AnimatePresence>
         {selectedAMM && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -298,10 +400,18 @@ const Library = () => {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button onClick={() => handleDownload(selectedAMM)}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
-                    <Download className="w-3 h-3" /> Download JSON
+                    <Download className="w-3 h-3" /> JSON
+                  </button>
+                  <button onClick={() => setSolidityTarget({ name: selectedAMM.name, author: selectedAMM.author })}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+                    <Code className="w-3 h-3" /> Solidity
+                  </button>
+                  <button onClick={() => forkFamousToAtlas(selectedAMM, navigate)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+                    <GitFork className="w-3 h-3" /> Fork
                   </button>
                   <button onClick={() => { navigate("/advanced"); }}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
@@ -319,9 +429,9 @@ const Library = () => {
         {selectedDbAMM && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-            onClick={() => setSelectedDbAMM(null)}>
+            onClick={() => { setSelectedDbAMM(null); setShowBacktest(false); }}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-background border border-border rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto"
+              className="bg-background border border-border rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}>
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
@@ -329,16 +439,16 @@ const Library = () => {
                     <h2 className="text-lg font-bold text-foreground">{selectedDbAMM.name}</h2>
                     <p className="text-xs text-muted-foreground">by {selectedDbAMM.author}</p>
                   </div>
-                  <button onClick={() => setSelectedDbAMM(null)} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                  <button onClick={() => { setSelectedDbAMM(null); setShowBacktest(false); }} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
                 {/* Liquidity distribution from bins */}
-                {selectedDbAMM.bins && selectedDbAMM.bins.length > 0 && (
+                {selectedDbAMM.bins && (selectedDbAMM.bins as number[]).length > 0 && (
                   <div className="h-48 mb-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={selectedDbAMM.bins.map((w, i) => ({ price: parseFloat(binPrice(i).toFixed(3)), weight: w }))} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                      <AreaChart data={(selectedDbAMM.bins as number[]).map((w: number, i: number) => ({ price: parseFloat(binPrice(i).toFixed(3)), weight: w }))} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                         <XAxis dataKey="price" tick={{ fontSize: 9, fill: colors.tick }} />
                         <YAxis tick={{ fontSize: 9, fill: colors.tick }} />
                         <Area type="monotone" dataKey="weight" stroke={colors.line} fill={colors.line} fillOpacity={0.3} />
@@ -380,7 +490,7 @@ const Library = () => {
                 {/* Detailed metrics */}
                 {selectedDbAMM.metrics && (
                   <div className="grid grid-cols-3 gap-2 mb-4">
-                    {Object.entries(selectedDbAMM.metrics).map(([key, val]) => (
+                    {Object.entries(selectedDbAMM.metrics as Record<string, number>).map(([key, val]) => (
                       <div key={key} className="p-2 rounded-lg bg-secondary border border-border text-center">
                         <p className="text-[8px] text-muted-foreground mb-0.5">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
                         <p className="text-[10px] font-mono font-semibold text-foreground">{typeof val === 'number' ? val.toFixed(4) : String(val)}</p>
@@ -389,7 +499,8 @@ const Library = () => {
                   </div>
                 )}
 
-                <div className="flex gap-2">
+                {/* Action buttons */}
+                <div className="flex gap-2 flex-wrap mb-4">
                   <button
                     onClick={async () => {
                       const ok = await upvoteLibraryAMM(selectedDbAMM.id);
@@ -416,13 +527,53 @@ const Library = () => {
                     const a = document.createElement("a"); a.href = url; a.download = `${selectedDbAMM.name}.json`; a.click();
                     URL.revokeObjectURL(url);
                   }}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
-                    <Download className="w-3 h-3" /> Download JSON
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+                    <Download className="w-3 h-3" /> JSON
+                  </button>
+                  <button onClick={() => setSolidityTarget({
+                    name: selectedDbAMM.name,
+                    familyId: selectedDbAMM.family_id || undefined,
+                    familyParams: selectedDbAMM.family_params as Record<string, number> | undefined,
+                    bins: selectedDbAMM.bins as number[] | undefined,
+                    score: selectedDbAMM.score ?? undefined,
+                    regime: selectedDbAMM.regime ?? undefined,
+                    author: selectedDbAMM.author,
+                  })}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+                    <Code className="w-3 h-3" /> Solidity
+                  </button>
+                  <button onClick={() => forkToAtlas(selectedDbAMM, navigate)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+                    <GitFork className="w-3 h-3" /> Fork to Atlas
+                  </button>
+                  <button onClick={() => setShowBacktest(!showBacktest)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-colors border ${
+                      showBacktest ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-foreground border-border hover:bg-accent"
+                    }`}>
+                    <BarChart3 className="w-3 h-3" /> Backtest
                   </button>
                 </div>
+
+                {/* Historical Backtest expandable */}
+                {showBacktest && selectedDbAMM.bins && (
+                  <div className="mb-2">
+                    <HistoricalBacktest bins={selectedDbAMM.bins as number[]} name={selectedDbAMM.name} />
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Solidity Export Modal */}
+      <AnimatePresence>
+        {solidityTarget && (
+          <SolidityExportModal
+            open={!!solidityTarget}
+            onClose={() => setSolidityTarget(null)}
+            {...solidityTarget}
+          />
         )}
       </AnimatePresence>
     </div>
