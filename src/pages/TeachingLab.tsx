@@ -6,6 +6,7 @@ import LabControls, { type LessonTab, type Controls } from "@/components/teachin
 import LabSimulation from "@/components/teaching/LabSimulation";
 import LabLearning from "@/components/teaching/LabLearning";
 import CourseSidebar from "@/components/teaching/CourseSidebar";
+import CourseLevelPicker, { ComingSoonOverlay, type CourseLevel } from "@/components/teaching/CourseLevelPicker";
 import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,6 +14,18 @@ import { useIsMobile } from "@/hooks/use-mobile";
 export default function TeachingLab() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+
+  // Level selection state
+  const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
+  const [comingSoonLevel, setComingSoonLevel] = useState<"intermediate" | "advanced" | null>(null);
+
+  const handleSelectLevel = (level: CourseLevel) => {
+    if (level === "beginner") {
+      setSelectedLevel("beginner");
+    } else {
+      setComingSoonLevel(level);
+    }
+  };
 
   // Course state
   const [courseActive, setCourseActive] = useState(true);
@@ -177,6 +190,41 @@ export default function TeachingLab() {
       }
     }
   };
+
+  // Level picker screen (before course starts)
+  if (!selectedLevel) {
+    if (comingSoonLevel) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col">
+          <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
+            </div>
+            <ThemeToggle />
+          </header>
+          <ComingSoonOverlay level={comingSoonLevel} onBack={() => setComingSoonLevel(null)} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
+          </div>
+          <ThemeToggle />
+        </header>
+        <CourseLevelPicker onSelectLevel={handleSelectLevel} />
+      </div>
+    );
+  }
 
   // Mobile: show course only, then desktop-required message
   if (isMobile) {
