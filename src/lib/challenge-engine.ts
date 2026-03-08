@@ -21,6 +21,22 @@ export interface ChallengeParams {
   concentrationUpper: number; // price range upper bound (ratio)
 }
 
+export interface SliderConfig {
+  reserveX: { min: number; max: number; step: number; format?: (v: number) => string };
+  reserveY: { min: number; max: number; step: number; format?: (v: number) => string };
+  feeRate: { min: number; max: number; step: number };
+  concentrationLower: { min: number; max: number; step: number };
+  concentrationUpper: { min: number; max: number; step: number };
+}
+
+const DEFAULT_SLIDERS: SliderConfig = {
+  reserveX: { min: 10, max: 1000, step: 10 },
+  reserveY: { min: 10000, max: 2000000, step: 10000 },
+  feeRate: { min: 1, max: 100, step: 1 },
+  concentrationLower: { min: 10, max: 100, step: 5 },
+  concentrationUpper: { min: 100, max: 500, step: 10 },
+};
+
 export interface ConstraintResult {
   constraint: ChallengeConstraint;
   actual: number;
