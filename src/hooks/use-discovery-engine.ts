@@ -144,7 +144,7 @@ export function useDiscoveryEngine() {
     };
 
     (async () => {
-      // 1. Try Supabase Realtime broadcast channel
+      // 1. Try cross-tab BroadcastChannel sync
       const sync = new AtlasSync(
         () => stateRef.current,
         // onRemoteState: adopt the leader's state
