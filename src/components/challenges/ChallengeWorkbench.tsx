@@ -168,14 +168,37 @@ export default function ChallengeWorkbench({
           </Card>
 
           <div className="flex gap-2">
-            <Button className="flex-1" onClick={runEvaluation} disabled={running}>
+            <Button className="flex-1" onClick={runEvaluation} disabled={running || animating}>
               <Play className="w-4 h-4" />
               {running ? "Simulating…" : "Run Simulation"}
             </Button>
-            <Button variant="outline" onClick={reset}>
+            <Button variant="outline" onClick={reset} disabled={animating}>
               <RotateCcw className="w-4 h-4" />
             </Button>
           </div>
+
+          {/* Give Up */}
+          {!gaveUp && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-muted-foreground hover:text-destructive"
+              onClick={giveUp}
+              disabled={animating}
+            >
+              <Flag className="w-3.5 h-3.5 mr-1.5" />
+              I give up — show me the answer
+            </Button>
+          )}
+          {gaveUp && result && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-muted-foreground text-center bg-muted/50 rounded-lg px-3 py-2"
+            >
+              🏳️ Solution revealed — progress not saved. Hit <strong>Reset</strong> to try again yourself!
+            </motion.div>
+          )}
 
           {/* Hints */}
           <Card>
