@@ -23,6 +23,24 @@ export default function Challenges() {
   const [progress, setProgress] = useState<ChallengeProgress>(loadProgress);
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
   const [filter, setFilter] = useState<"all" | Difficulty>("all");
+  const { setPageContext } = useAmmyContext();
+
+  // Tell Ammy which challenge is active
+  useEffect(() => {
+    if (activeChallenge) {
+      const constraintList = activeChallenge.constraints.map(c => `${c.label} ${c.operator} ${c.target}${c.unit}`).join(", ");
+      setPageContext(
+        `The user is currently solving the "${activeChallenge.name}" challenge (${activeChallenge.difficulty}). ` +
+        `Story: ${activeChallenge.story} ` +
+        `Constraints: ${constraintList}. ` +
+        `The user can adjust these sliders: Reserve X, Reserve Y, Fee Rate (in bps), Range Lower (%), Range Upper (%). ` +
+        `To help, suggest specific parameter values. Use set_slider actions with selectors like "Reserve X", "Reserve Y", "Fee Rate", "Range Lower", "Range Upper".`
+      );
+    } else {
+      setPageContext("");
+    }
+    return () => setPageContext("");
+  }, [activeChallenge, setPageContext]);
 
   const stats = useMemo(() => getCompletionStats(progress), [progress]);
 

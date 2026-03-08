@@ -56,7 +56,8 @@ export default function FloatingAIChat() {
   // Hide on teaching lab — AI is embedded in sidebar there
   if (location.pathname === "/learn") return null;
 
-  const context = ROUTE_CONTEXT[location.pathname] || `the page at ${location.pathname}`;
+  const routeCtx = ROUTE_CONTEXT[location.pathname] || `the page at ${location.pathname}`;
+  const context = pageContext ? `${routeCtx}. ${pageContext}` : routeCtx;
   const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
 
   return (
