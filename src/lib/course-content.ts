@@ -554,10 +554,10 @@ export const COURSE_MODULES: CourseModule[] = [
   },
 ];
 
-export function getRevealedSections(completedModules: number): Set<string> {
+export function getRevealedSections(completedModules: number, modules: CourseModule[] = COURSE_MODULES): Set<string> {
   const revealed = new Set<string>();
-  for (let i = 0; i < completedModules && i < COURSE_MODULES.length; i++) {
-    for (const r of COURSE_MODULES[i].reveals) {
+  for (let i = 0; i < completedModules && i < modules.length; i++) {
+    for (const r of modules[i].reveals) {
       revealed.add(r);
     }
   }
