@@ -1,33 +1,88 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Dna } from "lucide-react";
+import { ArrowLeft, Dna, Loader2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDiscoveryEngine } from "@/hooks/use-discovery-engine";
+import { supabase } from "@/integrations/supabase/client";
 import DNAFingerprint from "@/components/labs/DNAFingerprint";
 import DNAComparison from "@/components/labs/DNAComparison";
 import DNALineage from "@/components/labs/DNALineage";
-import type { Candidate } from "@/lib/discovery-engine";
+import type { Candidate, RegimeId, InvariantFamilyId, MetricVector, FeatureDescriptor } from "@/lib/discovery-engine";
+import { NUM_BINS, TOTAL_LIQUIDITY } from "@/lib/discovery-engine";
+
+function rowToCandidate(row: any): Candidate | null {
+  try {
+    const metrics: MetricVector = row.metrics
+      ? (typeof row.metrics === "string" ? JSON.parse(row.metrics) : row.metrics)
+      : { totalFees: 0, totalSlippage: 0, arbLeakage: 0, liquidityUtilization: 0, lpValueVsHodl: 1, maxDrawdown: 0, volatilityOfReturns: 0 };
+
+    const features: FeatureDescriptor = row.features
+      ? (typeof row.features === "string" ? JSON.parse(row.features) : row.features)
+      : { curvature: 0, curvatureGradient: 0, entropy: 0, symmetry: 0, tailDensityRatio: 0, peakConcentration: 0, concentrationWidth: 0 };
+
+    let bins: Float64Array;
+    if (row.bins && Array.isArray(row.bins) && row.bins.length > 0) {
+      bins = new Float64Array(row.bins);
+    } else {
+      bins = new Float64Array(NUM_BINS).fill(TOTAL_LIQUIDITY / NUM_BINS);
+    }
+
+    return {
+      id: row.id,
+      bins,
+      familyId: (row.family_id || "piecewise-bands") as InvariantFamilyId,
+      familyParams: row.family_params
+        ? (typeof row.family_params === "string" ? JSON.parse(row.family_params) : row.family_params)
+        : {},
+      regime: (row.regime || "low-vol") as RegimeId,
+      generation: row.generation ?? 0,
+      metrics,
+      features,
+      stability: row.stability ?? 0,
+      score: row.score ?? 0,
+      timestamp: new Date(row.created_at).getTime(),
+      source: "global",
+      contributor: row.author || row.name,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function DNALab() {
   const navigate = useNavigate();
-  const { state, selectedCandidate, selectCandidate, clearSelection } = useDiscoveryEngine();
   const [tab, setTab] = useState("fingerprint");
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const archive = state.archive;
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("library_amms")
+        .select("*")
+        .order("score", { ascending: true })
+        .limit(200);
 
-  // Sort archive by score (best first)
-  const sortedArchive = useMemo(
-    () => [...archive].sort((a, b) => a.score - b.score),
-    [archive],
+      if (!error && data) {
+        const parsed = data.map(rowToCandidate).filter(Boolean) as Candidate[];
+        setCandidates(parsed);
+        if (parsed.length > 0) setSelectedId(parsed[0].id);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const selected = useMemo(
+    () => candidates.find(c => c.id === selectedId) ?? candidates[0] ?? null,
+    [candidates, selectedId],
   );
 
-  const selected = selectedCandidate ?? sortedArchive[0] ?? null;
+  const selectCandidate = (id: string) => setSelectedId(id);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -41,52 +96,54 @@ export default function DNALab() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] font-mono-data text-muted-foreground">
-            {archive.length} archived designs
+            {candidates.length} library designs
           </span>
           <ThemeToggle />
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar: candidate picker */}
         <aside className="w-56 border-r border-border overflow-y-auto shrink-0 bg-card">
           <div className="p-3 border-b border-border">
-            <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Archive</h2>
+            <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Library</h2>
           </div>
-          <div className="divide-y divide-border">
-            {sortedArchive.slice(0, 60).map((c) => (
-              <button
-                key={c.id}
-                onClick={() => selectCandidate(c.id)}
-                className={`w-full text-left px-3 py-2 transition-colors ${
-                  selected?.id === c.id
-                    ? "bg-accent"
-                    : "hover:bg-accent/50"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono-data text-foreground truncate">
-                    {c.familyId.slice(0, 10)}
-                  </span>
-                  <span className="text-[9px] font-mono-data text-muted-foreground">
-                    G{c.generation}
-                  </span>
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {candidates.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => selectCandidate(c.id)}
+                  className={`w-full text-left px-3 py-2 transition-colors ${
+                    selected?.id === c.id ? "bg-accent" : "hover:bg-accent/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono-data text-foreground truncate">
+                      {c.contributor || c.familyId.slice(0, 12)}
+                    </span>
+                    <span className="text-[9px] font-mono-data text-muted-foreground">
+                      G{c.generation}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-[9px] text-muted-foreground">{c.regime}</span>
+                    <span className="text-[9px] font-mono-data text-chart-5">{c.score.toFixed(4)}</span>
+                  </div>
+                </button>
+              ))}
+              {candidates.length === 0 && (
+                <div className="p-4 text-center text-[11px] text-muted-foreground">
+                  No designs in the library yet. Publish from the Discovery Atlas first.
                 </div>
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-[9px] text-muted-foreground">{c.regime}</span>
-                  <span className="text-[9px] font-mono-data text-chart-5">{c.score.toFixed(4)}</span>
-                </div>
-              </button>
-            ))}
-            {sortedArchive.length === 0 && (
-              <div className="p-4 text-center text-[11px] text-muted-foreground">
-                No archived candidates yet. Start the discovery engine from the Atlas to populate.
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </aside>
 
-        {/* Main content */}
         <main className="flex-1 overflow-y-auto p-6">
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
@@ -105,7 +162,6 @@ export default function DNALab() {
                 >
                   <DNAFingerprint candidate={selected} size={320} />
 
-                  {/* Metrics grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-xl w-full">
                     {[
                       { label: "Fees", value: selected.metrics.totalFees.toFixed(4) },
@@ -124,29 +180,28 @@ export default function DNALab() {
                     ))}
                   </div>
 
-                  {/* ID */}
                   <div className="text-[10px] font-mono-data text-muted-foreground">
                     {selected.id}
                   </div>
                 </motion.div>
               ) : (
                 <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-                  Select a candidate from the sidebar
+                  {loading ? "Loading…" : "Select a design from the sidebar"}
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="compare" className="mt-6">
               <DNAComparison
-                candidates={sortedArchive.slice(0, 12)}
-                allCandidates={sortedArchive}
+                candidates={candidates.slice(0, 12)}
+                allCandidates={candidates}
                 onSelect={selectCandidate}
               />
             </TabsContent>
 
             <TabsContent value="lineage" className="mt-6">
               <DNALineage
-                archive={archive}
+                archive={candidates}
                 onSelect={selectCandidate}
                 selectedId={selected?.id}
               />
