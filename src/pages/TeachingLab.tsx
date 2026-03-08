@@ -191,6 +191,41 @@ export default function TeachingLab() {
     }
   };
 
+  // Level picker screen (before course starts)
+  if (!selectedLevel) {
+    if (comingSoonLevel) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col">
+          <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
+            </div>
+            <ThemeToggle />
+          </header>
+          <ComingSoonOverlay level={comingSoonLevel} onBack={() => setComingSoonLevel(null)} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
+          </div>
+          <ThemeToggle />
+        </header>
+        <CourseLevelPicker onSelectLevel={handleSelectLevel} />
+      </div>
+    );
+  }
+
   // Mobile: show course only, then desktop-required message
   if (isMobile) {
     return (
