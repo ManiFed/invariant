@@ -234,7 +234,7 @@ export function useDiscoveryEngine() {
       // 2. Realtime unavailable — fall back to IndexedDB (always leader locally)
       setRole("leader");
       const persistedState = await loadAtlasStateFromDB();
-      if (!cancelled && persistedState && persistedState.archive.length > 0) {
+      if (!cancelled && hasRecoverableState(persistedState)) {
         setState(normalizeLoadedState(persistedState));
       }
       setSyncMode("persisted");
