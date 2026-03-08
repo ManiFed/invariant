@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, Loader2, ExternalLink, Sparkles } from "lucide-react";
+import { Send, Bot, User, ExternalLink, Sparkles, MousePointerClick } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -9,11 +9,9 @@ interface Message {
   content: string;
 }
 
-interface ActionButton {
-  type: "navigate";
-  path: string;
-  label: string;
-}
+type ActionButton =
+  | { type: "navigate"; path: string; label: string }
+  | { type: "click"; selector: string; label: string };
 
 interface AIChatPanelProps {
   context?: string;
@@ -40,6 +38,8 @@ function extractActions(content: string): { cleanContent: string; actions: Actio
       const parsed = JSON.parse(json);
       if (parsed.type === "navigate" && parsed.path && parsed.label) {
         actions.push(parsed);
+      } else if (parsed.type === "click" && parsed.selector && parsed.label) {
+        actions.push(parsed);
       }
     } catch { /* ignore bad JSON */ }
     return "";
@@ -60,14 +60,19 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingPhrase, setThinkingPhrase] = useState("");
+  const [clickFeedback, setClickFeedback] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  // Autoscroll using a bottom sentinel
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, []);
+
   useEffect(() => {
-    requestAnimationFrame(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    });
-  }, [messages]);
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   useEffect(() => { saveMessages(messages); }, [messages]);
 
@@ -160,6 +165,55 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
 
   const handleNavigate = (path: string) => {
     navigate(path);
+  };
+
+  const handleClick = (selector: string, label: string) => {
+    try {
+      // Try multiple strategies to find the element
+      let el: HTMLElement | null = null;
+
+      // 1. Direct CSS selector
+      try { el = document.querySelector(selector); } catch { /* invalid selector */ }
+
+      // 2. Try by button/link text content
+      if (!el) {
+        const allClickable = document.querySelectorAll("button, a, [role='button'], [role='tab'], input[type='submit']");
+        for (const candidate of allClickable) {
+          const text = (candidate as HTMLElement).textContent?.trim().toLowerCase() || "";
+          if (text === selector.toLowerCase() || text.includes(selector.toLowerCase())) {
+            el = candidate as HTMLElement;
+            break;
+          }
+        }
+      }
+
+      // 3. Try by aria-label
+      if (!el) {
+        el = document.querySelector(`[aria-label="${selector}"]`) ||
+             document.querySelector(`[aria-label*="${selector}" i]`);
+      }
+
+      if (el) {
+        // Scroll element into view and highlight it briefly
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.style.outline = "2px solid hsl(var(--primary))";
+        el.style.outlineOffset = "2px";
+        el.style.transition = "outline 0.2s ease";
+        setTimeout(() => {
+          el!.style.outline = "";
+          el!.style.outlineOffset = "";
+        }, 1500);
+
+        // Click after a brief highlight delay
+        setTimeout(() => el!.click(), 300);
+        setClickFeedback(`✅ Clicked "${label}"`);
+      } else {
+        setClickFeedback(`⚠️ Couldn't find "${label}" on the page`);
+      }
+    } catch {
+      setClickFeedback(`⚠️ Couldn't click "${label}"`);
+    }
+    setTimeout(() => setClickFeedback(null), 2500);
   };
 
   const quickActions = [
@@ -255,10 +309,17 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
                           key={j}
                           whileHover={{ scale: 1.04 }}
                           whileTap={{ scale: 0.96 }}
-                          onClick={() => handleNavigate(action.path)}
+                          onClick={() => {
+                            if (action.type === "navigate") handleNavigate(action.path);
+                            else if (action.type === "click") handleClick(action.selector, action.label);
+                          }}
                           className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-[9px] font-medium text-primary hover:bg-primary/20 transition-colors"
                         >
-                          <ExternalLink className="w-2.5 h-2.5" />
+                          {action.type === "click" ? (
+                            <MousePointerClick className="w-2.5 h-2.5" />
+                          ) : (
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          )}
                           {action.label}
                         </motion.button>
                       ))}
@@ -285,6 +346,20 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
             </motion.div>
           );
         })}
+
+        {/* Click feedback toast */}
+        <AnimatePresence>
+          {clickFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="text-[9px] text-center text-muted-foreground bg-muted/50 rounded-md px-2 py-1"
+            >
+              {clickFeedback}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Thinking indicator */}
         <AnimatePresence>
@@ -321,6 +396,9 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Scroll anchor */}
+        <div ref={bottomRef} className="h-0 w-0" />
       </div>
 
       {/* Input */}
