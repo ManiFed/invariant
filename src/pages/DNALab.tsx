@@ -1,15 +1,17 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Dna, Loader2 } from "lucide-react";
+import { ArrowLeft, Dna, Loader2, Upload } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import DNAFingerprint from "@/components/labs/DNAFingerprint";
 import DNAComparison from "@/components/labs/DNAComparison";
 import DNALineage from "@/components/labs/DNALineage";
 import type { Candidate, RegimeId, InvariantFamilyId, MetricVector, FeatureDescriptor } from "@/lib/discovery-engine";
 import { NUM_BINS, TOTAL_LIQUIDITY } from "@/lib/discovery-engine";
+import { toast } from "sonner";
 
 function rowToCandidate(row: any): Candidate | null {
   try {
@@ -50,29 +52,109 @@ function rowToCandidate(row: any): Candidate | null {
   }
 }
 
+/** Parse an imported JSON blob into a library_amms insert row */
+function parseImportedCandidate(obj: any): any | null {
+  try {
+    const name = obj.name || obj.contributor || obj.familyId || "Imported Design";
+    const bins = obj.bins ? (Array.isArray(obj.bins) ? obj.bins : Array.from(obj.bins)) : null;
+
+    return {
+      name,
+      author: obj.contributor || obj.author || "Imported",
+      description: obj.description || `Imported ${obj.familyId || "AMM"} design`,
+      category: "community",
+      formula: obj.formula || "x * y = k",
+      params: obj.familyParams || obj.params || { k: 10000, wA: 0.5, wB: 0.5 },
+      bins,
+      family_id: obj.familyId || obj.family_id || null,
+      family_params: obj.familyParams || obj.family_params || {},
+      regime: obj.regime || null,
+      generation: obj.generation ?? null,
+      score: typeof obj.score === "number" ? obj.score : null,
+      stability: typeof obj.stability === "number" ? obj.stability : null,
+      metrics: obj.metrics || null,
+      features: obj.features || null,
+      candidate_id: obj.id || obj.candidate_id || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function DNALab() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("fingerprint");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchLibrary = async () => {
+    const { data, error } = await supabase
+      .from("library_amms")
+      .select("*")
+      .order("score", { ascending: true })
+      .limit(200);
+
+    if (!error && data) {
+      const parsed = data.map(rowToCandidate).filter(Boolean) as Candidate[];
+      setCandidates(parsed);
+      if (parsed.length > 0 && !selectedId) setSelectedId(parsed[0].id);
+      return parsed;
+    }
+    return [];
+  };
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("library_amms")
-        .select("*")
-        .order("score", { ascending: true })
-        .limit(200);
-
-      if (!error && data) {
-        const parsed = data.map(rowToCandidate).filter(Boolean) as Candidate[];
-        setCandidates(parsed);
-        if (parsed.length > 0) setSelectedId(parsed[0].id);
-      }
+      await fetchLibrary();
       setLoading(false);
     })();
   }, []);
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so re-selecting same file triggers change
+    e.target.value = "";
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      // Support single object or array
+      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
+      if (items.length === 0) {
+        toast.error("Empty file");
+        return;
+      }
+
+      const rows = items.map(parseImportedCandidate).filter(Boolean);
+      if (rows.length === 0) {
+        toast.error("No valid candidates found in file");
+        return;
+      }
+
+      const { error } = await supabase.from("library_amms").insert(rows);
+      if (error) {
+        toast.error("Import failed: " + error.message);
+        return;
+      }
+
+      toast.success(`Imported ${rows.length} design${rows.length > 1 ? "s" : ""} to library`);
+      const refreshed = await fetchLibrary();
+      // Select the first newly imported one
+      if (refreshed.length > 0) {
+        setSelectedId(refreshed[refreshed.length - 1].id);
+      }
+    } catch (err: any) {
+      toast.error("Invalid JSON file: " + (err.message || "parse error"));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const selected = useMemo(
     () => candidates.find(c => c.id === selectedId) ?? candidates[0] ?? null,
@@ -98,6 +180,23 @@ export default function DNALab() {
           <span className="text-[10px] font-mono-data text-muted-foreground">
             {candidates.length} library designs
           </span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-[10px] gap-1.5"
+            disabled={importing}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {importing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            Import JSON
+          </Button>
           <ThemeToggle />
         </div>
       </header>
@@ -137,7 +236,7 @@ export default function DNALab() {
               ))}
               {candidates.length === 0 && (
                 <div className="p-4 text-center text-[11px] text-muted-foreground">
-                  No designs in the library yet. Publish from the Discovery Atlas first.
+                  No designs yet. Import a JSON file or publish from the Discovery Atlas.
                 </div>
               )}
             </div>
