@@ -30,12 +30,18 @@ const SPEEDS = [
   { label: "Max", ms: 1 },
 ];
 
+const EMPTY_SCENARIO: MarketScenario = {
+  id: "", name: "", description: "", pair: "ETH-USDC",
+  startDate: "2023-01-01", endDate: "2023-06-01", category: "volatile",
+};
+
 export default function MarketReplayLab() {
   const navigate = useNavigate();
   const colors = useChartColors();
   const [designs, setDesigns] = useState<{ id: string; name: string; bins: number[] }[]>([]);
   const [selectedDesign, setSelectedDesign] = useState<string | null>(null);
   const [compareDesign, setCompareDesign] = useState<string | null>(null);
+  const [allScenarios, setAllScenarios] = useState<MarketScenario[]>([...SCENARIOS]);
   const [scenario, setScenario] = useState<MarketScenario>(SCENARIOS[0]);
   const [result, setResult] = useState<ReplayResult | null>(null);
   const [resultB, setResultB] = useState<ReplayResult | null>(null);
@@ -45,6 +51,8 @@ export default function MarketReplayLab() {
   const [speedIdx, setSpeedIdx] = useState(1);
   const [compareMode, setCompareMode] = useState(false);
   const [activeView, setActiveView] = useState<"charts" | "risk" | "reserves">("charts");
+  const [editing, setEditing] = useState<MarketScenario | null>(null);
+  const [isNew, setIsNew] = useState(false);
 
   useEffect(() => {
     supabase.from("library_amms").select("id, name, bins").then(({ data }) => {
