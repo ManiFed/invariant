@@ -61,8 +61,19 @@ export interface Challenge {
   constraints: ChallengeConstraint[];
   defaultParams: ChallengeParams;
   solutionParams: ChallengeParams;
+  sliders?: Partial<SliderConfig>;
   hints: string[];
   evaluate: (params: ChallengeParams) => ChallengeResult;
+}
+
+export function getSlidersForChallenge(challenge: Challenge): SliderConfig {
+  return {
+    reserveX: { ...DEFAULT_SLIDERS.reserveX, ...challenge.sliders?.reserveX },
+    reserveY: { ...DEFAULT_SLIDERS.reserveY, ...challenge.sliders?.reserveY },
+    feeRate: { ...DEFAULT_SLIDERS.feeRate, ...challenge.sliders?.feeRate },
+    concentrationLower: { ...DEFAULT_SLIDERS.concentrationLower, ...challenge.sliders?.concentrationLower },
+    concentrationUpper: { ...DEFAULT_SLIDERS.concentrationUpper, ...challenge.sliders?.concentrationUpper },
+  };
 }
 
 // ─── Simulation helpers ─────────────────────────────────────────────
