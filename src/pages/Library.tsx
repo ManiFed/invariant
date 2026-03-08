@@ -94,9 +94,16 @@ const Library = () => {
   const colors = useChartColors();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [communityAMMs, setCommunityAMMs] = useState<AMMEntry[]>([]);
+  const [dbAMMs, setDbAMMs] = useState<LibraryAMM[]>([]);
   const [selectedAMM, setSelectedAMM] = useState<AMMEntry | null>(null);
+  const [selectedDbAMM, setSelectedDbAMM] = useState<LibraryAMM | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "famous" | "featured" | "community">("all");
+
+  // Load community AMMs from database on mount
+  useEffect(() => {
+    loadLibraryAMMs().then(setDbAMMs);
+  }, []);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
