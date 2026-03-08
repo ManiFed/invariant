@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers, History, Shield, Wrench } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Labs = () => {
