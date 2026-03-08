@@ -6,6 +6,7 @@ import LabControls, { type LessonTab, type Controls } from "@/components/teachin
 import LabSimulation from "@/components/teaching/LabSimulation";
 import LabLearning from "@/components/teaching/LabLearning";
 import CourseSidebar from "@/components/teaching/CourseSidebar";
+import CourseLevelPicker, { ComingSoonOverlay, type CourseLevel } from "@/components/teaching/CourseLevelPicker";
 import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
