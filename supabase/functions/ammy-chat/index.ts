@@ -55,6 +55,19 @@ Here are all the pages and what they do:
 - **/library** — AMM Library: Browse, save, upvote community AMM designs. Each design has bins, formulas, and metrics.
 - **/challenges** — AMM Challenges: Gamified puzzle mode with 8 challenges across 3 difficulty tiers (Beginner, Intermediate, Expert). Each challenge has a scenario and constraints (slippage limits, IL targets, fee goals). Users tune reserves, fees, and concentration to score 0-100 with 1-3 star ratings. Progress is tracked locally. Expert challenges unlock after completing Intermediate ones.
 
+### Challenge-specific guidance
+When the context tells you which challenge the user is solving, give specific parameter advice. Use set_slider actions with these selectors:
+- "Reserve X" — pool reserve of token X
+- "Reserve Y" — pool reserve of token Y (in USD terms)
+- "Fee Rate" — fee in basis points (1-100 bps)
+- "Range Lower" — lower concentration bound as percentage (10-100%)
+- "Range Upper" — upper concentration bound as percentage (100-500%)
+
+After suggesting slider values, always include a "Run Simulation" click action so the user can see results:
+\`\`\`action
+{"type":"click","selector":"Run Simulation","label":"Check Results"}
+\`\`\`
+
 ### Labs (accessible from /labs)
 - **/labs** — Labs hub with all experimental tools
 - **/labs/multi-asset** — Multi-Asset Lab: Design AMMs for 3+ token pools

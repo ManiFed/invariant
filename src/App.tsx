@@ -21,6 +21,7 @@ import CompilerLab from "./pages/CompilerLab";
 import Challenges from "./pages/Challenges";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
+import { AmmyContextProvider } from "./lib/ammy-context";
 import ForecastIndex from "./forecasting/pages/ForecastIndex";
 import Lessons from "./forecasting/pages/Lessons";
 import Arena from "./forecasting/pages/Arena";
@@ -36,33 +37,35 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/beginner" element={<BeginnerMode />} />
-          <Route path="/advanced" element={<AdvancedMode />} />
-          <Route path="/learn" element={<TeachingLab />} />
-          <Route path="/docs" element={<Documentation />} />
-          <Route path="/library" element={<Library />} />
-          <Route path="/labs" element={<Labs />} />
-          <Route path="/labs/multi-asset" element={<MultiAssetLab />} />
-          <Route path="/labs/time-variance" element={<TimeVarianceLab />} />
-          <Route path="/labs/discover" element={<DiscoveryAtlas />} />
-          <Route path="/labs/discovery" element={<DiscoveryAtlas />} />
-          <Route path="/labs/strategy" element={<LiquidityStrategyLab />} />
-          <Route path="/labs/dna" element={<DNALab />} />
-          <Route path="/labs/replay" element={<MarketReplayLab />} />
-          <Route path="/labs/mev" element={<MEVLab />} />
-          <Route path="/labs/compiler" element={<CompilerLab />} />
-          <Route path="/challenges" element={<Challenges />} />
-          {/* Forecast Lab — separate service */}
-          <Route path={forecastRoute()} element={<ForecastIndex />} />
-          <Route path={forecastRoute("/lessons")} element={<Lessons />} />
-          <Route path={forecastRoute("/arena")} element={<Arena />} />
-          <Route path={forecastRoute("/drills")} element={<Drills />} />
-          <Route path={forecastRoute("/profile")} element={<Profile />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-        <FloatingAIChat />
+        <AmmyContextProvider>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/beginner" element={<BeginnerMode />} />
+            <Route path="/advanced" element={<AdvancedMode />} />
+            <Route path="/learn" element={<TeachingLab />} />
+            <Route path="/docs" element={<Documentation />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/labs" element={<Labs />} />
+            <Route path="/labs/multi-asset" element={<MultiAssetLab />} />
+            <Route path="/labs/time-variance" element={<TimeVarianceLab />} />
+            <Route path="/labs/discover" element={<DiscoveryAtlas />} />
+            <Route path="/labs/discovery" element={<DiscoveryAtlas />} />
+            <Route path="/labs/strategy" element={<LiquidityStrategyLab />} />
+            <Route path="/labs/dna" element={<DNALab />} />
+            <Route path="/labs/replay" element={<MarketReplayLab />} />
+            <Route path="/labs/mev" element={<MEVLab />} />
+            <Route path="/labs/compiler" element={<CompilerLab />} />
+            <Route path="/challenges" element={<Challenges />} />
+            {/* Forecast Lab — separate service */}
+            <Route path={forecastRoute()} element={<ForecastIndex />} />
+            <Route path={forecastRoute("/lessons")} element={<Lessons />} />
+            <Route path={forecastRoute("/arena")} element={<Arena />} />
+            <Route path={forecastRoute("/drills")} element={<Drills />} />
+            <Route path={forecastRoute("/profile")} element={<Profile />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+          <FloatingAIChat />
+        </AmmyContextProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

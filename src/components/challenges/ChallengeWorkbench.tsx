@@ -289,10 +289,12 @@ function ParamSlider({
   return (
     <div>
       <div className="flex justify-between items-center mb-1.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
+        <label className="text-xs text-muted-foreground" htmlFor={`param-${label.toLowerCase().replace(/\s+/g, "-")}`}>{label}</label>
         <span className="text-xs font-mono-data text-foreground">{format(value)}</span>
       </div>
       <Slider
+        id={`param-${label.toLowerCase().replace(/\s+/g, "-")}`}
+        aria-label={label}
         value={[value]}
         min={min}
         max={max}

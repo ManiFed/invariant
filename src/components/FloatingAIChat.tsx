@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, Sparkles, X, Zap } from "lucide-react";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
+import { useAmmyContext } from "@/lib/ammy-context";
 
 const ROUTE_CONTEXT: Record<string, string> = {
   "/": "the homepage of Invariant Studio",
@@ -37,6 +38,7 @@ export default function FloatingAIChat() {
   const [mood, setMood] = useState(0);
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
+  const { pageContext } = useAmmyContext();
 
   // Cycle mood emoji every 8s
   useEffect(() => {
@@ -54,7 +56,8 @@ export default function FloatingAIChat() {
   // Hide on teaching lab — AI is embedded in sidebar there
   if (location.pathname === "/learn") return null;
 
-  const context = ROUTE_CONTEXT[location.pathname] || `the page at ${location.pathname}`;
+  const routeCtx = ROUTE_CONTEXT[location.pathname] || `the page at ${location.pathname}`;
+  const context = pageContext ? `${routeCtx}. ${pageContext}` : routeCtx;
   const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
 
   return (
