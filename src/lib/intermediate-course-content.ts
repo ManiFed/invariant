@@ -338,6 +338,18 @@ export const INTERMEDIATE_MODULES: CourseModule[] = [
           wrongExplanation: "The weight shift pushes price down, but buying pushes it up. These forces compete. If demand outpaces the weight decay, the price rises — a strong signal of real demand.",
         },
       },
+      {
+        type: "lesson",
+        title: "📝 Halfway Checkpoint",
+        content: [
+          "You're halfway through the intermediate track! Let's consolidate:",
+          "• Concentrated liquidity: pick a range, earn amplified fees, face amplified IL. Range width = your risk dial.",
+          "• Fee tiers: different pairs and conditions need different fees. Dynamic fees are the cutting edge — adjusting automatically to volatility.",
+          "• LBPs: weight-shifting pools solve the bot-sniping problem for token launches. Price starts high and decays, rewarding patient buyers.",
+          "The common thread: every AMM design choice is a tradeoff. More efficiency somewhere always means more risk or complexity elsewhere.",
+          "The second half covers oracle security and MEV — the adversarial side of AMM design.",
+        ],
+      },
     ],
   },
 
