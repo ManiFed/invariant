@@ -67,6 +67,12 @@ function downloadCandidateJson(candidate: Candidate) {
 
 export default function DesignDetail({ candidate, state, onBack }: DesignDetailProps) {
   const colors = useChartColors();
+  const [showPublish, setShowPublish] = useState(false);
+  const [publishName, setPublishName] = useState("");
+  const [publishAuthor, setPublishAuthor] = useState("");
+  const [publishDesc, setPublishDesc] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
 
   // Liquidity distribution data
   const liquidityData = useMemo(() =>
