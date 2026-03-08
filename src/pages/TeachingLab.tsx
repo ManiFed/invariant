@@ -297,7 +297,7 @@ export default function TeachingLab() {
           <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
           {!courseComplete && (
             <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
-              MODULE {courseModule + 1}/{COURSE_MODULES.length}
+              MODULE {courseModule + 1}/{activeModules.length}
             </span>
           )}
           {courseComplete && (
