@@ -156,7 +156,6 @@ export function ComingSoonOverlay({
 }) {
   const isIntermediate = level === "intermediate";
   const topics = isIntermediate ? INTERMEDIATE_TOPICS : ADVANCED_TOPICS;
-  const color = isIntermediate ? "warning" : "destructive";
   const Icon = isIntermediate ? Zap : Flame;
   const label = isIntermediate ? "Intermediate" : "Advanced";
 
@@ -168,13 +167,13 @@ export function ComingSoonOverlay({
         className="max-w-md w-full space-y-6"
       >
         <div className="text-center space-y-3">
-          <div className={`w-14 h-14 rounded-2xl bg-${color}/15 flex items-center justify-center mx-auto`}>
-            <Icon className={`w-7 h-7 text-${color}`} />
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${isIntermediate ? "bg-warning/15" : "bg-destructive/15"}`}>
+            <Icon className={`w-7 h-7 ${isIntermediate ? "text-warning" : "text-destructive"}`} />
           </div>
           <h2 className="text-xl font-bold text-foreground">{label} Track</h2>
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-${color}/10 border border-${color}/20`}>
-            <Lock className={`w-3 h-3 text-${color}`} />
-            <span className={`text-xs font-medium text-${color}`}>Coming Soon</span>
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${isIntermediate ? "bg-warning/10 border border-warning/20" : "bg-destructive/10 border border-destructive/20"}`}>
+            <Lock className={`w-3 h-3 ${isIntermediate ? "text-warning" : "text-destructive"}`} />
+            <span className={`text-xs font-medium ${isIntermediate ? "text-warning" : "text-destructive"}`}>Coming Soon</span>
           </div>
         </div>
 
