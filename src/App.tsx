@@ -18,6 +18,7 @@ import DNALab from "./pages/DNALab";
 import MarketReplayLab from "./pages/MarketReplayLab";
 import MEVLab from "./pages/MEVLab";
 import CompilerLab from "./pages/CompilerLab";
+import Challenges from "./pages/Challenges";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
 import ForecastIndex from "./forecasting/pages/ForecastIndex";
@@ -52,6 +53,7 @@ const App = () => (
           <Route path="/labs/replay" element={<MarketReplayLab />} />
           <Route path="/labs/mev" element={<MEVLab />} />
           <Route path="/labs/compiler" element={<CompilerLab />} />
+          <Route path="/challenges" element={<Challenges />} />
           {/* Forecast Lab — separate service */}
           <Route path={forecastRoute()} element={<ForecastIndex />} />
           <Route path={forecastRoute("/lessons")} element={<Lessons />} />

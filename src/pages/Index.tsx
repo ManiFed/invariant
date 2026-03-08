@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FileText, GraduationCap, Heart, Library, Lightbulb, FlaskConical } from "lucide-react";
+import { ArrowRight, Beaker, FileText, GraduationCap, Heart, Library, Lightbulb, FlaskConical, Target } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AsciiCurveHero } from "@/components/AsciiCurveHero";
 
@@ -86,6 +86,15 @@ const Index = () => {
             badge="New"
             badgeColor="border-warning/30 text-warning"
             onClick={() => navigate("/labs")}
+          />
+
+          <NavCard
+            title="Challenges"
+            description="Solve AMM design puzzles — earn stars across beginner, intermediate, and expert tiers"
+            icon={<Target className="w-5 h-5" />}
+            badge="New"
+            badgeColor="border-warning/30 text-warning"
+            onClick={() => navigate("/challenges")}
           />
 
           <NavCard
