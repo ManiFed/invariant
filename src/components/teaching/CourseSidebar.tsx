@@ -583,6 +583,399 @@ function LessonVisual({ visual }: { visual?: string }) {
         <div className="text-[9px] text-muted-foreground text-center mt-1">You pay more; bot profits from the difference</div>
       </div>
     ),
+    // ── Advanced course visuals ──
+    "invariant-landscape": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 200 110" className="w-full max-w-[220px]" fill="none">
+          {/* Constant product */}
+          <path d="M 15 95 Q 35 60 55 42 Q 75 30 100 24 Q 130 19 170 15" stroke="hsl(var(--chart-1))" strokeWidth="2" fill="none" />
+          <text x="155" y="12" fontSize="6" fill="hsl(var(--chart-1))">x·y=k</text>
+          {/* Constant sum */}
+          <line x1="15" y1="15" x2="185" y2="95" stroke="hsl(var(--chart-2))" strokeWidth="1.5" strokeDasharray="4 2" />
+          <text x="155" y="90" fontSize="6" fill="hsl(var(--chart-2))">x+y=k</text>
+          {/* StableSwap blend */}
+          <path d="M 15 80 Q 40 60 65 38 Q 80 30 100 26 Q 120 24 140 24 Q 160 26 185 40" stroke="hsl(var(--warning))" strokeWidth="2.5" fill="none" />
+          <text x="100" y="40" fontSize="6" fill="hsl(var(--warning))">StableSwap</text>
+          <text x="55" y="105" fontSize="5" fill="hsl(var(--muted-foreground))">The invariant design space</text>
+        </svg>
+      </div>
+    ),
+    "stableswap-blend": (
+      <div className="py-3 space-y-2">
+        <div className="flex items-center justify-center">
+          <svg viewBox="0 0 200 90" className="w-full max-w-[220px]" fill="none">
+            {/* Low A (like Uniswap) */}
+            <path d="M 10 80 Q 30 50 50 38 Q 70 28 100 22 Q 140 16 190 12" stroke="hsl(var(--muted-foreground))" strokeWidth="1" opacity="0.4" fill="none" />
+            <text x="150" y="10" fontSize="5" fill="hsl(var(--muted-foreground))">A=1</text>
+            {/* Medium A */}
+            <path d="M 10 75 Q 30 55 60 35 Q 80 28 100 25 Q 120 23 140 23 Q 170 25 190 32" stroke="hsl(var(--chart-2))" strokeWidth="1.5" fill="none" />
+            <text x="155" y="30" fontSize="5" fill="hsl(var(--chart-2))">A=10</text>
+            {/* High A (nearly flat) */}
+            <path d="M 10 60 Q 30 42 60 30 Q 80 26 100 25 Q 120 25 140 26 Q 170 30 190 42" stroke="hsl(var(--warning))" strokeWidth="2.5" fill="none" />
+            <text x="155" y="46" fontSize="5" fill="hsl(var(--warning))">A=100</text>
+            {/* Flat zone highlight */}
+            <rect x="70" y="20" width="60" height="12" rx="3" fill="hsl(var(--warning))" opacity="0.08" />
+            <text x="76" y="28" fontSize="5" fill="hsl(var(--warning))">Near-zero slip</text>
+          </svg>
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center">Higher A → flatter curve near peg → less slippage</div>
+      </div>
+    ),
+    "invariant-design-space": (
+      <div className="py-3 space-y-2">
+        <div className="text-sm font-mono font-bold text-foreground text-center">
+          f(x,y) = α·(x+y) + (1−α)·(x·y)
+        </div>
+        <div className="flex items-center justify-center gap-2">
+          {[
+            { α: "0.0", label: "Uniswap", color: "bg-chart-1/30" },
+            { α: "0.5", label: "Hybrid", color: "bg-warning/30" },
+            { α: "1.0", label: "Const-sum", color: "bg-chart-2/30" },
+          ].map((d, i) => (
+            <motion.div key={d.α} className={`px-2 py-1.5 rounded ${d.color} text-center`}
+              initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.15 }}>
+              <div className="text-[8px] font-mono text-foreground">α={d.α}</div>
+              <div className="text-[7px] text-muted-foreground">{d.label}</div>
+            </motion.div>
+          ))}
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center">Parameterize between known curves</div>
+      </div>
+    ),
+    "mev-sandwich-diagram": (
+      <div className="py-3 space-y-1">
+        <div className="flex items-center justify-center">
+          <svg viewBox="0 0 200 100" className="w-full max-w-[220px]" fill="none">
+            {/* Price axis */}
+            <line x1="20" y1="85" x2="180" y2="85" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
+            <line x1="20" y1="85" x2="20" y2="10" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
+            <text x="5" y="50" fontSize="5" fill="hsl(var(--muted-foreground))" transform="rotate(-90, 5, 50)">Price</text>
+            {/* Frontrun: price up */}
+            <motion.rect x="40" y="40" width="30" height="45" rx="3" fill="hsl(var(--destructive))" opacity="0.2"
+              initial={{ height: 0, y: 85 }} animate={{ height: 45, y: 40 }} transition={{ duration: 0.6 }} />
+            <text x="42" y="36" fontSize="6" fill="hsl(var(--destructive))">① Front</text>
+            {/* Your trade: price up more */}
+            <motion.rect x="85" y="28" width="30" height="57" rx="3" fill="hsl(var(--warning))" opacity="0.2"
+              initial={{ height: 0, y: 85 }} animate={{ height: 57, y: 28 }} transition={{ duration: 0.6, delay: 0.3 }} />
+            <text x="87" y="24" fontSize="6" fill="hsl(var(--warning))">② You</text>
+            {/* Backrun: bot sells */}
+            <motion.rect x="130" y="50" width="30" height="35" rx="3" fill="hsl(var(--destructive))" opacity="0.2"
+              initial={{ height: 0, y: 85 }} animate={{ height: 35, y: 50 }} transition={{ duration: 0.6, delay: 0.6 }} />
+            <text x="132" y="46" fontSize="6" fill="hsl(var(--destructive))">③ Back</text>
+            {/* Profit bracket */}
+            <motion.line x1="170" y1="40" x2="170" y2="50" stroke="hsl(var(--chart-2))" strokeWidth="2"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} />
+            <motion.text x="174" y="47" fontSize="6" fill="hsl(var(--chart-2))"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}>Profit</motion.text>
+          </svg>
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center">Bot profits from the price impact your trade creates</div>
+      </div>
+    ),
+    "jit-liquidity-timeline": (
+      <div className="py-3 space-y-1.5">
+        {[
+          { step: "① Large swap detected in mempool", icon: "👁️", color: "text-muted-foreground" },
+          { step: "② JIT bot adds tight liquidity", icon: "💧", color: "text-chart-1" },
+          { step: "③ Swap executes (better price!)", icon: "🔄", color: "text-warning" },
+          { step: "④ Bot removes liquidity + fees", icon: "💰", color: "text-chart-2" },
+          { step: "⑤ Passive LPs earned nothing", icon: "😔", color: "text-destructive" },
+        ].map((d, i) => (
+          <motion.div key={i} className="flex items-center gap-2 text-[9px]"
+            initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.15 }}>
+            <span>{d.icon}</span>
+            <span className={d.color}>{d.step}</span>
+          </motion.div>
+        ))}
+      </div>
+    ),
+    "mev-defense-layers": (
+      <div className="py-3 space-y-1.5">
+        {[
+          { layer: "Network", defenses: "Encrypted mempool, PBS", color: "bg-chart-1/20 border-chart-1/30" },
+          { layer: "Protocol", defenses: "Batch auctions, CoW", color: "bg-chart-2/20 border-chart-2/30" },
+          { layer: "Contract", defenses: "Dynamic fees, TWAP", color: "bg-warning/20 border-warning/30" },
+          { layer: "User", defenses: "Slippage limits, private RPC", color: "bg-chart-3/20 border-chart-3/30" },
+        ].map((d, i) => (
+          <motion.div key={d.layer} className={`flex items-center gap-2 text-[9px] px-2 py-1.5 rounded-lg border ${d.color}`}
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.12 }}>
+            <span className="font-mono font-semibold w-14 text-foreground">{d.layer}</span>
+            <span className="text-muted-foreground">{d.defenses}</span>
+          </motion.div>
+        ))}
+      </div>
+    ),
+    "chain-fragmentation": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 200 100" className="w-full max-w-[220px]" fill="none">
+          {[
+            { cx: 40, cy: 30, label: "Eth", size: 18 },
+            { cx: 100, cy: 20, label: "Arb", size: 14 },
+            { cx: 155, cy: 35, label: "Base", size: 12 },
+            { cx: 60, cy: 70, label: "OP", size: 11 },
+            { cx: 130, cy: 75, label: "Sol", size: 15 },
+          ].map((chain, i) => (
+            <g key={chain.label}>
+              <motion.circle cx={chain.cx} cy={chain.cy} r={chain.size} fill="hsl(var(--chart-1))" opacity={0.1 + i * 0.03}
+                stroke="hsl(var(--chart-1))" strokeWidth="1" strokeDasharray="3 2"
+                initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.1 }} />
+              <text x={chain.cx - 7} y={chain.cy + 3} fontSize="7" fill="hsl(var(--chart-1))">{chain.label}</text>
+            </g>
+          ))}
+          <text x="40" y="95" fontSize="6" fill="hsl(var(--muted-foreground))">Isolated liquidity islands</text>
+        </svg>
+      </div>
+    ),
+    "intent-vs-bridge": (
+      <div className="py-3 space-y-2">
+        <div className="flex gap-2">
+          <div className="flex-1 rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">Bridge-Based</div>
+            <div className="text-[8px] font-mono text-destructive">Lock → Mint → Swap → Bridge</div>
+            <div className="text-[7px] text-muted-foreground mt-0.5">⏱ 10-30 min, 🔗 Trust bridge</div>
+          </div>
+          <div className="flex-1 rounded-lg bg-chart-2/10 border border-chart-2/20 p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">Intent-Based</div>
+            <div className="text-[8px] font-mono text-chart-2">"I want X for Y" → Solver fills</div>
+            <div className="text-[7px] text-muted-foreground mt-0.5">⚡ Seconds, 🏆 Best price</div>
+          </div>
+        </div>
+      </div>
+    ),
+    "virtual-pool-mesh": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 200 100" className="w-full max-w-[220px]" fill="none">
+          {/* Connected nodes */}
+          {[
+            { cx: 40, cy: 30 }, { cx: 100, cy: 20 }, { cx: 160, cy: 30 },
+            { cx: 60, cy: 70 }, { cx: 140, cy: 70 },
+          ].map((n, i, arr) => (
+            <g key={i}>
+              <circle cx={n.cx} cy={n.cy} r="12" fill="hsl(var(--chart-2))" opacity="0.15" stroke="hsl(var(--chart-2))" strokeWidth="1" />
+              {arr.slice(i + 1).map((m, j) => (
+                <motion.line key={j} x1={n.cx} y1={n.cy} x2={m.cx} y2={m.cy}
+                  stroke="hsl(var(--chart-2))" strokeWidth="0.5" opacity="0.3"
+                  initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ delay: i * 0.1, duration: 0.5 }} />
+              ))}
+            </g>
+          ))}
+          <text x="50" y="95" fontSize="6" fill="hsl(var(--chart-2))">Virtual unified liquidity mesh</text>
+        </svg>
+      </div>
+    ),
+    "static-vs-dynamic-fees": (
+      <div className="py-3 space-y-2">
+        <div className="flex items-end justify-center gap-3 h-16">
+          {[
+            { label: "Calm", staticFee: 30, dynFee: 15, vol: "Low σ" },
+            { label: "Normal", staticFee: 30, dynFee: 30, vol: "Med σ" },
+            { label: "Volatile", staticFee: 30, dynFee: 55, vol: "High σ" },
+          ].map((d, i) => (
+            <div key={d.label} className="flex flex-col items-center gap-0.5">
+              <div className="flex items-end gap-0.5">
+                <motion.div className="w-4 rounded-t bg-muted-foreground/30"
+                  initial={{ height: 0 }} animate={{ height: `${d.staticFee}px` }} transition={{ delay: i * 0.15, duration: 0.4 }} />
+                <motion.div className="w-4 rounded-t bg-warning/60"
+                  initial={{ height: 0 }} animate={{ height: `${d.dynFee}px` }} transition={{ delay: i * 0.15, duration: 0.4 }} />
+              </div>
+              <span className="text-[7px] font-mono text-muted-foreground">{d.vol}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-center gap-3 text-[8px]">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-muted-foreground/30" /> Static</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-warning/60" /> Dynamic</span>
+        </div>
+      </div>
+    ),
+    "volatility-fee-curve": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 200 90" className="w-full max-w-[220px]" fill="none">
+          <line x1="20" y1="75" x2="180" y2="75" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
+          <line x1="20" y1="75" x2="20" y2="10" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
+          <text x="80" y="88" fontSize="5" fill="hsl(var(--muted-foreground))">Volatility (σ)</text>
+          <text x="5" y="45" fontSize="5" fill="hsl(var(--muted-foreground))" transform="rotate(-90, 5, 45)">Fee</text>
+          {/* f = f_base + k*sigma */}
+          <motion.path d="M 20 60 Q 60 55 100 42 Q 140 28 180 15"
+            stroke="hsl(var(--warning))" strokeWidth="2" fill="none"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1 }} />
+          {/* Base fee line */}
+          <line x1="20" y1="60" x2="180" y2="60" stroke="hsl(var(--muted-foreground))" strokeWidth="1" strokeDasharray="3 2" opacity="0.4" />
+          <text x="140" y="67" fontSize="5" fill="hsl(var(--muted-foreground))">f_base</text>
+          <text x="50" y="20" fontSize="6" fill="hsl(var(--warning))">f = f_base + k·σ</text>
+        </svg>
+      </div>
+    ),
+    "directional-fee-diagram": (
+      <div className="py-3 space-y-2">
+        <div className="flex gap-2">
+          <motion.div className="flex-1 rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-center"
+            initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
+            <div className="text-[9px] text-muted-foreground mb-0.5">Toward oracle →</div>
+            <div className="text-sm font-mono text-destructive font-bold">0.8%</div>
+            <div className="text-[7px] text-muted-foreground">Likely arbitrage</div>
+          </motion.div>
+          <motion.div className="flex-1 rounded-lg bg-chart-2/10 border border-chart-2/20 p-2 text-center"
+            initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+            <div className="text-[9px] text-muted-foreground mb-0.5">Away from oracle →</div>
+            <div className="text-sm font-mono text-chart-2 font-bold">0.1%</div>
+            <div className="text-[7px] text-muted-foreground">Likely retail</div>
+          </motion.div>
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center">Charge informed flow more, uninformed less</div>
+      </div>
+    ),
+    "checkpoint-summary": (
+      <div className="py-3 space-y-1.5">
+        {[
+          { mod: "1", topic: "Custom Invariants", key: "Convexity + parameterization", emoji: "🔬" },
+          { mod: "2", topic: "MEV Protection", key: "Layered defense strategies", emoji: "🛡️" },
+          { mod: "3", topic: "Cross-Chain", key: "Intents > bridges", emoji: "🌐" },
+          { mod: "4", topic: "Dynamic Fees", key: "Adapt to volatility", emoji: "⚡" },
+        ].map((d, i) => (
+          <motion.div key={d.mod} className="flex items-center gap-2 text-[9px] px-2 py-1 rounded bg-secondary border border-border"
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+            <span>{d.emoji}</span>
+            <span className="font-mono text-foreground">M{d.mod}</span>
+            <span className="text-muted-foreground flex-1">{d.key}</span>
+          </motion.div>
+        ))}
+      </div>
+    ),
+    "mercenary-capital-cycle": (
+      <div className="py-3 flex items-center justify-center">
+        <svg viewBox="0 0 200 110" className="w-full max-w-[220px]" fill="none">
+          {/* Circular arrows */}
+          <motion.path d="M 100 15 Q 160 15 165 55 Q 165 90 100 95 Q 35 95 35 55 Q 35 15 100 15"
+            stroke="hsl(var(--destructive))" strokeWidth="1.5" fill="none" strokeDasharray="4 2"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, repeat: Infinity }} />
+          {/* Stages */}
+          {[
+            { x: 100, y: 10, label: "High APY" },
+            { x: 168, y: 55, label: "LP inflow" },
+            { x: 100, y: 100, label: "APY drops" },
+            { x: 28, y: 55, label: "LP exodus" },
+          ].map((d, i) => (
+            <g key={d.label}>
+              <circle cx={d.x} cy={d.y} r="3" fill="hsl(var(--destructive))" />
+              <text x={d.x - 12} y={d.y + (i === 0 ? -5 : i === 2 ? 12 : 0)} fontSize="6" fill="hsl(var(--destructive))">{d.label}</text>
+            </g>
+          ))}
+          <text x="60" y="60" fontSize="6" fill="hsl(var(--muted-foreground))">Death spiral</text>
+        </svg>
+      </div>
+    ),
+    "bonding-mechanism": (
+      <div className="py-3 space-y-1.5">
+        {[
+          { step: "① User has LP tokens", icon: "🎟️", desc: "Worth $1,000 at market" },
+          { step: "② Protocol offers bond", icon: "📜", desc: "$1,050 in OHM (5% discount)" },
+          { step: "③ User bonds LP tokens", icon: "🤝", desc: "Gives LP, gets vesting OHM" },
+          { step: "④ Protocol owns liquidity", icon: "🏛️", desc: "Permanent, no emissions needed" },
+        ].map((d, i) => (
+          <motion.div key={i} className="flex items-center gap-2 text-[9px]"
+            initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.15 }}>
+            <span>{d.icon}</span>
+            <span className="font-mono text-foreground">{d.step}</span>
+          </motion.div>
+        ))}
+      </div>
+    ),
+    "pol-strategies-comparison": (
+      <div className="py-3">
+        <div className="flex items-end justify-center gap-2 h-16">
+          {[
+            { label: "Emissions", sustain: 15, color: "bg-destructive/40" },
+            { label: "Bonding", sustain: 55, color: "bg-chart-2/50" },
+            { label: "80/20 Pool", sustain: 65, color: "bg-chart-1/50" },
+            { label: "Active POL", sustain: 75, color: "bg-warning/50" },
+          ].map((d, i) => (
+            <motion.div key={d.label} className="flex flex-col items-center gap-0.5"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.12 }}>
+              <motion.div className={`w-9 rounded-t ${d.color}`}
+                initial={{ height: 0 }} animate={{ height: `${d.sustain}px` }} transition={{ delay: i * 0.12, duration: 0.4 }} />
+              <span className="text-[6px] font-mono text-muted-foreground">{d.label}</span>
+            </motion.div>
+          ))}
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center mt-1">Sustainability of liquidity strategies</div>
+      </div>
+    ),
+    "testing-vs-formal": (
+      <div className="py-3 space-y-2">
+        <div className="flex gap-2">
+          <div className="flex-1 rounded-lg bg-warning/10 border border-warning/20 p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">Testing</div>
+            <div className="flex items-center justify-center gap-0.5">
+              {[1,2,3,4,5].map(i => (
+                <motion.div key={i} className="w-2 h-2 rounded-full bg-chart-2/60"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.1 }} />
+              ))}
+              <span className="text-[8px] text-warning ml-1">…?</span>
+            </div>
+            <div className="text-[7px] text-muted-foreground mt-0.5">Checks samples</div>
+          </div>
+          <div className="flex-1 rounded-lg bg-chart-2/10 border border-chart-2/20 p-2 text-center">
+            <div className="text-[9px] text-muted-foreground mb-0.5">Formal</div>
+            <motion.div className="text-sm font-mono text-chart-2"
+              animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }}>∀x ✓</motion.div>
+            <div className="text-[7px] text-muted-foreground mt-0.5">Proves all inputs</div>
+          </div>
+        </div>
+      </div>
+    ),
+    "verification-properties": (
+      <div className="py-3 space-y-1">
+        {[
+          { prop: "No-drain", desc: "Can't extract more than deposited", icon: "🛡️" },
+          { prop: "Monotonicity", desc: "More in → more out", icon: "📈" },
+          { prop: "Conservation", desc: "Invariant always holds", icon: "⚖️" },
+          { prop: "Rounding safety", desc: "Rounding favors pool", icon: "🔢" },
+          { prop: "No stuck states", desc: "Pool always accepts trades", icon: "🔄" },
+        ].map((d, i) => (
+          <motion.div key={d.prop} className="flex items-center gap-2 text-[9px] px-1.5 py-1 rounded bg-secondary/50"
+            initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}>
+            <span className="text-[10px]">{d.icon}</span>
+            <span className="font-mono text-foreground w-20">{d.prop}</span>
+            <span className="text-muted-foreground">{d.desc}</span>
+          </motion.div>
+        ))}
+      </div>
+    ),
+    "verification-toolchain": (
+      <div className="py-3 space-y-1.5">
+        {[
+          { tool: "Certora", type: "SMT-based prover", strength: "Production standard", color: "bg-chart-1/20 border-chart-1/30" },
+          { tool: "Halmos", type: "Symbolic execution", strength: "Quick setup", color: "bg-chart-2/20 border-chart-2/30" },
+          { tool: "Lean/Coq", type: "Theorem prover", strength: "Deepest guarantees", color: "bg-warning/20 border-warning/30" },
+        ].map((d, i) => (
+          <motion.div key={d.tool} className={`flex items-center gap-2 text-[9px] px-2 py-1.5 rounded-lg border ${d.color}`}
+            initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.15 }}>
+            <span className="font-mono font-semibold text-foreground w-14">{d.tool}</span>
+            <span className="text-muted-foreground flex-1">{d.strength}</span>
+          </motion.div>
+        ))}
+      </div>
+    ),
+    "graduation-advanced": (
+      <div className="py-4 flex flex-col items-center gap-2">
+        <motion.div className="text-3xl"
+          animate={{ scale: [1, 1.15, 1], rotate: [0, 5, -5, 0] }}
+          transition={{ duration: 2, repeat: Infinity }}>
+          🎓
+        </motion.div>
+        <div className="text-sm font-bold text-foreground">Advanced Complete</div>
+        <div className="flex flex-wrap justify-center gap-1">
+          {["🔬", "🛡️", "🌐", "⚡", "🏛️", "📐"].map((e, i) => (
+            <motion.span key={i} className="text-lg"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+              {e}
+            </motion.span>
+          ))}
+        </div>
+        <div className="text-[9px] text-muted-foreground text-center">6 modules mastered — go build something</div>
+      </div>
+    ),
   };
 
   return visuals[visual] || null;
