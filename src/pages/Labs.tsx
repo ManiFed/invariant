@@ -3,6 +3,33 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers, History, Shield, Wrench } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
+const labs = [
+  { route: "/labs/discovery", name: "Invariant Atlas", icon: Compass, color: "chart-3",
+    desc: "Continuous global discovery with user-defined experiment runs, evolutionary searches, and configurable objectives.",
+    bullets: ["64-bin liquidity representation", "Multi-objective scoring", "Pareto frontier tracking"] },
+  { route: "/labs/strategy", name: "Liquidity Strategy Lab", icon: Layers, color: "chart-4",
+    desc: "Design, backtest, and compare LP strategies over Monte Carlo price simulations against passive LPing.",
+    bullets: ["4 strategy presets", "Up to 5k MC paths", "Fee vs IL attribution"] },
+  { route: "/labs/dna", name: "AMM DNA Visualizer", icon: Dna, color: "chart-5",
+    desc: "Radial genome rings, feature radar arcs, and lineage trees tracing evolutionary ancestry across generations.",
+    bullets: ["64-bin genome fingerprint", "Side-by-side comparison", "Lineage tree exploration"] },
+  { route: "/labs/replay", name: "Live Market Replay", icon: History, color: "chart-1",
+    desc: "Replay historical market scenarios — Black Thursday, LUNA collapse, DeFi Summer — through any library AMM.",
+    bullets: ["8 curated scenarios", "Animated playback", "Drawdown detection"] },
+  { route: "/labs/mev", name: "MEV Impact Analyzer", icon: Shield, color: "destructive",
+    desc: "Simulate sandwich attacks, backrun arbitrage, and JIT liquidity. Quantify value leakage from any design.",
+    bullets: ["Protection Score 0-100", "Value flow breakdown", "Configurable attacker budget"] },
+  { route: "/labs/compiler", name: "Invariant Compiler", icon: Wrench, color: "chart-2",
+    desc: "Full pipeline: Solidity generation → compile → gas profile → storage layout → test suite → testnet deploy.",
+    bullets: ["Per-function gas profiling", "Storage layout viz", "Simulated deployment"] },
+  { route: "/labs/multi-asset", name: "Multi-Asset AMMs", icon: Boxes, color: "chart-1",
+    desc: "Design invariants across 3+ tokens with 3D surface plots, pairwise slicing, and price matrix heatmaps.",
+    bullets: ["Asset table editor", "3D surface visualization", "Price matrix heatmap"] },
+  { route: "/labs/time-variance", name: "Time-Variance AMMs", icon: Clock, color: "chart-2",
+    desc: "AMMs that evolve over time. Animate curves, adjust parameters at keyframes, build time-dependent functions.",
+    bullets: ["Keyframe timeline editor", "Continuous playback", "Snapshot comparison"] },
+];
+
 const Labs = () => {
   const navigate = useNavigate();
 
@@ -10,30 +37,25 @@ const Labs = () => {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("/")}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-bold text-foreground tracking-tight">LABS</span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
-            EXPERIMENTAL
-          </span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
         </div>
         <ThemeToggle />
       </header>
 
-      <div className="max-w-3xl mx-auto px-8 pt-16 pb-10">
+      <div className="max-w-6xl mx-auto px-6 pt-12 pb-10">
         <motion.h1
-          className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight mb-4 text-foreground"
+          className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight mb-3 text-foreground"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
           Experimental AMM Labs
         </motion.h1>
         <motion.p
-          className="text-base text-muted-foreground max-w-xl mb-12 leading-relaxed"
+          className="text-base text-muted-foreground max-w-xl mb-10 leading-relaxed"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -41,357 +63,38 @@ const Labs = () => {
           Not guaranteed to work. Quite cool.
         </motion.p>
 
-        {/* Featured: Discovery Atlas */}
         <motion.div
-          className="mb-8"
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-3"
-            onClick={() => navigate("/labs/discovery")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-chart-3/10 border border-chart-3/20 flex items-center justify-center shrink-0">
-                <Compass className="w-6 h-6 text-chart-3" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold text-foreground">Invariant Atlas</h2>
+          {labs.map((lab, i) => {
+            const Icon = lab.icon;
+            return (
+              <motion.div
+                key={lab.route}
+                className="surface-elevated rounded-2xl p-5 cursor-pointer group hover:border-foreground/20 transition-all flex flex-col"
+                onClick={() => navigate(lab.route)}
+                whileHover={{ y: -3 }}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + i * 0.04 }}
+              >
+                <div className={`w-10 h-10 rounded-xl bg-${lab.color}/10 border border-${lab.color}/20 flex items-center justify-center mb-3`}>
+                  <Icon className={`w-5 h-5 text-${lab.color}`} />
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Continuous global discovery now paired with user-defined experiment runs. Atlas keeps the Phase One
-                  mathematical core intact while allowing contributors to launch isolated evolutionary searches with
-                  configurable objectives, parameter constraints, and regime assumptions.
-                </p>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Canonical 64-bin liquidity representation</li>
-                    <li>• Regime controls (vol, jumps, mean reversion)</li>
-                    <li>• Statistically isolated Monte Carlo paths</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Per-experiment evolutionary populations</li>
-                    <li>• Single or weighted multi-objective scoring</li>
-                    <li>• Pareto frontier and convergence tracking</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Live queue and active job visibility</li>
-                    <li>• Atlas filters by contributor/experiment</li>
-                    <li>• User discoveries auto-archived globally</li>
-                  </ul>
+                <h2 className="text-sm font-bold text-foreground mb-1.5">{lab.name}</h2>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{lab.desc}</p>
+                <ul className="space-y-0.5 text-[10px] text-muted-foreground mb-3">
+                  {lab.bullets.map(b => <li key={b}>• {b}</li>)}
+                </ul>
+                <div className="flex items-center gap-1 text-[10px] text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-auto">
+                  Enter <ArrowRight className="w-3 h-3" />
                 </div>
-                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
-                  Enter Atlas <ArrowRight className="w-3 h-3" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        {/* Liquidity Strategy Lab */}
-        <motion.div
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-        >
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-4"
-            onClick={() => navigate("/labs/strategy")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-chart-4/10 border border-chart-4/20 flex items-center justify-center shrink-0">
-                <Layers className="w-6 h-6 text-chart-4" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold text-foreground">Liquidity Strategy Lab</h2>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Design, backtest, and compare LP strategies over Monte Carlo price simulations. Evaluate active
-                  management rules — range rebalancing, volatility tracking, hedging — against passive LPing.
-                </p>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• 4 strategy presets (Passive, Range, Vol, MR)</li>
-                    <li>• Up to 3 side-by-side comparisons</li>
-                    <li>• Configurable range, cooldown, hedging</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Monte Carlo simulation (up to 5k paths)</li>
-                    <li>• GBM with jump diffusion</li>
-                    <li>• Session-linked invariant &amp; fees</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Equity curves with confidence bands</li>
-                    <li>• Sharpe, drawdown, win rate metrics</li>
-                    <li>• Fee vs IL attribution breakdown</li>
-                  </ul>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
-                  Enter Lab <ArrowRight className="w-3 h-3" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        {/* DNA Visualizer */}
-        <motion.div
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-5"
-            onClick={() => navigate("/labs/dna")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-chart-5/10 border border-chart-5/20 flex items-center justify-center shrink-0">
-                <Dna className="w-6 h-6 text-chart-5" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold text-foreground">AMM DNA Visualizer</h2>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Explore the genetic fingerprint of every discovered AMM design. Radial genome rings encode
-                  64-bin liquidity distributions, inner radar arcs map feature traits, and lineage trees trace
-                  evolutionary ancestry across generations.
-                </p>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Radial genome ring (64-bin fingerprint)</li>
-                    <li>• Family-colored segments with density encoding</li>
-                    <li>• Inner feature radar (7 descriptors)</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Side-by-side DNA comparison</li>
-                    <li>• Divergence map with cosine similarity</li>
-                    <li>• Head-to-head metric bar charts</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Generational lineage trees</li>
-                    <li>• Mutation jump detection &amp; glow</li>
-                    <li>• Click-to-inspect any ancestor</li>
-                  </ul>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
-                  Enter Visualizer <ArrowRight className="w-3 h-3" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        {/* Live Market Replay */}
-        <motion.div
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-        >
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-1"
-            onClick={() => navigate("/labs/replay")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-chart-1/10 border border-chart-1/20 flex items-center justify-center shrink-0">
-                <History className="w-6 h-6 text-chart-1" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold text-foreground">Live Market Replay</h2>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Replay historical market scenarios through any library AMM design. See how your invariant
-                  would have performed during Black Thursday, the LUNA collapse, DeFi Summer, and more.
-                </p>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• 8 curated market scenarios</li>
-                    <li>• Crash, rally, crab, volatile regimes</li>
-                    <li>• Animated day-by-day playback</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• LP Value vs HODL comparison</li>
-                    <li>• Cumulative fee &amp; IL attribution</li>
-                    <li>• Drawdown event detection</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Sharpe, win rate, volatility metrics</li>
-                    <li>• Recovery time analysis</li>
-                    <li>• Configurable fee rates</li>
-                  </ul>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
-                  Enter Replay <ArrowRight className="w-3 h-3" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        {/* MEV Impact Analyzer */}
-        <motion.div
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-destructive"
-            onClick={() => navigate("/labs/mev")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-center shrink-0">
-                <Shield className="w-6 h-6 text-destructive" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold text-foreground">MEV Impact Analyzer</h2>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Quantify extractable value leaking from any AMM design. Simulate sandwich attacks, backrun
-                  arbitrage, and JIT liquidity under configurable block-building strategies.
-                </p>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Sandwich attack simulation</li>
-                    <li>• Backrun arbitrage modeling</li>
-                    <li>• JIT liquidity extraction</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Value flow pie chart (LP vs MEV)</li>
-                    <li>• Per-block extraction timeline</li>
-                    <li>• Cumulative extraction curves</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• MEV Protection Score (0-100)</li>
-                    <li>• Slippage amplification factor</li>
-                    <li>• Configurable attacker budget</li>
-                  </ul>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
-                  Enter Analyzer <ArrowRight className="w-3 h-3" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        {/* Invariant Compiler */}
-        <motion.div
-          className="mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-        >
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-2"
-            onClick={() => navigate("/labs/compiler")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center shrink-0">
-                <Wrench className="w-6 h-6 text-chart-2" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold text-foreground">Invariant Compiler</h2>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Full pipeline from Solidity generation to simulated testnet deployment. Compile any library
-                  design, profile gas costs, inspect storage layout, run test suites, and deploy.
-                </p>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Auto-generated Solidity from library</li>
-                    <li>• Configurable optimizer runs</li>
-                    <li>• Compiler error/warning reporting</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Per-function gas profiling</li>
-                    <li>• Storage slot layout visualization</li>
-                    <li>• ABI extraction &amp; inspection</li>
-                  </ul>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground">
-                    <li>• Automated test suite generation</li>
-                    <li>• Invariant &amp; security tests</li>
-                    <li>• Simulated testnet deploy pipeline</li>
-                  </ul>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
-                  Enter Compiler <ArrowRight className="w-3 h-3" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        <motion.div
-          className="grid sm:grid-cols-2 gap-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all"
-            onClick={() => navigate("/labs/multi-asset")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="w-12 h-12 rounded-xl bg-chart-1/10 border border-chart-1/20 flex items-center justify-center mb-4">
-              <Boxes className="w-6 h-6 text-chart-1" />
-            </div>
-            <h2 className="text-lg font-bold text-foreground mb-2">Multi-Asset AMMs</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              Design invariants across 3+ tokens. Asset table, 3D surface plots, pairwise slicing, price matrix
-              heatmaps, and multi-asset optimization.
-            </p>
-            <ul className="space-y-1 text-[11px] text-muted-foreground mb-4">
-              <li>• Spreadsheet-style asset configuration</li>
-              <li>• 3D surface visualization &amp; pairwise slices</li>
-              <li>• Radar chart of liquidity distribution</li>
-              <li>• Price matrix heatmap (∂xⱼ/∂xᵢ)</li>
-              <li>• Swap rate metrics between all pairs</li>
-            </ul>
-            <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-              Enter Lab <ArrowRight className="w-3 h-3" />
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all"
-            onClick={() => navigate("/labs/time-variance")}
-            whileHover={{ y: -3 }}
-          >
-            <div className="w-12 h-12 rounded-xl bg-chart-2/10 border border-chart-2/20 flex items-center justify-center mb-4">
-              <Clock className="w-6 h-6 text-chart-2" />
-            </div>
-            <h2 className="text-lg font-bold text-foreground mb-2">Time-Variance AMMs</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              Design AMMs that evolve over time. Animate the invariant curve, adjust parameters at keyframes, and build
-              time-dependent fee and weight functions.
-            </p>
-            <ul className="space-y-1 text-[11px] text-muted-foreground mb-4">
-              <li>• Continuous playback with pause/edit points</li>
-              <li>• Parameter timeline editor with keyframes</li>
-              <li>• Time-dependent expression functions</li>
-              <li>• All graphs animated over time</li>
-              <li>• Snapshot comparison at any two points</li>
-            </ul>
-            <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-              Enter Lab <ArrowRight className="w-3 h-3" />
-            </div>
-          </motion.div>
+              </motion.div>
+            );
+          })}
         </motion.div>
       </div>
     </div>
