@@ -37,9 +37,6 @@ export default function FloatingAIChat() {
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
 
-  // Hide on teaching lab — AI is embedded in sidebar there
-  if (location.pathname === "/learn") return null;
-
   // Cycle mood emoji every 8s
   useEffect(() => {
     const t = setInterval(() => setMood(m => (m + 1) % MOODS.length), 8000);
@@ -52,6 +49,9 @@ export default function FloatingAIChat() {
     const t = setTimeout(() => setHasUnread(true), 12000);
     return () => clearTimeout(t);
   }, [open, location.pathname]);
+
+  // Hide on teaching lab — AI is embedded in sidebar there
+  if (location.pathname === "/learn") return null;
 
   const context = ROUTE_CONTEXT[location.pathname] || `the page at ${location.pathname}`;
   const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
