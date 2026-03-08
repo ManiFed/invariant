@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Challenge, ChallengeParams, ChallengeResult, ConstraintResult } from "@/lib/challenge-engine";
-import { saveProgress } from "@/lib/challenge-engine";
+import { saveProgress, getSlidersForChallenge } from "@/lib/challenge-engine";
 
 export default function ChallengeWorkbench({
   challenge,
