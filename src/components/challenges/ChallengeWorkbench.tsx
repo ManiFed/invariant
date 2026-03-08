@@ -46,7 +46,49 @@ export default function ChallengeWorkbench({
     setResult(null);
     setCelebrated(false);
     setShowHint(-1);
+    setGaveUp(false);
   };
+
+  const giveUp = useCallback(() => {
+    if (animating) return;
+    setGaveUp(true);
+    setAnimating(true);
+    setResult(null);
+
+    const solution = challenge.solutionParams;
+    const start = { ...params };
+    const duration = 800;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      // Ease out cubic
+      const ease = 1 - Math.pow(1 - t, 3);
+      setParams({
+        reserveX: Math.round(start.reserveX + (solution.reserveX - start.reserveX) * ease),
+        reserveY: Math.round(start.reserveY + (solution.reserveY - start.reserveY) * ease),
+        feeRate: start.feeRate + (solution.feeRate - start.feeRate) * ease,
+        amplification: start.amplification + (solution.amplification - start.amplification) * ease,
+        concentrationLower: start.concentrationLower + (solution.concentrationLower - start.concentrationLower) * ease,
+        concentrationUpper: start.concentrationUpper + (solution.concentrationUpper - start.concentrationUpper) * ease,
+      });
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setParams({ ...solution });
+        setAnimating(false);
+        // Auto-run evaluation after filling in
+        setTimeout(() => {
+          const r = challenge.evaluate(solution);
+          setResult(r);
+          if (r.passed) {
+            // Don't save progress on give-up — it's a freebie
+          }
+        }, 300);
+      }
+    };
+    requestAnimationFrame(animate);
+  }, [challenge, params, animating]);
 
   const updateParam = (key: keyof ChallengeParams, value: number) => {
     setParams(prev => ({ ...prev, [key]: value }));
