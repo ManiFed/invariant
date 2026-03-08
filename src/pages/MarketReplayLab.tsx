@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Pause, SkipForward, RotateCcw, AlertTriangle, TrendingDown, TrendingUp, Minus, Info, Gauge, BarChart3, GitCompare } from "lucide-react";
+import { ArrowLeft, Play, Pause, SkipForward, RotateCcw, AlertTriangle, TrendingDown, TrendingUp, Minus, Info, Gauge, BarChart3, GitCompare, Plus, Pencil, Trash2, Save, X } from "lucide-react";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ReferenceLine, ComposedChart } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import ThemeToggle from "@/components/ThemeToggle";
