@@ -588,6 +588,70 @@ function LessonVisual({ visual }: { visual?: string }) {
   return visuals[visual] || null;
 }
 
+// Shuffled quiz component — shuffles options deterministically by question text
+function ShuffledQuiz({
+  question, options, correctIndex, explanation, wrongExplanation,
+  selectedAnswer, answered, onAnswer, isFollowUp,
+}: {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  wrongExplanation: string;
+  selectedAnswer: number | null;
+  answered: boolean;
+  onAnswer: (idx: number) => void;
+  isFollowUp?: boolean;
+}) {
+  const { items: shuffledOptions, indexMap } = useMemo(
+    () => seededShuffle(options, question),
+    [options, question]
+  );
+  const gotCorrect = selectedAnswer !== null && indexMap[selectedAnswer] === correctIndex;
+  const py = isFollowUp ? "py-1.5" : "py-2";
+
+  return (
+    <>
+      <div className="space-y-1">
+        {shuffledOptions.map((opt, displayIdx) => {
+          const origIdx = indexMap[displayIdx];
+          const isCorrect = origIdx === correctIndex;
+          const isSelected = selectedAnswer === displayIdx;
+          let optClass = "bg-background border-border text-foreground hover:bg-secondary cursor-pointer";
+          if (answered) {
+            if (isCorrect) optClass = "bg-success/10 border-success/30 text-success";
+            else if (isSelected && !isCorrect) optClass = "bg-destructive/10 border-destructive/30 text-destructive";
+            else optClass = "bg-background border-border text-muted-foreground opacity-50";
+          }
+          return (
+            <button
+              key={displayIdx}
+              onClick={() => onAnswer(displayIdx)}
+              disabled={answered}
+              className={`w-full text-left text-[10px] px-2.5 ${py} rounded-lg border transition-all ${optClass}`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {answered && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-2 rounded-lg text-[10px] leading-relaxed ${
+            gotCorrect
+              ? "bg-success/10 border border-success/20 text-foreground"
+              : "bg-destructive/10 border border-destructive/20 text-foreground"
+          }`}
+        >
+          {gotCorrect ? explanation : wrongExplanation}
+        </motion.div>
+      )}
+    </>
+  );
+}
+
 export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules }: Props) {
   const courseModules = modules || COURSE_MODULES;
   const [showAI, setShowAI] = useState(false);
