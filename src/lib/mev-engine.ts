@@ -118,7 +118,7 @@ export function simulateMEV(config: MEVSimConfig): MEVResult {
 
     for (let s = 0; s < swapsPerBlock; s++) {
       const isXtoY = Math.random() > 0.5;
-      const baseSize = (Math.random() * 0.02 + 0.001) * reserveY;
+      const baseSize = (Math.random() * 0.005 + 0.0005) * reserveY;
       const swapResult = computeSwapOutput(bins, reserveX, reserveY, baseSize, isXtoY, feeRate);
       blockFees += swapResult.fee;
       totalVolume += baseSize;
