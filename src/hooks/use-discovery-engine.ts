@@ -51,6 +51,17 @@ function normalizeLoadedState(next: EngineState): EngineState {
   };
 }
 
+function hasRecoverableState(next: EngineState | null | undefined): next is EngineState {
+  if (!next) return false;
+  if (next.totalGenerations > 0) return true;
+  if (next.archive.length > 0) return true;
+  const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
+  return regimes.some((regimeId) => {
+    const population = next.populations[regimeId];
+    return !!population && (population.candidates.length > 0 || population.champion !== null || population.generation > 0 || population.totalEvaluated > 0);
+  });
+}
+
 export type SyncMode = "live" | "persisted" | "memory" | "loading";
 
 export function useDiscoveryEngine() {
@@ -201,7 +212,7 @@ export function useDiscoveryEngine() {
               return cloudState || persistedState;
             })();
 
-            if (pickedState && pickedState.archive.length > 0) {
+            if (hasRecoverableState(pickedState)) {
               setState(normalizeLoadedState(pickedState));
             }
           }
@@ -223,7 +234,7 @@ export function useDiscoveryEngine() {
       // 2. Realtime unavailable — fall back to IndexedDB (always leader locally)
       setRole("leader");
       const persistedState = await loadAtlasStateFromDB();
-      if (!cancelled && persistedState && persistedState.archive.length > 0) {
+      if (!cancelled && hasRecoverableState(persistedState)) {
         setState(normalizeLoadedState(persistedState));
       }
       setSyncMode("persisted");
