@@ -482,6 +482,80 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
           <DefRow term="Peak Concentration" def="Ratio of maximum bin weight to mean bin weight." />
         </div>
       </motion.div>
+
+      {/* Publish Modal */}
+      {showPublish && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowPublish(false)}>
+          <div className="bg-background border border-border rounded-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-foreground mb-4">Publish to AMM Library</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">Name *</label>
+                <input
+                  value={publishName}
+                  onChange={e => setPublishName(e.target.value)}
+                  placeholder={`${candidate.familyId} — Gen ${candidate.generation}`}
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">Author</label>
+                <input
+                  value={publishAuthor}
+                  onChange={e => setPublishAuthor(e.target.value)}
+                  placeholder="Anonymous"
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">Description</label>
+                <textarea
+                  value={publishDesc}
+                  onChange={e => setPublishDesc(e.target.value)}
+                  placeholder={`Score: ${candidate.score.toFixed(3)} · ${candidate.regime} regime · Stability: ${candidate.stability.toFixed(4)}`}
+                  rows={3}
+                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring resize-none"
+                />
+              </div>
+              <div className="p-3 rounded-lg bg-secondary/50 border border-border">
+                <p className="text-[9px] text-muted-foreground">
+                  Score: <span className="font-mono text-foreground">{candidate.score.toFixed(3)}</span>
+                  {" · "}Regime: <span className="text-foreground">{candidate.regime}</span>
+                  {" · "}Family: <span className="text-foreground">{candidate.familyId}</span>
+                  {" · "}Gen: <span className="font-mono text-foreground">{candidate.generation}</span>
+                </p>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowPublish(false)}
+                  className="flex-1 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium border border-border hover:bg-accent transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={publishing}
+                  onClick={async () => {
+                    setPublishing(true);
+                    const name = publishName.trim() || `${candidate.familyId} — Gen ${candidate.generation}`;
+                    const desc = publishDesc.trim() || `Score: ${candidate.score.toFixed(3)} · ${candidate.regime} regime`;
+                    const result = await publishToLibrary(candidate, name, desc, publishAuthor.trim());
+                    setPublishing(false);
+                    if (result.success) {
+                      setPublished(true);
+                      setShowPublish(false);
+                    } else {
+                      alert("Failed to publish: " + (result.error || "Unknown error"));
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {publishing ? "Publishing..." : "Publish"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
