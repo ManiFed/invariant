@@ -251,15 +251,15 @@ export const challenges: Challenge[] = [
       { metric: "fee_revenue", label: "Daily fee revenue", operator: ">", target: 10, unit: "$", weight: 1 },
     ],
     sliders: {
-      reserveX: { min: 10, max: 2000, step: 10 },
-      reserveY: { min: 10000, max: 4000000, step: 10000 },
+      reserveX: { min: 100000, max: 3000000, step: 10000, format: (v: number) => v.toLocaleString() },
+      reserveY: { min: 200000, max: 6000000, step: 20000, format: (v: number) => `$${(v / 1000).toFixed(0)}k` },
     },
-    // Trade 10000 into reserveY side. slippage = 10000/(reserveY+10000). At 600k: ≈1.6% ✓
-    defaultParams: { reserveX: 50, reserveY: 100000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
-    solutionParams: { reserveX: 500, reserveY: 1000000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    defaultParams: { reserveX: 300000, reserveY: 600000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 1200000, reserveY: 2400000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
-      "More liquidity = less slippage. Try increasing reserves significantly.",
-      "A 0.5% fee rate is a good balance between revenue and trader friendliness."
+      "For this simulation model, reserve X depth is the biggest slippage lever.",
+      "Try pushing reserve X into the high six-figure range.",
+      "A mid fee (around 50 bps) helps revenue without violating any constraints.",
     ],
     evaluate(params) {
       const slip = simulateSlippage(params, 10000);
@@ -279,14 +279,15 @@ export const challenges: Challenge[] = [
       { metric: "slippage_5k", label: "Slippage on $5k trade", operator: "<", target: 1.5, unit: "%", weight: 2 },
     ],
     sliders: {
-      reserveX: { min: 50, max: 1000, step: 10 },
-      reserveY: { min: 50000, max: 2000000, step: 10000 },
+      reserveX: { min: 100000, max: 3000000, step: 10000, format: (v: number) => v.toLocaleString() },
+      reserveY: { min: 200000, max: 6000000, step: 20000, format: (v: number) => `$${(v / 1000).toFixed(0)}k` },
     },
-    defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
-    solutionParams: { reserveX: 500, reserveY: 1000000, feeRate: 0.008, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    defaultParams: { reserveX: 300000, reserveY: 600000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 1500000, reserveY: 3000000, feeRate: 0.008, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
-      "Higher fees earn more per trade but discourage volume.",
-      "Try fee rates between 0.05% and 1% — the sweet spot is usually around 0.5–0.8%.",
+      "In this simulator, larger reserve X materially boosts both stability and fee throughput.",
+      "Try reserve X around 1M+ to satisfy both constraints together.",
+      "The sweet spot here is typically in the ~60–90 bps zone.",
     ],
     evaluate(params) {
       const fees = simulateFeeRevenue(params, 30, 0.7);
