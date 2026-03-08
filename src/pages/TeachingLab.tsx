@@ -6,9 +6,10 @@ import LabControls, { type LessonTab, type Controls } from "@/components/teachin
 import LabSimulation from "@/components/teaching/LabSimulation";
 import LabLearning from "@/components/teaching/LabLearning";
 import CourseSidebar from "@/components/teaching/CourseSidebar";
-import CourseLevelPicker, { ComingSoonOverlay, type CourseLevel } from "@/components/teaching/CourseLevelPicker";
+import CourseLevelPicker, { type CourseLevel } from "@/components/teaching/CourseLevelPicker";
 import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
 import { INTERMEDIATE_MODULES, INTERMEDIATE_TAB_MAP } from "@/lib/intermediate-course-content";
+import { ADVANCED_MODULES, ADVANCED_TAB_MAP } from "@/lib/advanced-course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -18,19 +19,14 @@ export default function TeachingLab() {
 
   // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
-  const [comingSoonLevel, setComingSoonLevel] = useState<"advanced" | null>(null);
 
   const handleSelectLevel = (level: CourseLevel) => {
-    if (level === "advanced") {
-      setComingSoonLevel("advanced");
-    } else {
-      setSelectedLevel(level);
-    }
+    setSelectedLevel(level);
   };
 
   // Resolve which modules/tab-map to use based on selected level
-  const activeModules = selectedLevel === "intermediate" ? INTERMEDIATE_MODULES : COURSE_MODULES;
-  const activeTabMap = selectedLevel === "intermediate" ? INTERMEDIATE_TAB_MAP : MODULE_TAB_MAP;
+  const activeModules = selectedLevel === "advanced" ? ADVANCED_MODULES : selectedLevel === "intermediate" ? INTERMEDIATE_MODULES : COURSE_MODULES;
+  const activeTabMap = selectedLevel === "advanced" ? ADVANCED_TAB_MAP : selectedLevel === "intermediate" ? INTERMEDIATE_TAB_MAP : MODULE_TAB_MAP;
 
   // Course state
   const [courseActive, setCourseActive] = useState(true);
@@ -198,23 +194,6 @@ export default function TeachingLab() {
 
   // Level picker screen (before course starts)
   if (!selectedLevel) {
-    if (comingSoonLevel) {
-      return (
-        <div className="min-h-screen bg-background flex flex-col">
-          <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
-            </div>
-            <ThemeToggle />
-          </header>
-          <ComingSoonOverlay level={comingSoonLevel} onBack={() => setComingSoonLevel(null)} />
-        </div>
-      );
-    }
-
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
@@ -309,7 +288,7 @@ export default function TeachingLab() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setSelectedLevel(null); setComingSoonLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
+            onClick={() => { setSelectedLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
             className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
             Change Level
