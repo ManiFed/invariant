@@ -8,6 +8,7 @@ import LabLearning from "@/components/teaching/LabLearning";
 import CourseSidebar from "@/components/teaching/CourseSidebar";
 import CourseLevelPicker, { ComingSoonOverlay, type CourseLevel } from "@/components/teaching/CourseLevelPicker";
 import { COURSE_MODULES, getRevealedSections, MODULE_TAB_MAP } from "@/lib/course-content";
+import { INTERMEDIATE_MODULES, INTERMEDIATE_TAB_MAP } from "@/lib/intermediate-course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -17,23 +18,27 @@ export default function TeachingLab() {
 
   // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
-  const [comingSoonLevel, setComingSoonLevel] = useState<"intermediate" | "advanced" | null>(null);
+  const [comingSoonLevel, setComingSoonLevel] = useState<"advanced" | null>(null);
 
   const handleSelectLevel = (level: CourseLevel) => {
-    if (level === "beginner") {
-      setSelectedLevel("beginner");
+    if (level === "advanced") {
+      setComingSoonLevel("advanced");
     } else {
-      setComingSoonLevel(level);
+      setSelectedLevel(level);
     }
   };
+
+  // Resolve which modules/tab-map to use based on selected level
+  const activeModules = selectedLevel === "intermediate" ? INTERMEDIATE_MODULES : COURSE_MODULES;
+  const activeTabMap = selectedLevel === "intermediate" ? INTERMEDIATE_TAB_MAP : MODULE_TAB_MAP;
 
   // Course state
   const [courseActive, setCourseActive] = useState(true);
   const [courseModule, setCourseModule] = useState(0);
   const [courseStep, setCourseStep] = useState(0);
   const [completedModules, setCompletedModules] = useState(0);
-  const revealedSections = getRevealedSections(completedModules);
-  const courseComplete = completedModules >= COURSE_MODULES.length;
+  const revealedSections = getRevealedSections(completedModules, activeModules);
+  const courseComplete = completedModules >= activeModules.length;
 
   // Simulation state
   const [tab, setTab] = useState<LessonTab>("slippage");
