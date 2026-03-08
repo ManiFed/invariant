@@ -442,7 +442,7 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
             </PopoverTrigger>
             <PopoverContent side="bottom" align="start" className="w-56 p-1.5">
               <div className="flex flex-col gap-0.5">
-                {COURSE_MODULES.map((m, i) => {
+                {courseModules.map((m, i) => {
                   const isComplete = i < completedModules;
                   const isCurrent = i === currentModule;
                   const canClick = isComplete || isCurrent;
