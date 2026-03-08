@@ -12,7 +12,7 @@ import {
   runGeneration,
 } from "@/lib/discovery-engine";
 
-const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion"];
+const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
 
 let state: EngineState = { ...createInitialState(), running: true };
 let running = false;
