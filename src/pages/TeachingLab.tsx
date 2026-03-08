@@ -362,9 +362,10 @@ export default function TeachingLab() {
               onGoBack={handleGoBack}
               onCompleteModule={handleCompleteModule}
               onSkipCourse={handleSkipCourse}
-              totalModules={COURSE_MODULES.length}
+              totalModules={activeModules.length}
               completedModules={completedModules}
               onNavigateModule={handleNavigateModule}
+              modules={activeModules}
             />
           ) : (
             <LabLearning
