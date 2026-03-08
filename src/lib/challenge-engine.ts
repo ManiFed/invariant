@@ -377,6 +377,7 @@ export const challenges: Challenge[] = [
       { metric: "fee_revenue", label: "Still earns decent fees", operator: ">", target: 300, unit: "$", weight: 1 },
     ],
     defaultParams: { reserveX: 200, reserveY: 400000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 800, reserveY: 1600000, feeRate: 0.01, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Higher fees make sandwiches less profitable for attackers.",
       "Deep liquidity reduces the price impact of frontrunning.",
