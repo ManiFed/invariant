@@ -375,7 +375,8 @@ function LessonVisual({ visual }: { visual?: string }) {
   return visuals[visual] || null;
 }
 
-export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule }: Props) {
+export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules }: Props) {
+  const courseModules = modules || COURSE_MODULES;
   const [showAI, setShowAI] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
@@ -383,7 +384,7 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
   const [followUpAnswer, setFollowUpAnswer] = useState<number | null>(null);
   const [followUpAnswered, setFollowUpAnswered] = useState(false);
 
-  const mod = COURSE_MODULES[currentModule];
+  const mod = courseModules[currentModule];
   if (!mod) return null;
   const step = mod.steps[currentStep];
   if (!step) return null;
