@@ -20,6 +20,7 @@ const ROUTE_CONTEXT: Record<string, string> = {
   "/labs/replay": "Market Replay Lab — simulating AMM performance across historical scenarios (LUNA crash, DeFi Summer, etc.) with comparison mode, playback controls, and custom scenarios",
   "/labs/mev": "MEV Analyzer Lab — simulating sandwich attacks, backruns, JIT liquidity to test MEV resistance",
   "/labs/compiler": "Invariant Compiler Lab — a 4-step pipeline: Choose Design → Compile → Review & Test (gas, security, tests) → Deploy & Interact",
+  "/challenges": "AMM Challenges — a gamified puzzle mode with 8 challenges across Beginner, Intermediate, and Expert tiers. Users tune AMM parameters (reserves, fees, concentration) to meet specific constraints like slippage targets, IL limits, and fee revenue goals. Scored 0-100 with 1-3 star ratings.",
 };
 
 const MOODS = ["✨", "🧠", "⚡", "💡", "🔮"] as const;

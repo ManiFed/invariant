@@ -53,6 +53,7 @@ Here are all the pages and what they do:
 - **/learn** — Teaching Lab: Structured courses on AMM concepts (What is an AMM, Impermanent Loss, Fee Strategies, etc.). Has an embedded AI tutor.
 - **/docs** — Documentation with technical reference
 - **/library** — AMM Library: Browse, save, upvote community AMM designs. Each design has bins, formulas, and metrics.
+- **/challenges** — AMM Challenges: Gamified puzzle mode with 8 challenges across 3 difficulty tiers (Beginner, Intermediate, Expert). Each challenge has a scenario and constraints (slippage limits, IL targets, fee goals). Users tune reserves, fees, and concentration to score 0-100 with 1-3 star ratings. Progress is tracked locally. Expert challenges unlock after completing Intermediate ones.
 
 ### Labs (accessible from /labs)
 - **/labs** — Labs hub with all experimental tools
