@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Layers } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const Labs = () => {
@@ -140,11 +140,61 @@ const Labs = () => {
           </motion.div>
         </motion.div>
 
+        {/* DNA Visualizer */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <motion.div
+            className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all border-l-4 border-l-chart-5"
+            onClick={() => navigate("/labs/dna")}
+            whileHover={{ y: -3 }}
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-chart-5/10 border border-chart-5/20 flex items-center justify-center shrink-0">
+                <Dna className="w-6 h-6 text-chart-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="text-lg font-bold text-foreground">AMM DNA Visualizer</h2>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                  Explore the genetic fingerprint of every discovered AMM design. Radial genome rings encode
+                  64-bin liquidity distributions, inner radar arcs map feature traits, and lineage trees trace
+                  evolutionary ancestry across generations.
+                </p>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Radial genome ring (64-bin fingerprint)</li>
+                    <li>• Family-colored segments with density encoding</li>
+                    <li>• Inner feature radar (7 descriptors)</li>
+                  </ul>
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Side-by-side DNA comparison</li>
+                    <li>• Divergence map with cosine similarity</li>
+                    <li>• Head-to-head metric bar charts</li>
+                  </ul>
+                  <ul className="space-y-1 text-[11px] text-muted-foreground">
+                    <li>• Generational lineage trees</li>
+                    <li>• Mutation jump detection &amp; glow</li>
+                    <li>• Click-to-inspect any ancestor</li>
+                  </ul>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-3">
+                  Enter Visualizer <ArrowRight className="w-3 h-3" />
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+
         <motion.div
           className="grid sm:grid-cols-2 gap-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
+          transition={{ delay: 0.4 }}
         >
           <motion.div
             className="surface-elevated rounded-2xl p-6 cursor-pointer group hover:border-foreground/20 transition-all"
