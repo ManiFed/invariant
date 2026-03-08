@@ -288,7 +288,7 @@ export default function TeachingLab() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setSelectedLevel(null); setComingSoonLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
+            onClick={() => { setSelectedLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
             className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
             Change Level
