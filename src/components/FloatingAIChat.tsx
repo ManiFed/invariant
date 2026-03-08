@@ -6,11 +6,20 @@ import AIChatPanel from "@/components/teaching/AIChatPanel";
 
 const ROUTE_CONTEXT: Record<string, string> = {
   "/": "the homepage of Invariant Studio",
-  "/beginner": "the Beginner Mode — an interactive AMM playground with guided tour",
-  "/advanced": "the Advanced Mode — professional invariant engineering tools",
-  "/learn": "the Teaching Lab course",
-  "/docs": "the Documentation page",
-  "/library": "the AMM Library — browsing famous and community AMM designs",
+  "/beginner": "Beginner Mode — interactive AMM playground with guided tour, reserve sliders, price impact visualization",
+  "/advanced": "Advanced Mode — professional invariant engineering with Monte Carlo simulation, fee structure editor, stability analysis",
+  "/learn": "the Teaching Lab — structured courses on AMM concepts with embedded AI tutor",
+  "/docs": "the Documentation page — technical reference",
+  "/library": "the AMM Library — browsing, saving, and comparing community AMM designs with metrics and formulas",
+  "/labs": "the Labs hub — listing all experimental tools (Multi-Asset, Time-Variance, Discovery Atlas, Strategy, DNA, Market Replay, MEV Analyzer, Compiler)",
+  "/labs/multi-asset": "Multi-Asset Lab — designing AMMs for 3+ token pools",
+  "/labs/time-variance": "Time-Variance Lab — AMMs that adapt parameters over time",
+  "/labs/discover": "Discovery Atlas — AI-powered evolutionary search through the AMM design space using MAP-Elites",
+  "/labs/strategy": "Liquidity Strategy Lab — designing and backtesting LP strategies",
+  "/labs/dna": "DNA Lab — comparing genetic fingerprints of AMM designs",
+  "/labs/replay": "Market Replay Lab — simulating AMM performance across historical scenarios (LUNA crash, DeFi Summer, etc.) with comparison mode, playback controls, and custom scenarios",
+  "/labs/mev": "MEV Analyzer Lab — simulating sandwich attacks, backruns, JIT liquidity to test MEV resistance",
+  "/labs/compiler": "Invariant Compiler Lab — a 4-step pipeline: Choose Design → Compile → Review & Test (gas, security, tests) → Deploy & Interact",
 };
 
 export default function FloatingAIChat() {
