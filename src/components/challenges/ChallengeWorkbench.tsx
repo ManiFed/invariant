@@ -22,6 +22,8 @@ export default function ChallengeWorkbench({
   const [running, setRunning] = useState(false);
   const [showHint, setShowHint] = useState(-1);
   const [celebrated, setCelebrated] = useState(false);
+  const [gaveUp, setGaveUp] = useState(false);
+  const [animating, setAnimating] = useState(false);
 
   const runEvaluation = useCallback(() => {
     setRunning(true);
