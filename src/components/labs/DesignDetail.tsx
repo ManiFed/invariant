@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Fingerprint, BarChart3, TrendingUp, Layers, Shield, Download } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Fingerprint, BarChart3, TrendingUp, Layers, Shield, Download, BookOpen } from "lucide-react";
+import { publishToLibrary } from "@/lib/library-persistence";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis,
