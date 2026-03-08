@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Pause, SkipForward, RotateCcw, AlertTriangle, TrendingDown, TrendingUp, Minus, Info, Gauge, BarChart3, GitCompare } from "lucide-react";
+import { ArrowLeft, Play, Pause, SkipForward, RotateCcw, AlertTriangle, TrendingDown, TrendingUp, Minus, Info, Gauge, BarChart3, GitCompare, Plus, Pencil, Trash2, Save, X } from "lucide-react";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ReferenceLine, ComposedChart } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -30,12 +30,18 @@ const SPEEDS = [
   { label: "Max", ms: 1 },
 ];
 
+const EMPTY_SCENARIO: MarketScenario = {
+  id: "", name: "", description: "", pair: "ETH-USDC",
+  startDate: "2023-01-01", endDate: "2023-06-01", category: "volatile",
+};
+
 export default function MarketReplayLab() {
   const navigate = useNavigate();
   const colors = useChartColors();
   const [designs, setDesigns] = useState<{ id: string; name: string; bins: number[] }[]>([]);
   const [selectedDesign, setSelectedDesign] = useState<string | null>(null);
   const [compareDesign, setCompareDesign] = useState<string | null>(null);
+  const [allScenarios, setAllScenarios] = useState<MarketScenario[]>([...SCENARIOS]);
   const [scenario, setScenario] = useState<MarketScenario>(SCENARIOS[0]);
   const [result, setResult] = useState<ReplayResult | null>(null);
   const [resultB, setResultB] = useState<ReplayResult | null>(null);
@@ -45,6 +51,8 @@ export default function MarketReplayLab() {
   const [speedIdx, setSpeedIdx] = useState(1);
   const [compareMode, setCompareMode] = useState(false);
   const [activeView, setActiveView] = useState<"charts" | "risk" | "reserves">("charts");
+  const [editing, setEditing] = useState<MarketScenario | null>(null);
+  const [isNew, setIsNew] = useState(false);
 
   useEffect(() => {
     supabase.from("library_amms").select("id, name, bins").then(({ data }) => {
@@ -196,19 +204,86 @@ export default function MarketReplayLab() {
 
             {/* Scenario picker */}
             <div className="border border-border rounded-xl p-4 bg-card">
-              <h3 className="text-xs font-bold text-foreground mb-3">Market Scenario</h3>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                {SCENARIOS.map(s => (
-                  <button key={s.id} onClick={() => setScenario(s)}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                      scenario.id === s.id ? "bg-primary text-primary-foreground" : "hover:bg-secondary"
-                    }`}>
-                    <div className="flex items-center gap-2">
-                      <span className={scenario.id === s.id ? "" : categoryColors[s.category]}>{categoryIcons[s.category]}</span>
-                      <span className="text-xs font-medium">{s.name}</span>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold text-foreground">Market Scenario</h3>
+                <button onClick={() => { setEditing({ ...EMPTY_SCENARIO, id: `custom-${Date.now()}`, name: "My Scenario" }); setIsNew(true); }}
+                  className="text-[10px] px-2 py-0.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors">
+                  <Plus className="w-3 h-3 inline mr-0.5" />Custom
+                </button>
+              </div>
+
+              {/* Scenario editor */}
+              {editing && (
+                <div className="mb-3 p-3 rounded-lg bg-secondary border border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-foreground">{isNew ? "New Scenario" : "Edit Scenario"}</span>
+                    <button onClick={() => { setEditing(null); setIsNew(false); }} className="text-muted-foreground hover:text-foreground"><X className="w-3 h-3" /></button>
+                  </div>
+                  <input className="w-full px-2 py-1.5 rounded-md border border-border bg-background text-xs text-foreground" placeholder="Name"
+                    value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} />
+                  <input className="w-full px-2 py-1.5 rounded-md border border-border bg-background text-xs text-foreground" placeholder="Description"
+                    value={editing.description} onChange={e => setEditing({ ...editing, description: e.target.value })} />
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(["ETH-USDC", "BTC-USDC", "SOL-USDC"] as const).map(p => (
+                      <button key={p} onClick={() => setEditing({ ...editing, pair: p })}
+                        className={`px-1.5 py-1 rounded text-[9px] font-mono border transition-colors ${editing.pair === p ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>{p}</button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="text-[9px] text-muted-foreground">Start</label>
+                      <input type="date" className="w-full px-2 py-1 rounded-md border border-border bg-background text-[10px] text-foreground"
+                        value={editing.startDate} onChange={e => setEditing({ ...editing, startDate: e.target.value })} />
                     </div>
-                    <p className="text-[10px] opacity-70 mt-0.5 ml-5">{s.description}</p>
+                    <div>
+                      <label className="text-[9px] text-muted-foreground">End</label>
+                      <input type="date" className="w-full px-2 py-1 rounded-md border border-border bg-background text-[10px] text-foreground"
+                        value={editing.endDate} onChange={e => setEditing({ ...editing, endDate: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1">
+                    {(["crash", "rally", "crab", "volatile"] as const).map(c => (
+                      <button key={c} onClick={() => setEditing({ ...editing, category: c })}
+                        className={`px-1 py-1 rounded text-[9px] capitalize border transition-colors ${editing.category === c ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => {
+                    if (!editing.name.trim()) return;
+                    if (isNew) {
+                      setAllScenarios(prev => [...prev, editing]);
+                    } else {
+                      setAllScenarios(prev => prev.map(s => s.id === editing.id ? editing : s));
+                      if (scenario.id === editing.id) setScenario(editing);
+                    }
+                    setEditing(null); setIsNew(false);
+                  }} className="w-full py-1.5 rounded-md bg-primary text-primary-foreground text-[10px] font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-1">
+                    <Save className="w-3 h-3" />{isNew ? "Add Scenario" : "Save Changes"}
                   </button>
+                </div>
+              )}
+
+              <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                {allScenarios.map(s => (
+                  <div key={s.id} className={`group relative rounded-lg transition-colors ${scenario.id === s.id ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}>
+                    <button onClick={() => setScenario(s)} className="w-full text-left px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className={scenario.id === s.id ? "" : categoryColors[s.category]}>{categoryIcons[s.category]}</span>
+                        <span className="text-xs font-medium">{s.name}</span>
+                      </div>
+                      <p className="text-[10px] opacity-70 mt-0.5 ml-5">{s.description}</p>
+                    </button>
+                    {/* Edit/delete for custom scenarios */}
+                    {s.id.startsWith("custom-") && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1">
+                        <button onClick={(e) => { e.stopPropagation(); setEditing({ ...s }); setIsNew(false); }}
+                          className="p-1 rounded bg-secondary/80 text-muted-foreground hover:text-foreground"><Pencil className="w-2.5 h-2.5" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setAllScenarios(prev => prev.filter(x => x.id !== s.id)); if (scenario.id === s.id) setScenario(allScenarios[0]); }}
+                          className="p-1 rounded bg-secondary/80 text-muted-foreground hover:text-destructive"><Trash2 className="w-2.5 h-2.5" /></button>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
