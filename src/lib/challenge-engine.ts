@@ -315,6 +315,7 @@ export const challenges: Challenge[] = [
       { metric: "capital_used", label: "Total capital deployed", operator: "<=", target: 250000, unit: "$", weight: 3 },
     ],
     defaultParams: { reserveX: 62.5, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.8, concentrationUpper: 1.25 },
+    solutionParams: { reserveX: 62.5, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.9, concentrationUpper: 1.1 },
     hints: [
       "Tight concentration ranges multiply capital efficiency.",
       "A range of ±20% can give 5x+ capital efficiency.",
