@@ -146,11 +146,13 @@ function buildPopulationsFromArchive(
 ): Record<RegimeId, PopulationState> {
   const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
   const pops = {} as Record<RegimeId, PopulationState>;
-  const candidateMap = new Map(archive.map(c => [c.id, c]));
+  // Filter out any candidates that are undefined or missing critical fields
+  const safeArchive = archive.filter(c => c != null && typeof c.score === "number" && Number.isFinite(c.score));
+  const candidateMap = new Map(safeArchive.map(c => [c.id, c]));
 
   for (const regime of regimes) {
     const info = populationInfo?.[regime];
-    const regimeCandidates = archive.filter(c => c.regime === regime);
+    const regimeCandidates = safeArchive.filter(c => c.regime === regime);
     const sorted = [...regimeCandidates].sort((a, b) => a.score - b.score);
 
     let champion: Candidate | null = null;
