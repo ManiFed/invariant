@@ -234,7 +234,14 @@ const Library = () => {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {allAMMs.map((amm, i) => (
-              <AMM_Card key={amm.id} amm={amm} colors={colors} index={i} onClick={() => setSelectedAMM(amm)} />
+              <AMM_Card key={amm.id} amm={amm} colors={colors} index={i} onClick={() => {
+                const dbMatch = dbAMMs.find(d => d.id === amm.id);
+                if (dbMatch) {
+                  setSelectedDbAMM(dbMatch);
+                } else {
+                  setSelectedAMM(amm);
+                }
+              }} />
             ))}
           </div>
         )}
