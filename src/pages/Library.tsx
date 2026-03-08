@@ -313,6 +313,118 @@ const Library = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* DB AMM Detail Modal (discovered designs) */}
+      <AnimatePresence>
+        {selectedDbAMM && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={() => setSelectedDbAMM(null)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background border border-border rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}>
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground">{selectedDbAMM.name}</h2>
+                    <p className="text-xs text-muted-foreground">by {selectedDbAMM.author}</p>
+                  </div>
+                  <button onClick={() => setSelectedDbAMM(null)} className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Liquidity distribution from bins */}
+                {selectedDbAMM.bins && selectedDbAMM.bins.length > 0 && (
+                  <div className="h-48 mb-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={selectedDbAMM.bins.map((w, i) => ({ price: parseFloat(binPrice(i).toFixed(3)), weight: w }))} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                        <XAxis dataKey="price" tick={{ fontSize: 9, fill: colors.tick }} />
+                        <YAxis tick={{ fontSize: 9, fill: colors.tick }} />
+                        <Area type="monotone" dataKey="weight" stroke={colors.line} fill={colors.line} fillOpacity={0.3} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4">{selectedDbAMM.description}</p>
+
+                {/* Discovery metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                  {selectedDbAMM.score != null && (
+                    <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+                      <p className="text-[9px] text-muted-foreground mb-0.5">Score</p>
+                      <p className="text-xs font-mono font-semibold text-foreground">{selectedDbAMM.score.toFixed(3)}</p>
+                    </div>
+                  )}
+                  {selectedDbAMM.stability != null && (
+                    <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+                      <p className="text-[9px] text-muted-foreground mb-0.5">Stability</p>
+                      <p className="text-xs font-mono font-semibold text-foreground">{selectedDbAMM.stability.toFixed(4)}</p>
+                    </div>
+                  )}
+                  {selectedDbAMM.regime && (
+                    <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+                      <p className="text-[9px] text-muted-foreground mb-0.5">Regime</p>
+                      <p className="text-xs font-mono font-semibold text-foreground">{selectedDbAMM.regime}</p>
+                    </div>
+                  )}
+                  {selectedDbAMM.generation != null && (
+                    <div className="p-2 rounded-lg bg-secondary border border-border text-center">
+                      <p className="text-[9px] text-muted-foreground mb-0.5">Generation</p>
+                      <p className="text-xs font-mono font-semibold text-foreground">{selectedDbAMM.generation}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Detailed metrics */}
+                {selectedDbAMM.metrics && (
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {Object.entries(selectedDbAMM.metrics).map(([key, val]) => (
+                      <div key={key} className="p-2 rounded-lg bg-secondary border border-border text-center">
+                        <p className="text-[8px] text-muted-foreground mb-0.5">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                        <p className="text-[10px] font-mono font-semibold text-foreground">{typeof val === 'number' ? val.toFixed(4) : String(val)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      const ok = await upvoteLibraryAMM(selectedDbAMM.id);
+                      if (ok) {
+                        setDbAMMs(prev => prev.map(d => d.id === selectedDbAMM.id ? { ...d, upvotes: d.upvotes + 1 } : d));
+                        setSelectedDbAMM(prev => prev ? { ...prev, upvotes: prev.upvotes + 1 } : prev);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border"
+                  >
+                    <ThumbsUp className="w-3 h-3" /> {selectedDbAMM.upvotes}
+                  </button>
+                  <button onClick={() => {
+                    const json = JSON.stringify({
+                      name: selectedDbAMM.name, description: selectedDbAMM.description,
+                      author: selectedDbAMM.author, regime: selectedDbAMM.regime,
+                      family_id: selectedDbAMM.family_id, family_params: selectedDbAMM.family_params,
+                      bins: selectedDbAMM.bins, score: selectedDbAMM.score,
+                      stability: selectedDbAMM.stability, metrics: selectedDbAMM.metrics,
+                      features: selectedDbAMM.features,
+                    }, null, 2);
+                    const blob = new Blob([json], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `${selectedDbAMM.name}.json`; a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+                    <Download className="w-3 h-3" /> Download JSON
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
