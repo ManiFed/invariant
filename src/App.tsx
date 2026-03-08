@@ -15,6 +15,9 @@ import TimeVarianceLab from "./pages/TimeVarianceLab";
 import DiscoveryAtlas from "./pages/DiscoveryAtlas";
 import LiquidityStrategyLab from "./pages/LiquidityStrategyLab";
 import DNALab from "./pages/DNALab";
+import MarketReplayLab from "./pages/MarketReplayLab";
+import MEVLab from "./pages/MEVLab";
+import CompilerLab from "./pages/CompilerLab";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
 import ForecastIndex from "./forecasting/pages/ForecastIndex";
@@ -46,6 +49,9 @@ const App = () => (
           <Route path="/labs/discovery" element={<DiscoveryAtlas />} />
           <Route path="/labs/strategy" element={<LiquidityStrategyLab />} />
           <Route path="/labs/dna" element={<DNALab />} />
+          <Route path="/labs/replay" element={<MarketReplayLab />} />
+          <Route path="/labs/mev" element={<MEVLab />} />
+          <Route path="/labs/compiler" element={<CompilerLab />} />
           {/* Forecast Lab — separate service */}
           <Route path={forecastRoute()} element={<ForecastIndex />} />
           <Route path={forecastRoute("/lessons")} element={<Lessons />} />
