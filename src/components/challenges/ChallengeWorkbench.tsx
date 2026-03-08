@@ -17,6 +17,7 @@ export default function ChallengeWorkbench({
   onBack: () => void;
   onProgressUpdate: () => void;
 }) {
+  const sliders = getSlidersForChallenge(challenge);
   const [params, setParams] = useState<ChallengeParams>({ ...challenge.defaultParams });
   const [result, setResult] = useState<ChallengeResult | null>(null);
   const [running, setRunning] = useState(false);
