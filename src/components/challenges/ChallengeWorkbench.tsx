@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Challenge, ChallengeParams, ChallengeResult, ConstraintResult } from "@/lib/challenge-engine";
-import { saveProgress } from "@/lib/challenge-engine";
+import { saveProgress, getSlidersForChallenge } from "@/lib/challenge-engine";
 
 export default function ChallengeWorkbench({
   challenge,
@@ -17,6 +17,7 @@ export default function ChallengeWorkbench({
   onBack: () => void;
   onProgressUpdate: () => void;
 }) {
+  const sliders = getSlidersForChallenge(challenge);
   const [params, setParams] = useState<ChallengeParams>({ ...challenge.defaultParams });
   const [result, setResult] = useState<ChallengeResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -122,45 +123,45 @@ export default function ChallengeWorkbench({
               <ParamSlider
                 label="Reserve X"
                 value={params.reserveX}
-                min={10}
-                max={1000}
-                step={10}
-                format={(v) => `${v.toLocaleString()}`}
+                min={sliders.reserveX.min}
+                max={sliders.reserveX.max}
+                step={sliders.reserveX.step}
+                format={sliders.reserveX.format || ((v) => `${v.toLocaleString()}`)}
                 onChange={(v) => updateParam("reserveX", v)}
               />
               <ParamSlider
                 label="Reserve Y"
                 value={params.reserveY}
-                min={10000}
-                max={2000000}
-                step={10000}
-                format={(v) => `$${(v / 1000).toFixed(0)}k`}
+                min={sliders.reserveY.min}
+                max={sliders.reserveY.max}
+                step={sliders.reserveY.step}
+                format={sliders.reserveY.format || ((v) => `$${(v / 1000).toFixed(0)}k`)}
                 onChange={(v) => updateParam("reserveY", v)}
               />
               <ParamSlider
                 label="Fee Rate"
                 value={params.feeRate * 10000}
-                min={1}
-                max={100}
-                step={1}
+                min={sliders.feeRate.min}
+                max={sliders.feeRate.max}
+                step={sliders.feeRate.step}
                 format={(v) => `${v} bps (${(v / 100).toFixed(2)}%)`}
                 onChange={(v) => updateParam("feeRate", v / 10000)}
               />
               <ParamSlider
                 label="Range Lower"
                 value={params.concentrationLower * 100}
-                min={10}
-                max={100}
-                step={5}
+                min={sliders.concentrationLower.min}
+                max={sliders.concentrationLower.max}
+                step={sliders.concentrationLower.step}
                 format={(v) => `${v}%`}
                 onChange={(v) => updateParam("concentrationLower", v / 100)}
               />
               <ParamSlider
                 label="Range Upper"
                 value={params.concentrationUpper * 100}
-                min={100}
-                max={500}
-                step={10}
+                min={sliders.concentrationUpper.min}
+                max={sliders.concentrationUpper.max}
+                step={sliders.concentrationUpper.step}
                 format={(v) => `${v}%`}
                 onChange={(v) => updateParam("concentrationUpper", v / 100)}
               />
