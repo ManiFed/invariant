@@ -17,6 +17,7 @@ interface Props {
   totalModules: number;
   completedModules: number;
   onNavigateModule: (idx: number) => void;
+  modules?: CourseModule[];
 }
 
 function MiniCalculator() {
