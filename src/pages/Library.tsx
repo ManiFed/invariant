@@ -212,8 +212,8 @@ const Library = () => {
                   activeFilter === t.id && !searchQuery ? "bg-foreground/5 text-foreground border border-foreground/20" : "text-muted-foreground hover:text-foreground border border-transparent"
                 }`}>
                 {t.id !== "all" && <t.icon className="w-3 h-3" />} {t.label}
-                {t.id === "community" && communityAMMs.length > 0 && (
-                  <span className="text-[9px] font-mono bg-primary/10 text-primary px-1 rounded">{communityAMMs.length}</span>
+                {t.id === "community" && communityCount > 0 && (
+                  <span className="text-[9px] font-mono bg-primary/10 text-primary px-1 rounded">{communityCount}</span>
                 )}
               </button>
             ))}
