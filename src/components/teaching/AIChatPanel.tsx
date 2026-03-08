@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, ExternalLink, Sparkles, MousePointerClick } from "lucide-react";
+import { Send, Bot, User, ExternalLink, Sparkles, MousePointerClick, SlidersHorizontal, FormInput } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -11,7 +11,9 @@ interface Message {
 
 type ActionButton =
   | { type: "navigate"; path: string; label: string }
-  | { type: "click"; selector: string; label: string };
+  | { type: "click"; selector: string; label: string }
+  | { type: "set_value"; selector: string; value: string; label: string }
+  | { type: "set_slider"; selector: string; value: number; label: string };
 
 interface AIChatPanelProps {
   context?: string;
@@ -40,6 +42,10 @@ function extractActions(content: string): { cleanContent: string; actions: Actio
         actions.push(parsed);
       } else if (parsed.type === "click" && parsed.selector && parsed.label) {
         actions.push(parsed);
+      } else if (parsed.type === "set_value" && parsed.selector && parsed.label) {
+        actions.push(parsed);
+      } else if (parsed.type === "set_slider" && parsed.selector && parsed.label) {
+        actions.push(parsed);
       }
     } catch { /* ignore bad JSON */ }
     return "";
@@ -55,28 +61,95 @@ const THINKING_PHRASES = [
   "One sec, thinking…",
 ];
 
+/** Find an interactive element by selector text, CSS selector, or aria-label */
+function findElement(selector: string): HTMLElement | null {
+  // 1. Direct CSS selector
+  try {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (el) return el;
+  } catch { /* invalid selector */ }
+
+  // 2. By visible text content on clickable elements
+  const clickable = document.querySelectorAll("button, a, [role='button'], [role='tab'], input[type='submit'], label");
+  for (const c of clickable) {
+    const text = (c as HTMLElement).textContent?.trim().toLowerCase() || "";
+    if (text === selector.toLowerCase() || text.includes(selector.toLowerCase())) {
+      return c as HTMLElement;
+    }
+  }
+
+  // 3. Inputs/sliders by associated label text
+  const labels = document.querySelectorAll("label");
+  for (const label of labels) {
+    const text = label.textContent?.trim().toLowerCase() || "";
+    if (text.includes(selector.toLowerCase())) {
+      const forId = label.getAttribute("for");
+      if (forId) {
+        const target = document.getElementById(forId);
+        if (target) return target as HTMLElement;
+      }
+      // Check for nested input
+      const nested = label.querySelector("input, select, textarea, [role='slider']");
+      if (nested) return nested as HTMLElement;
+    }
+  }
+
+  // 4. Inputs by placeholder
+  const inputs = document.querySelectorAll<HTMLInputElement>("input, textarea");
+  for (const inp of inputs) {
+    if (inp.placeholder?.toLowerCase().includes(selector.toLowerCase())) return inp;
+  }
+
+  // 5. Aria-label
+  try {
+    return document.querySelector<HTMLElement>(`[aria-label="${selector}"]`) ||
+           document.querySelector<HTMLElement>(`[aria-label*="${selector}" i]`);
+  } catch { return null; }
+}
+
+function highlightElement(el: HTMLElement) {
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const prevOutline = el.style.outline;
+  const prevOffset = el.style.outlineOffset;
+  el.style.outline = "2px solid hsl(var(--primary))";
+  el.style.outlineOffset = "2px";
+  el.style.transition = "outline 0.2s ease";
+  setTimeout(() => {
+    el.style.outline = prevOutline;
+    el.style.outlineOffset = prevOffset;
+  }, 1500);
+}
+
+/** Trigger React-compatible value change on an input */
+function setNativeValue(el: HTMLInputElement, value: string) {
+  const proto = Object.getPrototypeOf(el);
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) {
+    setter.call(el, value);
+  } else {
+    el.value = value;
+  }
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
   const [messages, setMessages] = useState<Message[]>(loadMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingPhrase, setThinkingPhrase] = useState("");
-  const [clickFeedback, setClickFeedback] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Autoscroll using a bottom sentinel
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
+  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
   useEffect(() => { saveMessages(messages); }, [messages]);
 
-  // Rotate thinking phrase while loading
   useEffect(() => {
     if (!isLoading) return;
     setThinkingPhrase(THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)]);
@@ -85,6 +158,11 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
     }, 2500);
     return () => clearInterval(t);
   }, [isLoading]);
+
+  const showFeedback = (msg: string) => {
+    setActionFeedback(msg);
+    setTimeout(() => setActionFeedback(null), 2500);
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -163,57 +241,58 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
     setIsLoading(false);
   };
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
-  };
+  const handleAction = (action: ActionButton) => {
+    if (action.type === "navigate") {
+      navigate(action.path);
+      showFeedback(`🧭 Navigating to ${action.path}`);
+      return;
+    }
 
-  const handleClick = (selector: string, label: string) => {
-    try {
-      // Try multiple strategies to find the element
-      let el: HTMLElement | null = null;
+    const el = findElement(action.selector);
+    if (!el) {
+      showFeedback(`⚠️ Couldn't find "${action.label}" on the page`);
+      return;
+    }
 
-      // 1. Direct CSS selector
-      try { el = document.querySelector(selector); } catch { /* invalid selector */ }
+    highlightElement(el);
 
-      // 2. Try by button/link text content
-      if (!el) {
-        const allClickable = document.querySelectorAll("button, a, [role='button'], [role='tab'], input[type='submit']");
-        for (const candidate of allClickable) {
-          const text = (candidate as HTMLElement).textContent?.trim().toLowerCase() || "";
-          if (text === selector.toLowerCase() || text.includes(selector.toLowerCase())) {
-            el = candidate as HTMLElement;
-            break;
-          }
+    if (action.type === "click") {
+      setTimeout(() => el.click(), 300);
+      showFeedback(`✅ Clicked "${action.label}"`);
+    } else if (action.type === "set_value") {
+      const inp = el.tagName === "INPUT" || el.tagName === "TEXTAREA"
+        ? el as HTMLInputElement
+        : el.querySelector("input, textarea") as HTMLInputElement | null;
+      if (inp) {
+        setTimeout(() => {
+          setNativeValue(inp, action.value);
+          inp.focus();
+        }, 300);
+        showFeedback(`✏️ Set "${action.label}" to ${action.value}`);
+      } else {
+        showFeedback(`⚠️ Couldn't find input for "${action.label}"`);
+      }
+    } else if (action.type === "set_slider") {
+      const slider = el.tagName === "INPUT" && (el as HTMLInputElement).type === "range"
+        ? el as HTMLInputElement
+        : el.querySelector("input[type='range']") as HTMLInputElement | null;
+      if (slider) {
+        setTimeout(() => {
+          setNativeValue(slider, String(action.value));
+        }, 300);
+        showFeedback(`🎚️ Set "${action.label}" to ${action.value}`);
+      } else {
+        // Try Radix slider - trigger pointer events
+        const thumb = el.querySelector("[role='slider']") as HTMLElement | null;
+        if (thumb) {
+          // For Radix sliders, we click the track area at the proportional position
+          setTimeout(() => el.click(), 300);
+          showFeedback(`🎚️ Adjusted "${action.label}"`);
+        } else {
+          showFeedback(`⚠️ Couldn't find slider for "${action.label}"`);
         }
       }
-
-      // 3. Try by aria-label
-      if (!el) {
-        el = document.querySelector(`[aria-label="${selector}"]`) ||
-             document.querySelector(`[aria-label*="${selector}" i]`);
-      }
-
-      if (el) {
-        // Scroll element into view and highlight it briefly
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.style.outline = "2px solid hsl(var(--primary))";
-        el.style.outlineOffset = "2px";
-        el.style.transition = "outline 0.2s ease";
-        setTimeout(() => {
-          el!.style.outline = "";
-          el!.style.outlineOffset = "";
-        }, 1500);
-
-        // Click after a brief highlight delay
-        setTimeout(() => el!.click(), 300);
-        setClickFeedback(`✅ Clicked "${label}"`);
-      } else {
-        setClickFeedback(`⚠️ Couldn't find "${label}" on the page`);
-      }
-    } catch {
-      setClickFeedback(`⚠️ Couldn't click "${label}"`);
     }
-    setTimeout(() => setClickFeedback(null), 2500);
   };
 
   const quickActions = [
@@ -230,6 +309,15 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
       return;
     }
     setInput(msg);
+  };
+
+  const actionIcon = (type: string) => {
+    switch (type) {
+      case "click": return <MousePointerClick className="w-2.5 h-2.5" />;
+      case "set_value": return <FormInput className="w-2.5 h-2.5" />;
+      case "set_slider": return <SlidersHorizontal className="w-2.5 h-2.5" />;
+      default: return <ExternalLink className="w-2.5 h-2.5" />;
+    }
   };
 
   return (
@@ -309,17 +397,10 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
                           key={j}
                           whileHover={{ scale: 1.04 }}
                           whileTap={{ scale: 0.96 }}
-                          onClick={() => {
-                            if (action.type === "navigate") handleNavigate(action.path);
-                            else if (action.type === "click") handleClick(action.selector, action.label);
-                          }}
+                          onClick={() => handleAction(action)}
                           className="flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 border border-primary/20 text-[9px] font-medium text-primary hover:bg-primary/20 transition-colors"
                         >
-                          {action.type === "click" ? (
-                            <MousePointerClick className="w-2.5 h-2.5" />
-                          ) : (
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          )}
+                          {actionIcon(action.type)}
                           {action.label}
                         </motion.button>
                       ))}
@@ -347,16 +428,16 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
           );
         })}
 
-        {/* Click feedback toast */}
+        {/* Action feedback toast */}
         <AnimatePresence>
-          {clickFeedback && (
+          {actionFeedback && (
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               className="text-[9px] text-center text-muted-foreground bg-muted/50 rounded-md px-2 py-1"
             >
-              {clickFeedback}
+              {actionFeedback}
             </motion.div>
           )}
         </AnimatePresence>
@@ -402,7 +483,7 @@ export default function AIChatPanel({ context }: AIChatPanelProps = {}) {
       </div>
 
       {/* Input */}
-      <div className="p-2 border-t border-border">
+      <div className="p-2 border-t border-border shrink-0">
         <div className="flex gap-1">
           <input
             value={input}
