@@ -168,6 +168,18 @@ export const INTERMEDIATE_MODULES: CourseModule[] = [
         wrongExplanation: "Scale annual vol to weekly: σ_week = σ_annual × √(days/365). For 100% annual vol over 7 days: 100% × √(7/365) ≈ 14%. Two standard deviations ≈ ±14%.",
         calculatorNeeded: true,
       },
+      {
+        type: "lesson",
+        title: "📝 Modules 1–2 Recap",
+        content: [
+          "So far in the intermediate track, you've learned two tightly linked concepts:",
+          "• Concentrated liquidity = capital efficiency × amplified risk. You choose a range and the market decides if you were right.",
+          "• Range selection is driven by asset volatility, your holding period, and how actively you want to manage. ±2σ is a good starting heuristic.",
+          "• Passive LPs set wide ranges and rebalance rarely. Active LPs follow price but pay gas and lock in IL each time.",
+          "Key insight: there's no 'best' range — only ranges that match your risk tolerance and market view.",
+          "Next: fee tier design and why the same token pair needs multiple fee options.",
+        ],
+      },
     ],
   },
 
