@@ -14,6 +14,7 @@ import MultiAssetLab from "./pages/MultiAssetLab";
 import TimeVarianceLab from "./pages/TimeVarianceLab";
 import DiscoveryAtlas from "./pages/DiscoveryAtlas";
 import LiquidityStrategyLab from "./pages/LiquidityStrategyLab";
+import DNALab from "./pages/DNALab";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
 import ForecastIndex from "./forecasting/pages/ForecastIndex";
