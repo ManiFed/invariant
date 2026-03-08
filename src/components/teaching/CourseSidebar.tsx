@@ -7,6 +7,26 @@ import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
 
+// Deterministic shuffle: produces a stable permutation from a string seed
+function seededShuffle<T>(arr: T[], seed: string): { items: T[]; indexMap: number[] } {
+  // Simple hash from string
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
+  }
+  const indices = arr.map((_, i) => i);
+  // Fisher-Yates with seeded pseudo-random
+  for (let i = indices.length - 1; i > 0; i--) {
+    h = Math.abs(((h * 1103515245 + 12345) | 0));
+    const j = h % (i + 1);
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return {
+    items: indices.map(i => arr[i]),
+    indexMap: indices, // indexMap[displayIdx] = originalIdx
+  };
+}
+
 interface Props {
   currentModule: number;
   currentStep: number;
