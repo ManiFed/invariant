@@ -44,6 +44,7 @@ export interface Challenge {
   story: string;
   constraints: ChallengeConstraint[];
   defaultParams: ChallengeParams;
+  solutionParams: ChallengeParams;
   hints: string[];
   evaluate: (params: ChallengeParams) => ChallengeResult;
 }
