@@ -45,6 +45,7 @@ const App = () => (
           <Route path="/labs/discover" element={<DiscoveryAtlas />} />
           <Route path="/labs/discovery" element={<DiscoveryAtlas />} />
           <Route path="/labs/strategy" element={<LiquidityStrategyLab />} />
+          <Route path="/labs/dna" element={<DNALab />} />
           {/* Forecast Lab — separate service */}
           <Route path={forecastRoute()} element={<ForecastIndex />} />
           <Route path={forecastRoute("/lessons")} element={<Lessons />} />
