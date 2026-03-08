@@ -44,6 +44,7 @@ export interface Challenge {
   story: string;
   constraints: ChallengeConstraint[];
   defaultParams: ChallengeParams;
+  solutionParams: ChallengeParams;
   hints: string[];
   evaluate: (params: ChallengeParams) => ChallengeResult;
 }
@@ -194,6 +195,7 @@ export const challenges: Challenge[] = [
       { metric: "fee_rate", label: "Fee rate", operator: "<=", target: 0.1, unit: "%", weight: 1 },
     ],
     defaultParams: { reserveX: 500000, reserveY: 500000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 1000, reserveY: 1500000, feeRate: 0.0005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Stablecoin pools work best with very deep liquidity.",
       "Lower fee rates help, but the real trick is the reserve depth.",
@@ -217,6 +219,7 @@ export const challenges: Challenge[] = [
       { metric: "fee_revenue", label: "Daily fee revenue", operator: ">", target: 10, unit: "$", weight: 1 },
     ],
     defaultParams: { reserveX: 50, reserveY: 100000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 500, reserveY: 500000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "More liquidity = less slippage. But the fee rate matters too.",
       "Think about how much capital you're willing to deploy."
@@ -239,6 +242,7 @@ export const challenges: Challenge[] = [
       { metric: "slippage_5k", label: "Slippage on $5k trade", operator: "<", target: 1.5, unit: "%", weight: 2 },
     ],
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 300, reserveY: 600000, feeRate: 0.005, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Higher fees earn more per trade but discourage volume.",
       "Try fee rates between 0.05% and 1% and compare revenue.",
@@ -264,6 +268,7 @@ export const challenges: Challenge[] = [
       { metric: "solvent", label: "Pool stays solvent", operator: ">=", target: 1, unit: "", weight: 3 },
     ],
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.3, concentrationUpper: 3 },
+    solutionParams: { reserveX: 500, reserveY: 1000000, feeRate: 0.01, amplification: 1, concentrationLower: 0.1, concentrationUpper: 5 },
     hints: [
       "Wide price ranges reduce concentrated IL exposure.",
       "Higher fee rates help offset IL during volatile periods.",
@@ -286,6 +291,7 @@ export const challenges: Challenge[] = [
       { metric: "il_90d", label: "IL after 90 days", operator: "<", target: 8, unit: "%", weight: 2 },
     ],
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 300, reserveY: 600000, feeRate: 0.008, amplification: 1, concentrationLower: 0.7, concentrationUpper: 1.5 },
     hints: [
       "Volatile markets generate more arb volume → more fees.",
       "But volatile markets also mean more IL. Balance is key.",
@@ -309,6 +315,7 @@ export const challenges: Challenge[] = [
       { metric: "capital_used", label: "Total capital deployed", operator: "<=", target: 250000, unit: "$", weight: 3 },
     ],
     defaultParams: { reserveX: 62.5, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.8, concentrationUpper: 1.25 },
+    solutionParams: { reserveX: 62.5, reserveY: 125000, feeRate: 0.003, amplification: 1, concentrationLower: 0.9, concentrationUpper: 1.1 },
     hints: [
       "Tight concentration ranges multiply capital efficiency.",
       "A range of ±20% can give 5x+ capital efficiency.",
@@ -346,6 +353,7 @@ export const challenges: Challenge[] = [
       { metric: "il", label: "Impermanent loss", operator: "<", target: 8, unit: "%", weight: 2 },
     ],
     defaultParams: { reserveX: 200, reserveY: 400000, feeRate: 0.01, amplification: 1, concentrationLower: 0.2, concentrationUpper: 5 },
+    solutionParams: { reserveX: 800, reserveY: 1600000, feeRate: 0.015, amplification: 1, concentrationLower: 0.1, concentrationUpper: 5 },
     hints: [
       "Higher fee rates create a buffer during extreme moves.",
       "Very wide ranges ensure the pool never runs out of one asset.",
@@ -369,6 +377,7 @@ export const challenges: Challenge[] = [
       { metric: "fee_revenue", label: "Still earns decent fees", operator: ">", target: 300, unit: "$", weight: 1 },
     ],
     defaultParams: { reserveX: 200, reserveY: 400000, feeRate: 0.003, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
+    solutionParams: { reserveX: 800, reserveY: 1600000, feeRate: 0.01, amplification: 1, concentrationLower: 0.5, concentrationUpper: 2 },
     hints: [
       "Higher fees make sandwiches less profitable for attackers.",
       "Deep liquidity reduces the price impact of frontrunning.",

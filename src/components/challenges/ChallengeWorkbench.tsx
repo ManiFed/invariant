@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Star, CheckCircle2, XCircle, Lightbulb, RotateCcw } from "lucide-react";
+import { ArrowLeft, Play, Star, CheckCircle2, XCircle, Lightbulb, RotateCcw, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
@@ -22,6 +22,8 @@ export default function ChallengeWorkbench({
   const [running, setRunning] = useState(false);
   const [showHint, setShowHint] = useState(-1);
   const [celebrated, setCelebrated] = useState(false);
+  const [gaveUp, setGaveUp] = useState(false);
+  const [animating, setAnimating] = useState(false);
 
   const runEvaluation = useCallback(() => {
     setRunning(true);
@@ -44,7 +46,49 @@ export default function ChallengeWorkbench({
     setResult(null);
     setCelebrated(false);
     setShowHint(-1);
+    setGaveUp(false);
   };
+
+  const giveUp = useCallback(() => {
+    if (animating) return;
+    setGaveUp(true);
+    setAnimating(true);
+    setResult(null);
+
+    const solution = challenge.solutionParams;
+    const start = { ...params };
+    const duration = 800;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      // Ease out cubic
+      const ease = 1 - Math.pow(1 - t, 3);
+      setParams({
+        reserveX: Math.round(start.reserveX + (solution.reserveX - start.reserveX) * ease),
+        reserveY: Math.round(start.reserveY + (solution.reserveY - start.reserveY) * ease),
+        feeRate: start.feeRate + (solution.feeRate - start.feeRate) * ease,
+        amplification: start.amplification + (solution.amplification - start.amplification) * ease,
+        concentrationLower: start.concentrationLower + (solution.concentrationLower - start.concentrationLower) * ease,
+        concentrationUpper: start.concentrationUpper + (solution.concentrationUpper - start.concentrationUpper) * ease,
+      });
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setParams({ ...solution });
+        setAnimating(false);
+        // Auto-run evaluation after filling in
+        setTimeout(() => {
+          const r = challenge.evaluate(solution);
+          setResult(r);
+          if (r.passed) {
+            // Don't save progress on give-up — it's a freebie
+          }
+        }, 300);
+      }
+    };
+    requestAnimationFrame(animate);
+  }, [challenge, params, animating]);
 
   const updateParam = (key: keyof ChallengeParams, value: number) => {
     setParams(prev => ({ ...prev, [key]: value }));
@@ -124,14 +168,37 @@ export default function ChallengeWorkbench({
           </Card>
 
           <div className="flex gap-2">
-            <Button className="flex-1" onClick={runEvaluation} disabled={running}>
+            <Button className="flex-1" onClick={runEvaluation} disabled={running || animating}>
               <Play className="w-4 h-4" />
               {running ? "Simulating…" : "Run Simulation"}
             </Button>
-            <Button variant="outline" onClick={reset}>
+            <Button variant="outline" onClick={reset} disabled={animating}>
               <RotateCcw className="w-4 h-4" />
             </Button>
           </div>
+
+          {/* Give Up */}
+          {!gaveUp && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-muted-foreground hover:text-destructive"
+              onClick={giveUp}
+              disabled={animating}
+            >
+              <Flag className="w-3.5 h-3.5 mr-1.5" />
+              I give up — show me the answer
+            </Button>
+          )}
+          {gaveUp && result && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-muted-foreground text-center bg-muted/50 rounded-lg px-3 py-2"
+            >
+              🏳️ Solution revealed — progress not saved. Hit <strong>Reset</strong> to try again yourself!
+            </motion.div>
+          )}
 
           {/* Hints */}
           <Card>
