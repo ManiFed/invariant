@@ -268,6 +268,7 @@ export const challenges: Challenge[] = [
       { metric: "solvent", label: "Pool stays solvent", operator: ">=", target: 1, unit: "", weight: 3 },
     ],
     defaultParams: { reserveX: 100, reserveY: 200000, feeRate: 0.003, amplification: 1, concentrationLower: 0.3, concentrationUpper: 3 },
+    solutionParams: { reserveX: 500, reserveY: 1000000, feeRate: 0.01, amplification: 1, concentrationLower: 0.1, concentrationUpper: 5 },
     hints: [
       "Wide price ranges reduce concentrated IL exposure.",
       "Higher fee rates help offset IL during volatile periods.",
