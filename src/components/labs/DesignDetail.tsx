@@ -178,8 +178,20 @@ export default function DesignDetail({ candidate, state, onBack }: DesignDetailP
             onClick={() => downloadCandidateJson(candidate)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground border border-border text-[10px] font-medium hover:bg-accent transition-colors"
           >
-            <Download className="w-3 h-3" /> Download .json
+            <Download className="w-3 h-3" /> Download
           </button>
+          {published ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 text-primary text-[10px] font-medium">
+              <BookOpen className="w-3 h-3" /> Published ✓
+            </span>
+          ) : (
+            <button
+              onClick={() => setShowPublish(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-[10px] font-medium hover:opacity-90 transition-opacity"
+            >
+              <BookOpen className="w-3 h-3" /> Publish to Library
+            </button>
+          )}
           <div className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: REGIME_COLORS[candidate.regime] }} />
             <span className="text-[9px] font-mono text-muted-foreground">{candidate.regime}</span>
