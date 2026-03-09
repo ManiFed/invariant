@@ -7,7 +7,9 @@ import Index from "./pages/Index";
 import BeginnerMode from "./pages/BeginnerMode";
 import AdvancedMode from "./pages/AdvancedMode";
 import TeachingLab from "./pages/TeachingLab";
-import Documentation from "./pages/Documentation";
+import DocsLayout from "./pages/docs/DocsLayout";
+import DocsIndex from "./pages/docs/DocsIndex";
+import DocsSection from "./pages/docs/DocsSection";
 import Library from "./pages/Library";
 import Labs from "./pages/Labs";
 import AMMDesignStudio from "./pages/AMMDesignStudio";
@@ -45,7 +47,13 @@ const App = () => (
             <Route path="/beginner" element={<BeginnerMode />} />
             <Route path="/advanced" element={<AdvancedMode />} />
             <Route path="/learn" element={<TeachingLab />} />
-            <Route path="/docs" element={<Documentation />} />
+            {/* Multi-page Documentation */}
+            <Route path="/docs" element={<DocsLayout />}>
+              <Route index element={<DocsIndex />} />
+              <Route path=":sectionId" element={<DocsSection />} />
+            </Route>
+            {/* Legacy redirect */}
+            <Route path="/documentation" element={<Navigate to="/docs" replace />} />
             <Route path="/library" element={<Library />} />
             <Route path="/labs" element={<Labs />} />
             <Route path="/design-studio" element={<AMMDesignStudio />} />

@@ -397,6 +397,247 @@ export function compileAMMDesign(design: AMMDesign): CompiledAMMFormula {
   };
 }
 
+// ─── NUMERIC BLOCK EVALUATION ─────────────────────────────────
+
+export interface EvalContext {
+  x: number;
+  y: number;
+  k: number;
+  t: number;
+  assets?: number[];
+}
+
+/**
+ * Evaluate a single block tree node to a numeric value.
+ * Used for custom formula evaluation and curve solving.
+ */
+export function evaluateBlockNumeric(block: AMMBlockInstance, ctx: EvalContext): number {
+  // Get input values eagerly
+  const inputs = block.inputs.map(inp => evaluateBlockNumeric(inp, ctx));
+  const [a, b] = inputs;
+
+  switch (block.blockId) {
+    // ── Primitives ──
+    case "var_x": return ctx.x;
+    case "var_y": return ctx.y;
+    case "const_k": return ctx.k;
+    case "const_price": return ctx.x > 0 ? ctx.y / ctx.x : 0;
+    case "const_number": return Number(block.params.value) || 0;
+    case "var_z": return ctx.assets?.[2] ?? 0;
+    case "var_w": return ctx.assets?.[3] ?? 0;
+    case "var_asset_n": return ctx.assets?.[Number(block.params.index)] ?? 0;
+    case "var_time": return ctx.t;
+    case "var_elapsed": return ctx.t;
+    case "var_epoch": return Math.floor(ctx.t / (Number(block.params.duration) || 86400));
+
+    // ── Arithmetic Operations ──
+    case "op_add": return (a ?? 0) + (b ?? 0);
+    case "op_subtract": return (a ?? 0) - (b ?? 0);
+    case "op_multiply": return (a ?? 0) * (b ?? 0);
+    case "op_divide": return b ? (a ?? 0) / b : 0;
+    case "op_power": return Math.pow(Math.abs(a ?? 0), b ?? 1);
+    case "op_sqrt": return Math.sqrt(Math.abs(a ?? 0));
+    case "op_cbrt": return Math.cbrt(a ?? 0);
+    case "op_ln": return (a ?? 0) > 0 ? Math.log(a!) : 0;
+    case "op_exp": return Math.exp(Math.min(a ?? 0, 500));
+    case "op_min": return Math.min(a ?? 0, b ?? 0);
+    case "op_max": return Math.max(a ?? 0, b ?? 0);
+
+    // ── Curve Templates (return invariant value) ──
+    case "curve_cp": return ctx.x * ctx.y;
+    case "curve_csum": return ctx.x + ctx.y;
+    case "curve_weighted": {
+      const wx = Number(block.params.wx) || 0.5;
+      return Math.pow(Math.abs(ctx.x), wx) * Math.pow(Math.abs(ctx.y), 1 - wx);
+    }
+    case "curve_stable": {
+      const A = Number(block.params.amp) || 100;
+      const sum = ctx.x + ctx.y;
+      const prod = ctx.x * ctx.y;
+      return A * sum + (prod > 0 ? (sum * sum) / (4 * prod) : 0);
+    }
+    case "curve_concentrated": {
+      const lower = Number(block.params.lower) || 0.9;
+      const upper = Number(block.params.upper) || 1.1;
+      const L = Math.sqrt(ctx.k);
+      return (ctx.x + L / Math.sqrt(upper)) * (ctx.y + L * Math.sqrt(lower));
+    }
+    case "curve_custom": {
+      if (block.children.length > 0) {
+        // Last child's value is the invariant expression
+        return block.children.reduce((_, child) => evaluateBlockNumeric(child, ctx), 0);
+      }
+      return ctx.x * ctx.y;
+    }
+
+    // ── Modifiers ──
+    case "mod_weight": return Math.pow(Math.abs(a ?? 0), Number(block.params.w) || 0.5);
+    case "mod_amplify": return (Number(block.params.factor) || 1) * (a ?? 0);
+    case "mod_clamp": return Math.max(Number(block.params.min) || 0, Math.min(Number(block.params.max) || 1e6, a ?? 0));
+    case "mod_smooth": {
+      const blend = Number(block.params.blend) || 0.5;
+      return (a ?? 0) * (1 - blend) + (b ?? 0) * blend;
+    }
+    case "mod_blend": {
+      const ratio = Number(block.params.ratio) || 0.5;
+      return (a ?? 0) * (1 - ratio) + (b ?? 0) * ratio;
+    }
+
+    // ── Conditionals ──
+    case "cond_price_above": {
+      const price = ctx.x > 0 ? ctx.y / ctx.x : 0;
+      if (price > Number(block.params.threshold) && block.children.length > 0) {
+        return evaluateBlockNumeric(block.children[0], ctx);
+      }
+      return ctx.x * ctx.y; // fallback CP
+    }
+    case "cond_price_below": {
+      const price = ctx.x > 0 ? ctx.y / ctx.x : 0;
+      if (price < Number(block.params.threshold) && block.children.length > 0) {
+        return evaluateBlockNumeric(block.children[0], ctx);
+      }
+      return ctx.x * ctx.y;
+    }
+    case "cond_price_range": {
+      const price = ctx.x > 0 ? ctx.y / ctx.x : 0;
+      const lo = Number(block.params.lower);
+      const hi = Number(block.params.upper);
+      if (price > lo && price < hi && block.children.length > 0) {
+        return evaluateBlockNumeric(block.children[0], ctx);
+      }
+      return ctx.x * ctx.y;
+    }
+    case "cond_else": {
+      return block.children.length > 0 ? evaluateBlockNumeric(block.children[0], ctx) : ctx.x * ctx.y;
+    }
+
+    // ── Fee blocks (return fee rate) ──
+    case "fee_base": return Number(block.params.rate) || 0.003;
+    case "fee_dynamic": return Number(block.params.base) || 0.003;
+    case "fee_tiered": return Number(block.params.mid) || 0.003;
+
+    // ── Time Modifiers ──
+    case "mod_time_decay": {
+      const halflife = Number(block.params.halflife) || 3600;
+      return (a ?? 1) * Math.exp(-ctx.t * Math.LN2 / halflife);
+    }
+    case "mod_time_ramp": {
+      const start = Number(block.params.start);
+      const end = Number(block.params.end);
+      const dur = Number(block.params.duration) || 3600;
+      return start + (end - start) * Math.min(1, ctx.t / dur);
+    }
+    case "mod_time_oscillate": {
+      const amp = Number(block.params.amplitude) || 0.1;
+      const period = Number(block.params.period) || 3600;
+      return (a ?? 1) * (1 + amp * Math.sin(2 * Math.PI * ctx.t / period));
+    }
+    case "keyframe_lerp": {
+      const t0 = Number(block.params.t0), v0 = Number(block.params.v0);
+      const t1 = Number(block.params.t1), v1 = Number(block.params.v1);
+      if (ctx.t <= t0) return v0;
+      if (ctx.t >= t1) return v1;
+      return v0 + (v1 - v0) * (ctx.t - t0) / (t1 - t0);
+    }
+    case "keyframe_step":
+      return ctx.t >= Number(block.params.switchTime) ? Number(block.params.after) : Number(block.params.before);
+    case "cond_time_before":
+      if (ctx.t < Number(block.params.threshold) && block.children.length > 0)
+        return evaluateBlockNumeric(block.children[0], ctx);
+      return ctx.x * ctx.y;
+    case "cond_time_after":
+      if (ctx.t > Number(block.params.threshold) && block.children.length > 0)
+        return evaluateBlockNumeric(block.children[0], ctx);
+      return ctx.x * ctx.y;
+    case "cond_epoch_is":
+      if (Math.floor(ctx.t / 86400) === Number(block.params.epoch) && block.children.length > 0)
+        return evaluateBlockNumeric(block.children[0], ctx);
+      return ctx.x * ctx.y;
+
+    // ── Multi-asset Operations ──
+    case "op_sum_all": return (ctx.assets || [ctx.x, ctx.y]).reduce((s, v) => s + v, 0);
+    case "op_product_all": return (ctx.assets || [ctx.x, ctx.y]).reduce((p, v) => p * v, 1);
+    case "op_geometric_mean": {
+      const arr = ctx.assets || [ctx.x, ctx.y];
+      return Math.pow(arr.reduce((p, v) => p * Math.abs(v), 1), 1 / arr.length);
+    }
+    case "mod_asset_weight": {
+      const idx = Number(block.params.asset) || 0;
+      const w = Number(block.params.weight) || 0.25;
+      const val = ctx.assets?.[idx] ?? (idx === 0 ? ctx.x : ctx.y);
+      return Math.pow(Math.abs(val), w);
+    }
+    case "curve_multi_weighted": {
+      const wx = Number(block.params.wx) || 0.33;
+      const wy = Number(block.params.wy) || 0.33;
+      const wz = Number(block.params.wz) || 0.34;
+      const z = ctx.assets?.[2] ?? Math.cbrt(ctx.k);
+      return Math.pow(ctx.x, wx) * Math.pow(ctx.y, wy) * Math.pow(z, wz);
+    }
+    case "curve_multi_stable": {
+      const A = Number(block.params.amp) || 100;
+      const n = Number(block.params.n) || 3;
+      const assets = ctx.assets || [ctx.x, ctx.y];
+      const sum = assets.reduce((s, v) => s + v, 0);
+      const prod = assets.reduce((p, v) => p * v, 1);
+      return A * Math.pow(n, n) * sum + (prod > 0 ? Math.pow(sum, n + 1) / (Math.pow(n, n) * prod) : 0);
+    }
+
+    default: return 0;
+  }
+}
+
+/**
+ * Numerically solve for y given x, using the block tree as the invariant function.
+ * Uses bisection: finds y where f(x,y) = target.
+ */
+function solveCustomForY(formulaBlocks: AMMBlockInstance[], x: number, k: number, t: number = 0): number | null {
+  // Compute the target invariant value at equilibrium (√k, √k)
+  const eqY = Math.sqrt(k);
+  const eqCtx: EvalContext = { x: eqY, y: eqY, k, t };
+  let target = 0;
+  for (const block of formulaBlocks) {
+    const def = getAMMBlockDef(block.blockId);
+    if (!def || def.category === "fee") continue;
+    target = evaluateBlockNumeric(block, eqCtx);
+  }
+  if (!isFinite(target) || target === 0) target = k;
+
+  const evalAt = (y: number): number => {
+    const ctx: EvalContext = { x, y, k, t };
+    let result = 0;
+    for (const block of formulaBlocks) {
+      const def = getAMMBlockDef(block.blockId);
+      if (!def || def.category === "fee") continue;
+      result = evaluateBlockNumeric(block, ctx);
+    }
+    return result;
+  };
+
+  // Determine monotonicity direction
+  const valLo = evalAt(0.01);
+  const valHi = evalAt(k * 100);
+  const increasing = valHi > valLo;
+
+  let lo = 0.001, hi = k * 100;
+
+  // Bisection: find y where evalAt(y) ≈ target
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    const val = evalAt(mid);
+    if (!isFinite(val)) { hi = mid; continue; }
+    const diff = val - target;
+    if (Math.abs(diff) < Math.abs(target) * 1e-10) return mid;
+    if ((increasing && diff > 0) || (!increasing && diff < 0)) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  const result = (lo + hi) / 2;
+  return isFinite(result) && result > 0 ? result : null;
+}
+
 // ─── CURVE EVALUATION ─────────────────────────────────────────
 
 export interface CurvePoint {
@@ -404,61 +645,79 @@ export interface CurvePoint {
   y: number;
 }
 
+/**
+ * Evaluate the complete AMM design to generate curve points.
+ * Handles named templates with closed-form solutions and custom block compositions with numeric solving.
+ */
 export function evaluateAMMCurve(design: AMMDesign, k: number = 10000, points: number = 100): CurvePoint[] {
   const result: CurvePoint[] = [];
-  const compiled = compileAMMDesign(design);
-  
-  // Generate curve based on detected type
+
+  // Filter out fee-only blocks
+  const formulaBlocks = design.blocks.filter(b => {
+    const def = getAMMBlockDef(b.blockId);
+    return def && def.category !== "fee";
+  });
+
+  if (formulaBlocks.length === 0) {
+    // No formula → default constant product
+    const minX = 1, maxX = Math.sqrt(k) * 3;
+    for (let i = 0; i <= points; i++) {
+      const x = minX + (maxX - minX) * (i / points);
+      result.push({ x, y: k / x });
+    }
+    return result;
+  }
+
+  // Check if we have a simple named curve template (use closed-form)
+  const namedCurve = formulaBlocks.find(b =>
+    b.blockId.startsWith("curve_") && b.blockId !== "curve_custom"
+  );
+  const hasOnlyNamedCurve = namedCurve && formulaBlocks.length === 1;
+
   const minX = 1;
   const maxX = Math.sqrt(k) * 3;
-  
+
   for (let i = 0; i <= points; i++) {
     const x = minX + (maxX - minX) * (i / points);
-    let y: number;
+    let y: number | null = null;
 
-    // Find the first curve block and evaluate
-    const curveBlock = design.blocks.find(b => getAMMBlockDef(b.blockId)?.category === "curve");
-    
-    if (!curveBlock) {
-      // Default to constant product
-      y = k / x;
-    } else if (curveBlock.blockId === "curve_cp") {
-      y = k / x;
-    } else if (curveBlock.blockId === "curve_csum") {
-      y = k - x;
-      if (y < 0) continue;
-    } else if (curveBlock.blockId === "curve_weighted") {
-      const wx = Number(curveBlock.params.wx) || 0.5;
-      // x^wx * y^(1-wx) = k => y = (k / x^wx)^(1/(1-wx))
-      y = Math.pow(k / Math.pow(x, wx), 1 / (1 - wx));
-    } else if (curveBlock.blockId === "curve_stable") {
-      // Simplified StableSwap approximation
-      const A = Number(curveBlock.params.amp) || 100;
-      const D = Math.sqrt(k) * 2;
-      // Use constant product as base, flatten around midpoint
-      const xMid = D / 2;
-      const dist = Math.abs(x - xMid) / xMid;
-      const blend = Math.min(1, dist * 2);
-      const yCP = k / x;
-      const yCS = D - x;
-      y = yCS * (1 - blend / A) + yCP * (blend / A);
-      if (y < 0) continue;
-    } else if (curveBlock.blockId === "curve_concentrated") {
-      const lower = Number(curveBlock.params.lower) || 0.9;
-      const upper = Number(curveBlock.params.upper) || 1.1;
-      const L = Math.sqrt(k);
-      const sqrtPl = Math.sqrt(lower);
-      const sqrtPu = Math.sqrt(upper);
-      // Virtual reserves model
-      const xVirtual = x + L / sqrtPu;
-      const yVirtual = (L * L) / xVirtual - L * sqrtPl;
-      y = Math.max(0, yVirtual);
+    if (hasOnlyNamedCurve && namedCurve) {
+      // Closed-form solutions for named templates
+      switch (namedCurve.blockId) {
+        case "curve_cp": y = k / x; break;
+        case "curve_csum": y = k - x; break;
+        case "curve_weighted": {
+          const wx = Number(namedCurve.params.wx) || 0.5;
+          y = Math.pow(k / Math.pow(x, wx), 1 / (1 - wx));
+          break;
+        }
+        case "curve_stable": {
+          const A = Number(namedCurve.params.amp) || 100;
+          const D = Math.sqrt(k) * 2;
+          const xMid = D / 2;
+          const dist = Math.abs(x - xMid) / xMid;
+          const blend = Math.min(1, dist * 2);
+          const yCP = k / x;
+          const yCS = D - x;
+          y = yCS * (1 - blend / A) + yCP * (blend / A);
+          break;
+        }
+        case "curve_concentrated": {
+          const lower = Number(namedCurve.params.lower) || 0.9;
+          const upper = Number(namedCurve.params.upper) || 1.1;
+          const L = Math.sqrt(k);
+          const xV = x + L / Math.sqrt(upper);
+          y = (L * L) / xV - L * Math.sqrt(lower);
+          break;
+        }
+        default: y = k / x;
+      }
     } else {
-      // Fallback to constant product
-      y = k / x;
+      // Numeric solving for custom formulas / block compositions
+      y = solveCustomForY(formulaBlocks, x, k);
     }
 
-    if (y > 0 && y < maxX * 10 && isFinite(y)) {
+    if (y !== null && y > 0 && y < maxX * 10 && isFinite(y)) {
       result.push({ x, y });
     }
   }
@@ -473,10 +732,11 @@ export function addChildToBlock(blocks: AMMBlockInstance[], parentUid: string, c
     if (b.uid === parentUid) {
       return { ...b, children: [...b.children, child] };
     }
-    if (b.children.length > 0) {
-      return { ...b, children: addChildToBlock(b.children, parentUid, child) };
-    }
-    return b;
+    return {
+      ...b,
+      children: addChildToBlock(b.children, parentUid, child),
+      inputs: addChildToBlock(b.inputs, parentUid, child),
+    };
   });
 }
 
@@ -485,10 +745,11 @@ export function addInputToBlock(blocks: AMMBlockInstance[], parentUid: string, i
     if (b.uid === parentUid) {
       return { ...b, inputs: [...b.inputs, input] };
     }
-    if (b.children.length > 0) {
-      return { ...b, children: addInputToBlock(b.children, parentUid, input) };
-    }
-    return b;
+    return {
+      ...b,
+      children: addInputToBlock(b.children, parentUid, input),
+      inputs: addInputToBlock(b.inputs, parentUid, input),
+    };
   });
 }
 

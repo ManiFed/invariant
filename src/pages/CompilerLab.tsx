@@ -65,6 +65,21 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
   const [showCode, setShowCode] = useState(false);
   const [tooltip, setTooltip] = useState<string | null>(null);
 
+  // ── Testnet State Tracking ──
+  const [testnetState, setTestnetState] = useState({
+    ethBalance: 100,
+    tokenABalance: 1_000_000,
+    tokenBBalance: 1_000_000,
+    contractReserveA: 500_000,
+    contractReserveB: 500_000,
+    lpTokens: 0,
+    totalSupply: 1_000_000,
+    accumulatedFeesA: 0,
+    accumulatedFeesB: 0,
+    txCount: 0,
+    blockNumber: 19_500_000,
+  });
+
   useEffect(() => {
     supabase.from("library_amms").select("id, name, bins, formula, params").then(({ data }) => {
       if (data) {
@@ -104,18 +119,134 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
     setDeployStatus({ step: "compiling", progress: 0 });
     setStep("deploy");
     await simulateDeployment(setDeployStatus);
-  }, []);
+    // Reset testnet state on fresh deploy
+    setTestnetState({
+      ethBalance: 100,
+      tokenABalance: 1_000_000,
+      tokenBBalance: 1_000_000,
+      contractReserveA: 500_000,
+      contractReserveB: 500_000,
+      lpTokens: 0,
+      totalSupply: 1_000_000,
+      accumulatedFeesA: 0,
+      accumulatedFeesB: 0,
+      txCount: 0,
+      blockNumber: deployStatus?.blockNumber || 19_500_000,
+    });
+    setInteractLog(prev => [...prev,
+      `[${new Date().toLocaleTimeString()}] 📦 Contract deployed. Initial reserves: 500,000 A / 500,000 B`,
+      `[${new Date().toLocaleTimeString()}] 💰 Test account funded: 100 ETH, 1,000,000 Token A, 1,000,000 Token B`,
+    ]);
+  }, [deployStatus]);
 
   const handleInteract = useCallback((fnName: string) => {
-    const inputValues = Object.entries(interactInputs).map(([k, v]) => `${k}=${v}`).join(", ");
-    const gasUsed = 20000 + Math.floor(Math.random() * 80000);
     const ts = new Date().toLocaleTimeString();
-    if (fnName.startsWith("get") || fnName.includes("reserve") || fnName.includes("price")) {
-      setInteractLog(prev => [...prev, `[${ts}] ${fnName}(${inputValues}) → ${(Math.random() * 100000).toFixed(2)}  (${gasUsed.toLocaleString()} gas, view)`]);
-    } else {
-      const txHash = "0x" + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join("") + "...";
-      setInteractLog(prev => [...prev, `[${ts}] ${fnName}(${inputValues}) → tx: ${txHash}  (${gasUsed.toLocaleString()} gas)`]);
-    }
+    const inputValues = Object.entries(interactInputs).map(([k, v]) => `${k}=${v}`).join(", ");
+
+    setTestnetState(prev => {
+      const next = { ...prev, txCount: prev.txCount + 1, blockNumber: prev.blockNumber + 1 };
+
+      // Simulate realistic function behavior
+      if (fnName === "swap") {
+        const aToB = interactInputs["aToB"] === "true";
+        const amountIn = parseInt(interactInputs["amountIn"] || "1000") || 1000;
+        const feeAmount = Math.floor(amountIn * 0.003);
+        const netInput = amountIn - feeAmount;
+
+        if (aToB) {
+          const newA = next.contractReserveA + netInput;
+          const k = next.contractReserveA * next.contractReserveB;
+          const amountOut = Math.floor(next.contractReserveB - k / newA);
+          if (amountOut > 0 && amountOut < next.contractReserveB && amountIn <= next.tokenABalance) {
+            next.tokenABalance -= amountIn;
+            next.tokenBBalance += amountOut;
+            next.contractReserveA = newA;
+            next.contractReserveB -= amountOut;
+            next.accumulatedFeesA += feeAmount;
+            next.ethBalance -= 0.005; // gas
+            setInteractLog(p => [...p,
+              `[${ts}] swap(true, ${amountIn}) → received ${amountOut.toLocaleString()} Token B  (fee: ${feeAmount}, gas: ~65,432)`,
+              `[${ts}]   Reserves: ${newA.toLocaleString()} A / ${(next.contractReserveB).toLocaleString()} B  |  Price: ${(next.contractReserveB / newA).toFixed(6)}`,
+            ]);
+          } else {
+            setInteractLog(p => [...p, `[${ts}] ✗ swap() REVERTED: ${amountIn > next.tokenABalance ? "Insufficient balance" : "Bad output amount"}`]);
+          }
+        } else {
+          const newB = next.contractReserveB + netInput;
+          const k = next.contractReserveA * next.contractReserveB;
+          const amountOut = Math.floor(next.contractReserveA - k / newB);
+          if (amountOut > 0 && amountOut < next.contractReserveA && amountIn <= next.tokenBBalance) {
+            next.tokenBBalance -= amountIn;
+            next.tokenABalance += amountOut;
+            next.contractReserveB = newB;
+            next.contractReserveA -= amountOut;
+            next.accumulatedFeesB += feeAmount;
+            next.ethBalance -= 0.005;
+            setInteractLog(p => [...p,
+              `[${ts}] swap(false, ${amountIn}) → received ${amountOut.toLocaleString()} Token A  (fee: ${feeAmount}, gas: ~65,432)`,
+              `[${ts}]   Reserves: ${(next.contractReserveA).toLocaleString()} A / ${newB.toLocaleString()} B  |  Price: ${(newB / next.contractReserveA).toFixed(6)}`,
+            ]);
+          } else {
+            setInteractLog(p => [...p, `[${ts}] ✗ swap() REVERTED: ${amountIn > next.tokenBBalance ? "Insufficient balance" : "Bad output amount"}`]);
+          }
+        }
+      } else if (fnName === "addLiquidity") {
+        const amtA = parseInt(interactInputs["amountA"] || "10000") || 10000;
+        const amtB = parseInt(interactInputs["amountB"] || "10000") || 10000;
+        if (amtA <= next.tokenABalance && amtB <= next.tokenBBalance) {
+          const lpMinted = Math.floor(Math.sqrt(amtA * amtB));
+          next.tokenABalance -= amtA;
+          next.tokenBBalance -= amtB;
+          next.contractReserveA += amtA;
+          next.contractReserveB += amtB;
+          next.lpTokens += lpMinted;
+          next.totalSupply += lpMinted;
+          next.ethBalance -= 0.008;
+          setInteractLog(p => [...p, `[${ts}] addLiquidity(${amtA.toLocaleString()}, ${amtB.toLocaleString()}) → minted ${lpMinted.toLocaleString()} LP tokens  (gas: ~124,891)`]);
+        } else {
+          setInteractLog(p => [...p, `[${ts}] ✗ addLiquidity() REVERTED: Insufficient token balance`]);
+        }
+      } else if (fnName === "removeLiquidity") {
+        const lpAmt = parseInt(interactInputs["lpTokens"] || "1000") || 1000;
+        if (lpAmt <= next.lpTokens && next.totalSupply > 0) {
+          const amtA = Math.floor((lpAmt * next.contractReserveA) / next.totalSupply);
+          const amtB = Math.floor((lpAmt * next.contractReserveB) / next.totalSupply);
+          next.lpTokens -= lpAmt;
+          next.totalSupply -= lpAmt;
+          next.tokenABalance += amtA;
+          next.tokenBBalance += amtB;
+          next.contractReserveA -= amtA;
+          next.contractReserveB -= amtB;
+          next.ethBalance -= 0.006;
+          setInteractLog(p => [...p, `[${ts}] removeLiquidity(${lpAmt.toLocaleString()}) → received ${amtA.toLocaleString()} A + ${amtB.toLocaleString()} B  (gas: ~98,234)`]);
+        } else {
+          setInteractLog(p => [...p, `[${ts}] ✗ removeLiquidity() REVERTED: ${lpAmt > next.lpTokens ? "Insufficient LP tokens" : "Zero supply"}`]);
+        }
+      } else if (fnName === "collectFees") {
+        const feesA = next.accumulatedFeesA;
+        const feesB = next.accumulatedFeesB;
+        next.accumulatedFeesA = 0;
+        next.accumulatedFeesB = 0;
+        next.ethBalance -= 0.003;
+        setInteractLog(p => [...p, `[${ts}] collectFees() → ${feesA.toLocaleString()} A fees + ${feesB.toLocaleString()} B fees collected  (gas: ~42,156)`]);
+      } else if (fnName.startsWith("get") || fnName.includes("reserve") || fnName.includes("price") || fnName.includes("Bin")) {
+        // View functions — no gas cost
+        let result: string;
+        if (fnName === "getReserves" || fnName === "reserveA") result = `(${next.contractReserveA.toLocaleString()}, ${next.contractReserveB.toLocaleString()})`;
+        else if (fnName === "getSpotPrice") result = (next.contractReserveB / next.contractReserveA).toFixed(8);
+        else if (fnName === "getBinWeights") result = `uint256[64] array (view only)`;
+        else if (fnName === "totalSupply") result = next.totalSupply.toLocaleString();
+        else result = (Math.random() * 100000).toFixed(2);
+        setInteractLog(p => [...p, `[${ts}] ${fnName}(${inputValues}) → ${result}  (view, no gas)`]);
+        return prev; // Don't update state for views
+      } else {
+        const gasUsed = 20000 + Math.floor(Math.random() * 80000);
+        next.ethBalance -= 0.003;
+        setInteractLog(p => [...p, `[${ts}] ${fnName}(${inputValues}) → success  (${gasUsed.toLocaleString()} gas)`]);
+      }
+
+      return next;
+    });
   }, [interactInputs]);
 
   const currentDesign = designs.find(d => d.id === selectedDesign);
@@ -567,14 +698,36 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
                 )}
               </div>
 
+              {/* Account state panel */}
+              {deployStatus?.contractAddress && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+                  {[
+                    { label: "ETH Balance", value: `${testnetState.ethBalance.toFixed(4)} ETH`, warn: testnetState.ethBalance < 1 },
+                    { label: "Token A", value: testnetState.tokenABalance.toLocaleString() },
+                    { label: "Token B", value: testnetState.tokenBBalance.toLocaleString() },
+                    { label: "LP Tokens", value: testnetState.lpTokens.toLocaleString() },
+                    { label: "Reserve A", value: testnetState.contractReserveA.toLocaleString() },
+                    { label: "Reserve B", value: testnetState.contractReserveB.toLocaleString() },
+                    { label: "Fees (A/B)", value: `${testnetState.accumulatedFeesA.toLocaleString()} / ${testnetState.accumulatedFeesB.toLocaleString()}` },
+                    { label: "Block / Txs", value: `#${testnetState.blockNumber.toLocaleString()} / ${testnetState.txCount}` },
+                  ].map(m => (
+                    <div key={m.label} className="p-2 rounded-lg bg-secondary border border-border text-center">
+                      <p className="text-[8px] text-muted-foreground">{m.label}</p>
+                      <p className={`text-[10px] font-mono font-bold ${m.warn ? "text-warning" : "text-foreground"}`}>{m.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Interaction panel - only after deployment */}
               {deployStatus?.contractAddress && compiled && (
-                <div className="grid lg:grid-cols-2 gap-4">
+                <div className="grid lg:grid-cols-2 gap-4 mt-4">
                   <div className="border border-border rounded-xl p-4 bg-card">
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center gap-2 mb-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-                      <Tip text="Call functions on your deployed contract. View functions are free; write functions cost gas."><h3 className="text-xs font-bold text-foreground">Contract Interaction</h3></Tip>
+                      <Tip text="Call functions on your deployed contract. View functions are free; write functions cost gas and update state."><h3 className="text-xs font-bold text-foreground">Contract Interaction</h3></Tip>
                     </div>
+                    <p className="text-[9px] text-muted-foreground mb-3">💡 Try: swap(aToB=true, amountIn=5000) to swap Token A → B. Or addLiquidity(amountA=10000, amountB=10000).</p>
                     <div className="space-y-1 mb-4 max-h-36 overflow-y-auto">
                       {compiled.abi.filter(a => a.type === "function").map((fn, i) => (
                         <button key={i} onClick={() => { setInteractFn(fn.name); setInteractInputs({}); }}
@@ -597,7 +750,7 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
                           {fn.inputs.map(input => (
                             <div key={input.name} className="flex items-center gap-2">
                               <label className="text-[10px] text-muted-foreground w-20">{input.name}</label>
-                              <input type="text" placeholder={`${input.type} value`}
+                              <input type="text" placeholder={input.name === "aToB" ? "true / false" : `${input.type} value`}
                                 value={interactInputs[input.name] || ""}
                                 onChange={e => setInteractInputs(prev => ({ ...prev, [input.name]: e.target.value }))}
                                 className="flex-1 px-2 py-1.5 rounded-lg bg-secondary border border-border text-xs font-mono text-foreground" />
@@ -614,12 +767,14 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
 
                   <div className="border border-border rounded-xl bg-card overflow-hidden">
                     <div className="px-4 py-2 border-b border-border flex items-center justify-between">
-                      <span className="text-[10px] font-mono text-muted-foreground">Console Output</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">Console Output ({interactLog.length} entries)</span>
                       <button onClick={() => setInteractLog([])} className="text-[10px] text-muted-foreground hover:text-foreground">Clear</button>
                     </div>
                     <div className="p-3 max-h-64 overflow-y-auto font-mono text-[10px] space-y-0.5">
                       {interactLog.length === 0 && <p className="text-muted-foreground">Call a function to see output here...</p>}
-                      {interactLog.map((log, i) => <p key={i} className="text-foreground">{log}</p>)}
+                      {interactLog.map((log, i) => (
+                        <p key={i} className={`${log.includes("REVERTED") ? "text-destructive" : log.includes("→") ? "text-foreground" : "text-muted-foreground"}`}>{log}</p>
+                      ))}
                     </div>
                   </div>
                 </div>
