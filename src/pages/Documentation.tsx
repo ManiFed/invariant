@@ -16,7 +16,7 @@ function ILCalculator() {
   const il = (2 * Math.sqrt(r)) / (1 + r) - 1;
   const data = Array.from({ length: 50 }, (_, i) => {
     const ratio = 0.2 + (i / 49) * 4.8;
-    return { ratio: +ratio.toFixed(2), il: +((2 * Math.sqrt(ratio)) / (1 + ratio) - 1) * 100).toFixed(2) };
+    return { ratio: +ratio.toFixed(2), il: +(((2 * Math.sqrt(ratio)) / (1 + ratio) - 1) * 100).toFixed(2) };
   });
   return (
     <div className="border border-border rounded-xl p-4 my-4 bg-secondary/30">
