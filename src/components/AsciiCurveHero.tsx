@@ -91,40 +91,37 @@ export function AsciiCurveHero() {
         tradeTimer++;
         
         if (tradeState === 'idle' && tradeTimer > nextTradeDelay) {
-          // Start a new trade
           tradeState = 'incoming';
           tradeTimer = 0;
-          impactX = 0.5 + Math.random() * 0.4; // Random position on curve (normalized)
+          impactX = 0.15 + Math.random() * 0.7; // Wider range of impact positions
           impactProgress = 0;
+          // Randomize entry direction: 0=top-right, 1=top, 2=top-left, 3=right, 4=bottom-right
+          tradeDirection = Math.floor(Math.random() * 5);
         } else if (tradeState === 'incoming') {
-          // Trade approaching the curve
-          impactProgress = Math.min(1, impactProgress + 0.04);
+          impactProgress = Math.min(1, impactProgress + 0.08); // 2x faster approach
           if (impactProgress >= 1) {
             tradeState = 'impact';
             tradeTimer = 0;
-            curveOffset = 0.15 + Math.random() * 0.1; // Impact magnitude
+            curveOffset = 0.15 + Math.random() * 0.1;
           }
         } else if (tradeState === 'impact') {
-          // Flash effect at impact
-          if (tradeTimer > 8) {
+          if (tradeTimer > 5) { // Shorter flash
             tradeState = 'sliding';
             tradeTimer = 0;
           }
         } else if (tradeState === 'sliding') {
-          // Curve slides to new position
-          impactProgress = Math.min(1, tradeTimer / 30);
+          impactProgress = Math.min(1, tradeTimer / 18); // Faster slide
           if (impactProgress >= 1) {
             tradeState = 'recovering';
             tradeTimer = 0;
           }
         } else if (tradeState === 'recovering') {
-          // Curve recovers back
-          curveOffset *= 0.92;
+          curveOffset *= 0.88; // Faster recovery
           if (curveOffset < 0.005) {
             tradeState = 'idle';
             tradeTimer = 0;
             curveOffset = 0;
-            nextTradeDelay = Math.random() * 100 + 50;
+            nextTradeDelay = Math.random() * 30 + 15; // Shorter gaps between trades
           }
         }
       }
