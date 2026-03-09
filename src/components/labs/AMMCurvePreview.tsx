@@ -74,27 +74,27 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
                 dataKey="x"
                 type="number"
                 domain={[0, maxX]}
-                tick={{ fontSize: 9, fill: chartTheme.text }}
-                axisLine={{ stroke: chartTheme.grid }}
-                tickLine={{ stroke: chartTheme.grid }}
-                label={{ value: "Reserve X", position: "bottom", fontSize: 9, fill: chartTheme.text }}
+                tick={{ fontSize: 9, fill: colors.tick }}
+                axisLine={{ stroke: colors.grid }}
+                tickLine={{ stroke: colors.grid }}
+                label={{ value: "Reserve X", position: "bottom", fontSize: 9, fill: colors.tick }}
               />
               <YAxis
                 type="number"
                 domain={[0, maxY * 1.1]}
-                tick={{ fontSize: 9, fill: chartTheme.text }}
-                axisLine={{ stroke: chartTheme.grid }}
-                tickLine={{ stroke: chartTheme.grid }}
-                label={{ value: "Reserve Y", angle: -90, position: "left", fontSize: 9, fill: chartTheme.text }}
+                tick={{ fontSize: 9, fill: colors.tick }}
+                axisLine={{ stroke: colors.grid }}
+                tickLine={{ stroke: colors.grid }}
+                label={{ value: "Reserve Y", angle: -90, position: "left", fontSize: 9, fill: colors.tick }}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: chartTheme.background,
-                  border: `1px solid ${chartTheme.grid}`,
+                  backgroundColor: colors.tooltipBg,
+                  border: `1px solid ${colors.tooltipBorder}`,
                   borderRadius: 8,
                   fontSize: 10,
                 }}
-                labelStyle={{ color: chartTheme.text }}
+                labelStyle={{ color: colors.tooltipText }}
                 formatter={(value: number) => [value.toFixed(2), ""]}
                 labelFormatter={(x) => `x = ${Number(x).toFixed(2)}`}
               />
@@ -105,7 +105,7 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
                   data={baselineData}
                   dataKey="y"
                   type="monotone"
-                  stroke={chartTheme.grid}
+                  stroke={colors.gray}
                   strokeWidth={1}
                   strokeDasharray="4 2"
                   dot={false}
@@ -119,7 +119,7 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
                   data={curveData}
                   dataKey="y"
                   type="monotone"
-                  stroke={chartTheme.primary}
+                  stroke={colors.green}
                   strokeWidth={2}
                   dot={false}
                   name="Your Curve"
@@ -129,13 +129,13 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
               {/* Reference lines at √k */}
               <ReferenceLine
                 x={Math.sqrt(k)}
-                stroke={chartTheme.accent}
+                stroke={colors.greenLight}
                 strokeDasharray="2 2"
                 strokeOpacity={0.5}
               />
               <ReferenceLine
                 y={Math.sqrt(k)}
-                stroke={chartTheme.accent}
+                stroke={colors.greenLight}
                 strokeDasharray="2 2"
                 strokeOpacity={0.5}
               />
