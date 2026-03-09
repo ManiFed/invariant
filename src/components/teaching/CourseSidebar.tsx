@@ -1192,9 +1192,27 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <BookOpen className="w-3 h-3 text-muted-foreground" />
-                    <h3 className="text-[11px] font-semibold text-foreground">{step.type === "lesson" ? step.title : "Knowledge Check"}</h3>
+                    <h3 className="text-[11px] font-semibold text-foreground">
+                      {step.type === "lesson" ? step.title : step.type === "challenge" ? "🎯 Challenge" : "Knowledge Check"}
+                    </h3>
                     <span className="text-[9px] font-mono text-muted-foreground ml-auto">{currentStep + 1}/{mod.steps.length}</span>
                   </div>
+
+                  {/* XP & Streak indicator */}
+                  {(xp > 0 || quizStreak >= 2) && (
+                    <div className="flex items-center gap-2 mb-2">
+                      {xp > 0 && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-warning/10 border border-warning/20 text-warning">
+                          ⭐ {xp} XP
+                        </span>
+                      )}
+                      {quizStreak >= 2 && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 border border-destructive/20 text-destructive flex items-center gap-0.5">
+                          <Flame className="w-2.5 h-2.5" /> {quizStreak} streak
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {step.type === "lesson" ? (
                     <div className="space-y-2">
@@ -1211,7 +1229,28 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                       ))}
                       <LessonVisual visual={step.visual} />
                       {step.interactive === "il-slider" && <ILSlider />}
+                      {step.miniSim && <InlineMiniSim type={step.miniSim} />}
                     </div>
+                  ) : step.type === "challenge" ? (
+                    <ChallengeStepComponent
+                      challenge={{
+                        id: step.id,
+                        title: step.title,
+                        description: step.description,
+                        targetMetric: step.targetMetric,
+                        targetValue: step.targetValue,
+                        tolerance: step.tolerance,
+                        unit: step.unit,
+                        hint: step.hint,
+                        highlightControls: step.highlightControls,
+                      }}
+                      currentValue={challengeMetrics[step.targetMetric] ?? 0}
+                      onComplete={() => {
+                        onChallengeComplete?.();
+                        handleNext();
+                      }}
+                      onSkip={handleNext}
+                    />
                   ) : (
                     <div className="space-y-2">
                       <div className="p-2.5 rounded-lg bg-secondary border border-border">
