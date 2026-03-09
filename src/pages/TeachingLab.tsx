@@ -214,6 +214,19 @@ export default function TeachingLab() {
     }
   };
 
+  // Challenge metrics derived from simulation state (must be before early returns)
+  const challengeMetrics = useMemo(() => {
+    const currentPrice = poolPrice(pool);
+    const ilVal = history.length > 0 ? history[history.length - 1].ilPct : 0;
+    return {
+      slippage: lastTrade ? lastTrade.slippagePct : 0,
+      price: currentPrice,
+      il: ilVal,
+      reserveRatio: pool.x / pool.y,
+      feeAccum: pool.totalFees,
+    };
+  }, [pool, history, lastTrade]);
+
   // Level picker screen (before course starts)
   if (!selectedLevel) {
     return (
