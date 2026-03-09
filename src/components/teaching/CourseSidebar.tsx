@@ -1,11 +1,14 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown } from "lucide-react";
-import { COURSE_MODULES, type CourseStep, type CourseModule } from "@/lib/course-content";
+import { ChevronRight, ChevronLeft, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown, Trophy, Flame } from "lucide-react";
+import { COURSE_MODULES, type CourseStep, type CourseModule, type ChallengeStepDef } from "@/lib/course-content";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
+import ChallengeStepComponent from "@/components/teaching/ChallengeStep";
+import { InlineMiniSim } from "@/components/teaching/InlineMiniSim";
+import { ALL_BADGES } from "@/hooks/use-course-progress";
 
 // Deterministic shuffle: produces a stable permutation from a string seed
 function seededShuffle<T>(arr: T[], seed: string): { items: T[]; indexMap: number[] } {
@@ -38,6 +41,17 @@ interface Props {
   completedModules: number;
   onNavigateModule: (idx: number) => void;
   modules?: CourseModule[];
+  // New props for enhanced features
+  xp?: number;
+  badges?: string[];
+  quizStreak?: number;
+  onQuizAnswer?: (correct: boolean) => void;
+  onStepComplete?: () => void;
+  onChallengeComplete?: () => void;
+  // Challenge metric values from simulation
+  challengeMetrics?: Record<string, number>;
+  // Current highlight controls (passed up to parent)
+  onHighlightControlsChange?: (controls: string[]) => void;
 }
 
 function MiniCalculator() {
@@ -1045,7 +1059,7 @@ function ShuffledQuiz({
   );
 }
 
-export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules }: Props) {
+export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules, xp = 0, badges = [], quizStreak = 0, onQuizAnswer, onStepComplete, onChallengeComplete, challengeMetrics = {}, onHighlightControlsChange }: Props) {
   const courseModules = modules || COURSE_MODULES;
   const [showAI, setShowAI] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -1178,9 +1192,27 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <BookOpen className="w-3 h-3 text-muted-foreground" />
-                    <h3 className="text-[11px] font-semibold text-foreground">{step.type === "lesson" ? step.title : "Knowledge Check"}</h3>
+                    <h3 className="text-[11px] font-semibold text-foreground">
+                      {step.type === "lesson" ? step.title : step.type === "challenge" ? "🎯 Challenge" : "Knowledge Check"}
+                    </h3>
                     <span className="text-[9px] font-mono text-muted-foreground ml-auto">{currentStep + 1}/{mod.steps.length}</span>
                   </div>
+
+                  {/* XP & Streak indicator */}
+                  {(xp > 0 || quizStreak >= 2) && (
+                    <div className="flex items-center gap-2 mb-2">
+                      {xp > 0 && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-warning/10 border border-warning/20 text-warning">
+                          ⭐ {xp} XP
+                        </span>
+                      )}
+                      {quizStreak >= 2 && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-destructive/10 border border-destructive/20 text-destructive flex items-center gap-0.5">
+                          <Flame className="w-2.5 h-2.5" /> {quizStreak} streak
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {step.type === "lesson" ? (
                     <div className="space-y-2">
@@ -1197,7 +1229,28 @@ export default function CourseSidebar({ currentModule, currentStep, onAdvanceSte
                       ))}
                       <LessonVisual visual={step.visual} />
                       {step.interactive === "il-slider" && <ILSlider />}
+                      {step.miniSim && <InlineMiniSim type={step.miniSim} />}
                     </div>
+                  ) : step.type === "challenge" ? (
+                    <ChallengeStepComponent
+                      challenge={{
+                        id: step.id,
+                        title: step.title,
+                        description: step.description,
+                        targetMetric: step.targetMetric,
+                        targetValue: step.targetValue,
+                        tolerance: step.tolerance,
+                        unit: step.unit,
+                        hint: step.hint,
+                        highlightControls: step.highlightControls,
+                      }}
+                      currentValue={challengeMetrics[step.targetMetric] ?? 0}
+                      onComplete={() => {
+                        onChallengeComplete?.();
+                        handleNext();
+                      }}
+                      onSkip={handleNext}
+                    />
                   ) : (
                     <div className="space-y-2">
                       <div className="p-2.5 rounded-lg bg-secondary border border-border">

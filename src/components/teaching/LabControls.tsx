@@ -43,6 +43,7 @@ interface Props {
   onReset: () => void;
   isRunning: boolean;
   onToggleRun: () => void;
+  highlightControls?: string[];
 }
 
 function HelpButton({ id }: {id: string;}) {
@@ -63,12 +64,12 @@ function HelpButton({ id }: {id: string;}) {
 
 }
 
-function SliderRow({ label, value, min, max, step, onChange, format, helpId
+function SliderRow({ label, value, min, max, step, onChange, format, helpId, highlighted
 
 
-}: {label: string;value: number;min: number;max: number;step: number;onChange: (v: number) => void;format?: (v: number) => string;helpId?: string;}) {
+}: {label: string;value: number;min: number;max: number;step: number;onChange: (v: number) => void;format?: (v: number) => string;helpId?: string;highlighted?: boolean;}) {
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 transition-all duration-300 rounded-md px-1.5 py-1 ${highlighted ? "ring-1 ring-warning/50 bg-warning/5" : ""} ${highlighted === false ? "opacity-40" : ""}`}>
       <div className="flex items-center justify-between gap-1">
         <div className="flex items-center gap-1">
           <Label className="text-[11px] text-muted-foreground">{label}</Label>
@@ -83,9 +84,14 @@ function SliderRow({ label, value, min, max, step, onChange, format, helpId
 
 export default function LabControls({
   tab, onTabChange, controls, onChange, onExecuteTrade, onReset,
-  isRunning, onToggleRun
+  isRunning, onToggleRun, highlightControls
 }: Props) {
   const [chatOpen, setChatOpen] = useState(false);
+  const hasHighlight = highlightControls && highlightControls.length > 0;
+  const isHighlighted = (id: string) => {
+    if (!hasHighlight) return undefined; // no highlighting active
+    return highlightControls!.includes(id);
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -110,17 +116,17 @@ export default function LabControls({
         <h2 className="text-[10px] font-mono font-semibold text-muted-foreground tracking-wider uppercase">Controls</h2>
 
         <SliderRow label="Reserve X" value={controls.reserveX} min={100} max={10000} step={100}
-        onChange={(v) => onChange({ reserveX: v })} format={(v) => v.toLocaleString()} helpId="reserveX" />
+        onChange={(v) => onChange({ reserveX: v })} format={(v) => v.toLocaleString()} helpId="reserveX" highlighted={isHighlighted("reserveX")} />
         <SliderRow label="Reserve Y" value={controls.reserveY} min={100} max={10000} step={100}
-        onChange={(v) => onChange({ reserveY: v })} format={(v) => v.toLocaleString()} helpId="reserveY" />
+        onChange={(v) => onChange({ reserveY: v })} format={(v) => v.toLocaleString()} helpId="reserveY" highlighted={isHighlighted("reserveY")} />
         <SliderRow label="Fee Rate" value={controls.feeRate} min={0} max={0.05} step={0.001}
-        onChange={(v) => onChange({ feeRate: v })} format={(v) => `${(v * 100).toFixed(1)}%`} helpId="feeRate" />
+        onChange={(v) => onChange({ feeRate: v })} format={(v) => `${(v * 100).toFixed(1)}%`} helpId="feeRate" highlighted={isHighlighted("feeRate")} />
         <SliderRow label="Volatility (σ)" value={controls.volatility} min={0.01} max={2} step={0.01}
-        onChange={(v) => onChange({ volatility: v })} format={(v) => `${(v * 100).toFixed(0)}%`} helpId="volatility" />
+        onChange={(v) => onChange({ volatility: v })} format={(v) => `${(v * 100).toFixed(0)}%`} helpId="volatility" highlighted={isHighlighted("volatility")} />
         <SliderRow label="Trade Size" value={controls.tradeSize} min={1} max={Math.max(controls.reserveX, controls.reserveY) * 0.5} step={1}
-        onChange={(v) => onChange({ tradeSize: v })} format={(v) => v.toLocaleString()} helpId="tradeSize" />
+        onChange={(v) => onChange({ tradeSize: v })} format={(v) => v.toLocaleString()} helpId="tradeSize" highlighted={isHighlighted("tradeSize")} />
 
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 transition-all duration-300 rounded-md px-1.5 py-1 ${isHighlighted("direction") ? "ring-1 ring-warning/50 bg-warning/5" : ""} ${isHighlighted("direction") === false ? "opacity-40" : ""}`}>
           <div className="flex items-center gap-1">
             <Label className="text-[11px] text-muted-foreground">Direction</Label>
             <HelpButton id="direction" />
@@ -137,7 +143,7 @@ export default function LabControls({
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className={`flex items-center justify-between transition-all duration-300 rounded-md px-1.5 py-1 ${isHighlighted("arbEnabled") ? "ring-1 ring-warning/50 bg-warning/5" : ""} ${isHighlighted("arbEnabled") === false ? "opacity-40" : ""}`}>
           <div className="flex items-center gap-1">
             <Label className="text-[11px] text-muted-foreground">Arbitrage</Label>
             <HelpButton id="arbEnabled" />
@@ -146,7 +152,7 @@ export default function LabControls({
         </div>
 
         <SliderRow label="Time Speed" value={controls.timeSpeed} min={0} max={10} step={1}
-        onChange={(v) => onChange({ timeSpeed: v })} format={(v) => `${v}x`} helpId="timeSpeed" />
+        onChange={(v) => onChange({ timeSpeed: v })} format={(v) => `${v}x`} helpId="timeSpeed" highlighted={isHighlighted("timeSpeed")} />
 
         {tab === "concentrated" &&
         <>

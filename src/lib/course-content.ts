@@ -1,6 +1,6 @@
 // Course content for the guided Teaching Lab
 
-export type StepType = "lesson" | "quiz";
+export type StepType = "lesson" | "quiz" | "challenge";
 
 export interface LessonStep {
   type: "lesson";
@@ -8,6 +8,8 @@ export interface LessonStep {
   content: string[];
   visual?: string;
   interactive?: string;
+  miniSim?: string; // "slippage-explorer" | "reserve-balance" | "fee-calculator"
+  highlightControls?: string[];
 }
 
 export interface FollowUpQuiz {
@@ -29,7 +31,20 @@ export interface QuizStep {
   calculatorNeeded?: boolean;
 }
 
-export type CourseStep = LessonStep | QuizStep;
+export interface ChallengeStepDef {
+  type: "challenge";
+  id: string;
+  title: string;
+  description: string;
+  targetMetric: string;
+  targetValue: number;
+  tolerance: number;
+  unit: string;
+  hint: string;
+  highlightControls: string[];
+}
+
+export type CourseStep = LessonStep | QuizStep | ChallengeStepDef;
 
 export interface CourseModule {
   id: string;
@@ -108,6 +123,8 @@ export const COURSE_MODULES: CourseModule[] = [
           "When someone trades, they add one token and remove the other. This changes the reserves — and therefore changes the price.",
         ],
         visual: "reserves-diagram",
+        miniSim: "reserve-balance",
+        highlightControls: ["reserveX", "reserveY"],
       },
       {
         type: "quiz",
@@ -223,6 +240,7 @@ export const COURSE_MODULES: CourseModule[] = [
           "This means each additional unit costs more than the previous one. This difference between the expected price and the actual average price is called slippage.",
         ],
         visual: "trade-animation",
+        highlightControls: ["tradeSize", "direction"],
       },
       {
         type: "lesson",
@@ -254,6 +272,8 @@ export const COURSE_MODULES: CourseModule[] = [
           "Try it yourself! Use the controls on the left to set trade size to 50, then 100, then 200. Watch how slippage accelerates.",
         ],
         visual: "slippage-nonlinear",
+        miniSim: "slippage-explorer",
+        highlightControls: ["tradeSize"],
       },
       {
         type: "quiz",
@@ -356,6 +376,18 @@ export const COURSE_MODULES: CourseModule[] = [
         correctIndex: 1,
         explanation: "If the price returns to exactly where it was when you deposited, the loss disappears entirely. It only becomes permanent (\"realized\") if you withdraw while prices have diverged.",
         wrongExplanation: "The key word is 'impermanent' = not permanent. The loss exists only while prices have moved. If they come back to where they started, the loss goes to zero. It's only real if you withdraw at the wrong time.",
+      },
+      {
+        type: "challenge",
+        id: "il-observe",
+        title: "Observe IL in Action",
+        description: "Run the auto-sim with arbitrage ON until IL reaches -3% or worse.",
+        targetMetric: "il",
+        targetValue: -3,
+        tolerance: 2,
+        unit: "%",
+        hint: "Set time speed to 5x, enable arbitrage, and increase volatility. Watch the LP vs HODL metric.",
+        highlightControls: ["timeSpeed", "arbEnabled", "volatility"],
       },
     ],
   },
@@ -506,6 +538,8 @@ export const COURSE_MODULES: CourseModule[] = [
           "The key question for LPs: do the fees earned exceed the impermanent loss suffered?",
         ],
         visual: "fees-diagram",
+        miniSim: "fee-calculator",
+        highlightControls: ["feeRate"],
       },
       {
         type: "quiz",

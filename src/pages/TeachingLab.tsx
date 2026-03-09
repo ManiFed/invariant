@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Monitor } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -12,11 +12,13 @@ import { INTERMEDIATE_MODULES, INTERMEDIATE_TAB_MAP } from "@/lib/intermediate-c
 import { ADVANCED_MODULES, ADVANCED_TAB_MAP } from "@/lib/advanced-course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useCourseProgress } from "@/hooks/use-course-progress";
 
 export default function TeachingLab() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-
+  const { progress, onStepComplete, onQuizAnswer, onChallengeComplete, onModuleComplete, onCourseComplete, startModuleTimer } = useCourseProgress();
+  const [highlightControls, setHighlightControls] = useState<string[]>([]);
   // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
 
@@ -150,7 +152,17 @@ export default function TeachingLab() {
     return () => clearInterval(interval);
   }, [isRunning, controls.timeSpeed, addHistoryPoint]);
 
-  const handleAdvanceStep = () => setCourseStep(s => s + 1);
+  const handleAdvanceStep = () => {
+    onStepComplete();
+    setCourseStep(s => s + 1);
+    // Update highlights for the next step
+    const nextStep = activeModules[courseModule]?.steps[courseStep + 1];
+    if (nextStep && 'highlightControls' in nextStep && nextStep.highlightControls) {
+      setHighlightControls(nextStep.highlightControls);
+    } else {
+      setHighlightControls([]);
+    }
+  };
 
   const handleGoBack = () => {
     if (courseStep > 0) {
@@ -166,14 +178,24 @@ export default function TeachingLab() {
 
   const handleCompleteModule = () => {
     const next = courseModule + 1;
+    const levelKey = selectedLevel || "beginner";
+    onModuleComplete(levelKey, courseModule);
     setCompletedModules(m => Math.max(m, courseModule + 1));
+    setHighlightControls([]);
     if (next >= activeModules.length) {
       setCourseActive(false);
+      onCourseComplete(levelKey as any);
     } else {
       setCourseModule(next);
       setCourseStep(0);
+      startModuleTimer();
       const mappedTab = activeTabMap[activeModules[next].id] as LessonTab;
       if (mappedTab) setTab(mappedTab);
+      // Set highlights for first step of new module
+      const firstStep = activeModules[next]?.steps[0];
+      if (firstStep && 'highlightControls' in firstStep && firstStep.highlightControls) {
+        setHighlightControls(firstStep.highlightControls);
+      }
     }
   };
 
@@ -191,6 +213,19 @@ export default function TeachingLab() {
       }
     }
   };
+
+  // Challenge metrics derived from simulation state (must be before early returns)
+  const challengeMetrics = useMemo(() => {
+    const currentPrice = poolPrice(pool);
+    const ilVal = history.length > 0 ? history[history.length - 1].ilPct : 0;
+    return {
+      slippage: lastTrade ? lastTrade.slippagePct : 0,
+      price: currentPrice,
+      il: ilVal,
+      reserveRatio: pool.x / pool.y,
+      feeAccum: pool.totalFees,
+    };
+  }, [pool, history, lastTrade]);
 
   // Level picker screen (before course starts)
   if (!selectedLevel) {
@@ -258,6 +293,9 @@ export default function TeachingLab() {
     );
   }
 
+
+  // Determine what to show based on progress
+
   // Determine what to show based on progress
   const showControls = courseComplete || revealedSections.has("controls") || (courseActive && courseModule >= 3);
   const showCurve = courseComplete || revealedSections.has("curve");
@@ -285,17 +323,23 @@ export default function TeachingLab() {
               COMPLETE ✓
             </span>
           )}
+          {/* XP Display in header */}
+          {progress.xp > 0 && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-warning/10 border border-warning/20 text-warning">
+              ⭐ {progress.xp} XP
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setSelectedLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
+            onClick={() => { setSelectedLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); setHighlightControls([]); }}
             className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
             Change Level
           </button>
           {courseComplete && (
             <button
-              onClick={() => { setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); }}
+              onClick={() => { setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); setHighlightControls([]); }}
               className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
             >
               Restart Course
@@ -318,6 +362,7 @@ export default function TeachingLab() {
             onReset={handleReset}
             isRunning={isRunning}
             onToggleRun={() => setIsRunning(r => !r)}
+            highlightControls={highlightControls}
           />
         </div>
 
@@ -352,6 +397,14 @@ export default function TeachingLab() {
               completedModules={completedModules}
               onNavigateModule={handleNavigateModule}
               modules={activeModules}
+              xp={progress.xp}
+              badges={progress.badges}
+              quizStreak={progress.quizStreak}
+              onQuizAnswer={onQuizAnswer}
+              onStepComplete={onStepComplete}
+              onChallengeComplete={onChallengeComplete}
+              challengeMetrics={challengeMetrics}
+              onHighlightControlsChange={setHighlightControls}
             />
           ) : (
             <LabLearning
