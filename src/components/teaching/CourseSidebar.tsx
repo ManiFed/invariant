@@ -41,6 +41,17 @@ interface Props {
   completedModules: number;
   onNavigateModule: (idx: number) => void;
   modules?: CourseModule[];
+  // New props for enhanced features
+  xp?: number;
+  badges?: string[];
+  quizStreak?: number;
+  onQuizAnswer?: (correct: boolean) => void;
+  onStepComplete?: () => void;
+  onChallengeComplete?: () => void;
+  // Challenge metric values from simulation
+  challengeMetrics?: Record<string, number>;
+  // Current highlight controls (passed up to parent)
+  onHighlightControlsChange?: (controls: string[]) => void;
 }
 
 function MiniCalculator() {
