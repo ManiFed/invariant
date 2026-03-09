@@ -17,7 +17,8 @@ import { useCourseProgress } from "@/hooks/use-course-progress";
 export default function TeachingLab() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-
+  const { progress, onStepComplete, onQuizAnswer, onChallengeComplete, onModuleComplete, onCourseComplete, startModuleTimer } = useCourseProgress();
+  const [highlightControls, setHighlightControls] = useState<string[]>([]);
   // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
 
