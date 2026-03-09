@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Monitor } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Monitor, Target } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LabControls, { type LessonTab, type Controls } from "@/components/teaching/LabControls";
 import LabSimulation from "@/components/teaching/LabSimulation";
@@ -13,6 +13,10 @@ import { ADVANCED_MODULES, ADVANCED_TAB_MAP } from "@/lib/advanced-course-conten
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCourseProgress } from "@/hooks/use-course-progress";
+import ChallengeCard from "@/components/challenges/ChallengeCard";
+import ChallengeWorkbench from "@/components/challenges/ChallengeWorkbench";
+import { challenges, loadProgress as loadChallengeProgress, getCompletionStats, type Challenge, type ChallengeProgress, type Difficulty } from "@/lib/challenge-engine";
+import { useAmmyContext } from "@/lib/ammy-context";
 
 export default function TeachingLab() {
   const navigate = useNavigate();
