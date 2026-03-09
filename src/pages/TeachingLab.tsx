@@ -293,18 +293,8 @@ export default function TeachingLab() {
     );
   }
 
-  // Challenge metrics derived from simulation state
-  const challengeMetrics = useMemo(() => {
-    const currentPrice = poolPrice(pool);
-    const ilVal = history.length > 0 ? history[history.length - 1].ilPct : 0;
-    return {
-      slippage: lastTrade ? lastTrade.slippagePct : 0,
-      price: currentPrice,
-      il: ilVal,
-      reserveRatio: pool.x / pool.y,
-      feeAccum: pool.totalFees,
-    };
-  }, [pool, history, lastTrade]);
+
+  // Determine what to show based on progress
 
   // Determine what to show based on progress
   const showControls = courseComplete || revealedSections.has("controls") || (courseActive && courseModule >= 3);
