@@ -309,6 +309,7 @@ const AdvancedMode = () => {
               {activeTab === "arbitrage" && <ArbitrageEngine savedInvariant={savedInvariant} savedFees={savedFees} />}
               {activeTab === "liquidity" && <LiquidityAnalyzer savedInvariant={savedInvariant} />}
               {activeTab === "stability" && <StabilityAnalysis savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "mev" && <MEVLab embedded />}
               {activeTab === "deploy" && <DeploymentExport savedInvariant={savedInvariant} savedFees={savedFees} />}
             </motion.div>
           </AnimatePresence>

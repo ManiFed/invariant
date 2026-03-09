@@ -73,10 +73,19 @@ const Index = () => {
 
           <NavCard
             title="Advanced Mode"
-            description="Invariant editor, Monte Carlo, arbitrage engine, stability analysis"
+            description="Invariant editor, Monte Carlo, arbitrage engine, MEV analyzer, stability analysis"
             icon={<Lightbulb className="w-5 h-5" />}
             badge="Pro"
             onClick={() => navigate("/advanced")}
+          />
+
+          <NavCard
+            title="Design Studio"
+            description="Visual block coding, multi-asset invariants, time-variance, and Solidity compiler"
+            icon={<Puzzle className="w-5 h-5" />}
+            badge="New"
+            badgeColor="border-warning/30 text-warning"
+            onClick={() => navigate("/design-studio")}
           />
 
           <NavCard

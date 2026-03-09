@@ -44,7 +44,7 @@ function generateSuggestions(result: MEVResult, bins: number[]): { title: string
   return suggestions;
 }
 
-export default function MEVLab() {
+export default function MEVLab({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const colors = useChartColors();
   const [designs, setDesigns] = useState<{ id: string; name: string; bins: number[] }[]>([]);
