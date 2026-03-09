@@ -84,7 +84,7 @@ function loadTVConfig(): TimeVarianceConfig {
   };
 }
 
-const TimeVarianceLab = () => {
+const TimeVarianceLab = ({ embedded = false }: { embedded?: boolean }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
