@@ -152,7 +152,17 @@ export default function TeachingLab() {
     return () => clearInterval(interval);
   }, [isRunning, controls.timeSpeed, addHistoryPoint]);
 
-  const handleAdvanceStep = () => setCourseStep(s => s + 1);
+  const handleAdvanceStep = () => {
+    onStepComplete();
+    setCourseStep(s => s + 1);
+    // Update highlights for the next step
+    const nextStep = activeModules[courseModule]?.steps[courseStep + 1];
+    if (nextStep && 'highlightControls' in nextStep && nextStep.highlightControls) {
+      setHighlightControls(nextStep.highlightControls);
+    } else {
+      setHighlightControls([]);
+    }
+  };
 
   const handleGoBack = () => {
     if (courseStep > 0) {
