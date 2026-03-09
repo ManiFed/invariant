@@ -37,11 +37,12 @@ export function AsciiCurveHero() {
 
     /* ── persistent state for the animated trade ── */
     let tradeState: 'idle' | 'incoming' | 'impact' | 'sliding' | 'recovering' = 'idle';
+    let tradeDirection = 0; // 0=top-right, 1=top, 2=top-left, 3=right, 4=bottom-right
     let tradeTimer = 0;
     let impactX = 0;
     let impactProgress = 0;
     let curveOffset = 0; // Temporary curve displacement from trade impact
-    let nextTradeDelay = Math.random() * 120 + 60; // frames until next trade
+    let nextTradeDelay = Math.random() * 40 + 20; // frames until next trade
 
     const draw = (time = 0) => {
       const isDark = document.documentElement.classList.contains('dark');
@@ -91,40 +92,37 @@ export function AsciiCurveHero() {
         tradeTimer++;
         
         if (tradeState === 'idle' && tradeTimer > nextTradeDelay) {
-          // Start a new trade
           tradeState = 'incoming';
           tradeTimer = 0;
-          impactX = 0.5 + Math.random() * 0.4; // Random position on curve (normalized)
+          impactX = 0.15 + Math.random() * 0.7; // Wider range of impact positions
           impactProgress = 0;
+          // Randomize entry direction: 0=top-right, 1=top, 2=top-left, 3=right, 4=bottom-right
+          tradeDirection = Math.floor(Math.random() * 5);
         } else if (tradeState === 'incoming') {
-          // Trade approaching the curve
-          impactProgress = Math.min(1, impactProgress + 0.04);
+          impactProgress = Math.min(1, impactProgress + 0.08); // 2x faster approach
           if (impactProgress >= 1) {
             tradeState = 'impact';
             tradeTimer = 0;
-            curveOffset = 0.15 + Math.random() * 0.1; // Impact magnitude
+            curveOffset = 0.15 + Math.random() * 0.1;
           }
         } else if (tradeState === 'impact') {
-          // Flash effect at impact
-          if (tradeTimer > 8) {
+          if (tradeTimer > 5) { // Shorter flash
             tradeState = 'sliding';
             tradeTimer = 0;
           }
         } else if (tradeState === 'sliding') {
-          // Curve slides to new position
-          impactProgress = Math.min(1, tradeTimer / 30);
+          impactProgress = Math.min(1, tradeTimer / 18); // Faster slide
           if (impactProgress >= 1) {
             tradeState = 'recovering';
             tradeTimer = 0;
           }
         } else if (tradeState === 'recovering') {
-          // Curve recovers back
-          curveOffset *= 0.92;
+          curveOffset *= 0.88; // Faster recovery
           if (curveOffset < 0.005) {
             tradeState = 'idle';
             tradeTimer = 0;
             curveOffset = 0;
-            nextTradeDelay = Math.random() * 100 + 50;
+            nextTradeDelay = Math.random() * 30 + 15; // Shorter gaps between trades
           }
         }
       }
@@ -185,10 +183,15 @@ export function AsciiCurveHero() {
           /* ── incoming trade projectile ── */
           if (tradeState === 'incoming') {
             const targetRow = Math.round(padTop + usableRows * (1 - Math.min(1, Math.max(0, (tradeWorldY - yMin) / (yMax - yMin)))));
-            // Trade comes from top-right, diagonally
-            const startCol = padLeft + usableCols + 5;
-            const startRow = padTop - 5;
-            const currentCol = startCol + (padLeft + Math.round(tradeScreenX) - startCol) * impactProgress;
+            const targetCol = padLeft + Math.round(tradeScreenX);
+            // Entry point depends on direction
+            let startCol: number, startRow: number;
+            if (tradeDirection === 0) { startCol = padLeft + usableCols + 5; startRow = padTop - 5; }
+            else if (tradeDirection === 1) { startCol = targetCol; startRow = padTop - 8; }
+            else if (tradeDirection === 2) { startCol = padLeft - 5; startRow = padTop - 5; }
+            else if (tradeDirection === 3) { startCol = padLeft + usableCols + 8; startRow = targetRow; }
+            else { startCol = padLeft + usableCols + 5; startRow = padTop + usableRows + 5; }
+            const currentCol = startCol + (targetCol - startCol) * impactProgress;
             const currentRow = startRow + (targetRow - startRow) * impactProgress;
             
             const dx = Math.abs(col - currentCol);
@@ -203,7 +206,7 @@ export function AsciiCurveHero() {
             if (impactProgress > 0.1) {
               const trailT = impactProgress - 0.15;
               if (trailT > 0) {
-                const trailCol = startCol + (padLeft + Math.round(tradeScreenX) - startCol) * trailT;
+                const trailCol = startCol + (targetCol - startCol) * trailT;
                 const trailRow = startRow + (targetRow - startRow) * trailT;
                 const tdx = Math.abs(col - trailCol);
                 const tdy = Math.abs(row - trailRow);
