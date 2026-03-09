@@ -65,6 +65,16 @@ export default function FloatingAIChat() {
       {/* Unread nudge bubble */}
       <AnimatePresence>
         {hasUnread && !open && (
+          <motion.div
+            key="nudge"
+            initial={{ opacity: 0, y: 8, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.9 }}
+            className="fixed bottom-[4.5rem] right-4 z-50 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium shadow-lg"
+          >
+            <Zap className="w-3 h-3 inline mr-1" />
+            {greeting}
+          </motion.div>
         )}
       </AnimatePresence>
 
