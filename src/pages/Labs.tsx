@@ -76,8 +76,8 @@ const Labs = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 + i * 0.04 }}
               >
-                <div className={`w-10 h-10 rounded-xl bg-${lab.color}/10 border border-${lab.color}/20 flex items-center justify-center mb-3`}>
-                  <Icon className={`w-5 h-5 text-${lab.color}`} />
+                <div className={`w-10 h-10 rounded-xl ${colorMap[lab.color]?.bg} ${colorMap[lab.color]?.border} border flex items-center justify-center mb-3`}>
+                  <Icon className={`w-5 h-5 ${colorMap[lab.color]?.text}`} />
                 </div>
                 <h2 className="text-sm font-bold text-foreground mb-1.5">{lab.name}</h2>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{lab.desc}</p>

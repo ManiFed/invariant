@@ -309,8 +309,6 @@ export default function TeachingLab() {
 
 
   // Determine what to show based on progress
-
-  // Determine what to show based on progress
   const showControls = courseComplete || revealedSections.has("controls") || (courseActive && courseModule >= 3);
   const showCurve = courseComplete || revealedSections.has("curve");
   const showReserves = courseComplete || revealedSections.has("reserves");

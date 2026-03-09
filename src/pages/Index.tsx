@@ -111,7 +111,7 @@ const Index = () => {
             onClick={() => navigate("/docs")}
           />
 
-          <div className="rounded-xl border border-border p-5 text-center items-center justify-center flex flex-row">
+          <div className="rounded-xl border border-border p-5 text-center items-center justify-center flex flex-col">
             <h3 className="text-sm font-semibold text-foreground mb-2">Support the Project</h3>
             <p className="text-[11px] text-muted-foreground mb-3">Free and open. Consider supporting development.</p>
             <a
