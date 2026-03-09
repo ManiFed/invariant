@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FileText, GraduationCap, Heart, Library, Lightbulb, FlaskConical, Target, Puzzle } from "lucide-react";
+import { ArrowRight, Beaker, FileText, GraduationCap, Heart, Library, Lightbulb, FlaskConical, Puzzle } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AsciiCurveHero } from "@/components/AsciiCurveHero";
 
