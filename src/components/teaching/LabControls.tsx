@@ -84,9 +84,14 @@ function SliderRow({ label, value, min, max, step, onChange, format, helpId, hig
 
 export default function LabControls({
   tab, onTabChange, controls, onChange, onExecuteTrade, onReset,
-  isRunning, onToggleRun
+  isRunning, onToggleRun, highlightControls
 }: Props) {
   const [chatOpen, setChatOpen] = useState(false);
+  const hasHighlight = highlightControls && highlightControls.length > 0;
+  const isHighlighted = (id: string) => {
+    if (!hasHighlight) return undefined; // no highlighting active
+    return highlightControls!.includes(id);
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
