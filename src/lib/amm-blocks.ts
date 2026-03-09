@@ -1,6 +1,6 @@
 // AMM Block Coding System — Type definitions and compiler for visual AMM curve design
 
-export type AMMBlockCategory = "primitive" | "operation" | "curve" | "modifier" | "conditional" | "fee";
+export type AMMBlockCategory = "primitive" | "operation" | "curve" | "modifier" | "conditional" | "fee" | "multiasset" | "timevar";
 
 export interface AMMBlockParam {
   key: string;
