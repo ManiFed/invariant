@@ -43,7 +43,7 @@ function ILCalculator() {
             <XAxis dataKey="ratio" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
             <YAxis tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" unit="%" />
             <Tooltip contentStyle={{ fontSize: 10, background: "hsl(var(--background))", border: "1px solid hsl(var(--border))" }} />
-            <Area dataKey="il" stroke={colors.chart1} fill={colors.chart1} fillOpacity={0.15} name="IL %" />
+            <Area dataKey="il" stroke={colors.series[0]} fill={colors.series[0]} fillOpacity={0.15} name="IL %" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
