@@ -1,12 +1,9 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers, History, Shield, Wrench, Puzzle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Compass, Dna, Layers, History } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const labs = [
-  { route: "/labs/design-studio", name: "AMM Design Studio", icon: Puzzle, color: "chart-3",
-    desc: "Unified visual AMM design environment — block coding, multi-asset invariants, time-variant curves, and a full Solidity compilation pipeline.",
-    bullets: ["Visual block builder", "3+ token multi-asset", "Time-variant keyframes", "Solidity compiler & deploy"] },
   { route: "/labs/discovery", name: "Invariant Atlas", icon: Compass, color: "chart-3",
     desc: "Continuous global discovery with user-defined experiment runs, evolutionary searches, and configurable objectives.",
     bullets: ["64-bin liquidity representation", "Multi-objective scoring", "Pareto frontier tracking"] },
