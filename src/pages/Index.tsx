@@ -57,7 +57,7 @@ const Index = () => {
         >
           <NavCard
             title="Teaching Lab"
-            description="Guided course that teaches AMM mechanics from scratch"
+            description="Guided courses, interactive simulations, and design challenges"
             icon={<GraduationCap className="w-5 h-5" />}
             badge="Start Here"
             badgeColor="border-success/30 text-success"
