@@ -1,6 +1,6 @@
 // Course content for the guided Teaching Lab
 
-export type StepType = "lesson" | "quiz";
+export type StepType = "lesson" | "quiz" | "challenge";
 
 export interface LessonStep {
   type: "lesson";
@@ -8,6 +8,8 @@ export interface LessonStep {
   content: string[];
   visual?: string;
   interactive?: string;
+  miniSim?: string; // "slippage-explorer" | "reserve-balance" | "fee-calculator"
+  highlightControls?: string[];
 }
 
 export interface FollowUpQuiz {
@@ -29,7 +31,20 @@ export interface QuizStep {
   calculatorNeeded?: boolean;
 }
 
-export type CourseStep = LessonStep | QuizStep;
+export interface ChallengeStepDef {
+  type: "challenge";
+  id: string;
+  title: string;
+  description: string;
+  targetMetric: string;
+  targetValue: number;
+  tolerance: number;
+  unit: string;
+  hint: string;
+  highlightControls: string[];
+}
+
+export type CourseStep = LessonStep | QuizStep | ChallengeStepDef;
 
 export interface CourseModule {
   id: string;
