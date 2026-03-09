@@ -123,6 +123,8 @@ export const COURSE_MODULES: CourseModule[] = [
           "When someone trades, they add one token and remove the other. This changes the reserves — and therefore changes the price.",
         ],
         visual: "reserves-diagram",
+        miniSim: "reserve-balance",
+        highlightControls: ["reserveX", "reserveY"],
       },
       {
         type: "quiz",
