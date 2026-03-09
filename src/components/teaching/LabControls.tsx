@@ -64,12 +64,12 @@ function HelpButton({ id }: {id: string;}) {
 
 }
 
-function SliderRow({ label, value, min, max, step, onChange, format, helpId
+function SliderRow({ label, value, min, max, step, onChange, format, helpId, highlighted
 
 
-}: {label: string;value: number;min: number;max: number;step: number;onChange: (v: number) => void;format?: (v: number) => string;helpId?: string;}) {
+}: {label: string;value: number;min: number;max: number;step: number;onChange: (v: number) => void;format?: (v: number) => string;helpId?: string;highlighted?: boolean;}) {
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 transition-all duration-300 rounded-md px-1.5 py-1 ${highlighted ? "ring-1 ring-warning/50 bg-warning/5" : ""} ${highlighted === false ? "opacity-40" : ""}`}>
       <div className="flex items-center justify-between gap-1">
         <div className="flex items-center gap-1">
           <Label className="text-[11px] text-muted-foreground">{label}</Label>
