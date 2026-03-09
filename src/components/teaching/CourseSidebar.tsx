@@ -1,11 +1,14 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown } from "lucide-react";
-import { COURSE_MODULES, type CourseStep, type CourseModule } from "@/lib/course-content";
+import { ChevronRight, ChevronLeft, BookOpen, GraduationCap, Calculator, SkipForward, ArrowRight, Check, Lock, Circle, ChevronDown, Trophy, Flame } from "lucide-react";
+import { COURSE_MODULES, type CourseStep, type CourseModule, type ChallengeStepDef } from "@/lib/course-content";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import AIChatPanel from "@/components/teaching/AIChatPanel";
+import ChallengeStepComponent from "@/components/teaching/ChallengeStep";
+import { InlineMiniSim } from "@/components/teaching/InlineMiniSim";
+import { ALL_BADGES } from "@/hooks/use-course-progress";
 
 // Deterministic shuffle: produces a stable permutation from a string seed
 function seededShuffle<T>(arr: T[], seed: string): { items: T[]; indexMap: number[] } {
