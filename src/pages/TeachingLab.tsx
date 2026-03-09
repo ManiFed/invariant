@@ -178,14 +178,24 @@ export default function TeachingLab() {
 
   const handleCompleteModule = () => {
     const next = courseModule + 1;
+    const levelKey = selectedLevel || "beginner";
+    onModuleComplete(levelKey, courseModule);
     setCompletedModules(m => Math.max(m, courseModule + 1));
+    setHighlightControls([]);
     if (next >= activeModules.length) {
       setCourseActive(false);
+      onCourseComplete(levelKey as any);
     } else {
       setCourseModule(next);
       setCourseStep(0);
+      startModuleTimer();
       const mappedTab = activeTabMap[activeModules[next].id] as LessonTab;
       if (mappedTab) setTab(mappedTab);
+      // Set highlights for first step of new module
+      const firstStep = activeModules[next]?.steps[0];
+      if (firstStep && 'highlightControls' in firstStep && firstStep.highlightControls) {
+        setHighlightControls(firstStep.highlightControls);
+      }
     }
   };
 
