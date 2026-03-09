@@ -56,7 +56,7 @@ export default function AMMDesignStudio() {
       <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/labs")}
+            onClick={() => navigate("/")}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

@@ -3,6 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Compass, Dna, Layers, History } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
+const colorMap: Record<string, { bg: string; border: string; text: string }> = {
+  "chart-3": { bg: "bg-chart-3/10", border: "border-chart-3/20", text: "text-chart-3" },
+  "chart-4": { bg: "bg-chart-4/10", border: "border-chart-4/20", text: "text-chart-4" },
+  "chart-5": { bg: "bg-chart-5/10", border: "border-chart-5/20", text: "text-chart-5" },
+  "chart-1": { bg: "bg-chart-1/10", border: "border-chart-1/20", text: "text-chart-1" },
+};
+
 const labs = [
   { route: "/labs/discovery", name: "Invariant Atlas", icon: Compass, color: "chart-3",
     desc: "Continuous global discovery with user-defined experiment runs, evolutionary searches, and configurable objectives.",
@@ -69,8 +76,8 @@ const Labs = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 + i * 0.04 }}
               >
-                <div className={`w-10 h-10 rounded-xl bg-${lab.color}/10 border border-${lab.color}/20 flex items-center justify-center mb-3`}>
-                  <Icon className={`w-5 h-5 text-${lab.color}`} />
+                <div className={`w-10 h-10 rounded-xl ${colorMap[lab.color]?.bg} ${colorMap[lab.color]?.border} border flex items-center justify-center mb-3`}>
+                  <Icon className={`w-5 h-5 ${colorMap[lab.color]?.text}`} />
                 </div>
                 <h2 className="text-sm font-bold text-foreground mb-1.5">{lab.name}</h2>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3 flex-1">{lab.desc}</p>
