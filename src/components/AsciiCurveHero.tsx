@@ -37,6 +37,7 @@ export function AsciiCurveHero() {
 
     /* ── persistent state for the animated trade ── */
     let tradeState: 'idle' | 'incoming' | 'impact' | 'sliding' | 'recovering' = 'idle';
+    let tradeDirection = 0; // 0=top-right, 1=top, 2=top-left, 3=right, 4=bottom-right
     let tradeTimer = 0;
     let impactX = 0;
     let impactProgress = 0;
