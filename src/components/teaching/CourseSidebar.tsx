@@ -1059,7 +1059,7 @@ function ShuffledQuiz({
   );
 }
 
-export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules }: Props) {
+export default function CourseSidebar({ currentModule, currentStep, onAdvanceStep, onGoBack, onCompleteModule, onSkipCourse, totalModules, completedModules, onNavigateModule, modules, xp = 0, badges = [], quizStreak = 0, onQuizAnswer, onStepComplete, onChallengeComplete, challengeMetrics = {}, onHighlightControlsChange }: Props) {
   const courseModules = modules || COURSE_MODULES;
   const [showAI, setShowAI] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
