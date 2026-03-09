@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Monitor } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Monitor, Target } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LabControls, { type LessonTab, type Controls } from "@/components/teaching/LabControls";
 import LabSimulation from "@/components/teaching/LabSimulation";
@@ -13,14 +13,28 @@ import { ADVANCED_MODULES, ADVANCED_TAB_MAP } from "@/lib/advanced-course-conten
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCourseProgress } from "@/hooks/use-course-progress";
+import ChallengeCard from "@/components/challenges/ChallengeCard";
+import ChallengeWorkbench from "@/components/challenges/ChallengeWorkbench";
+import { challenges, loadProgress as loadChallengeProgress, getCompletionStats, type Challenge, type ChallengeProgress, type Difficulty } from "@/lib/challenge-engine";
+import { useAmmyContext } from "@/lib/ammy-context";
 
 export default function TeachingLab() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { progress, onStepComplete, onQuizAnswer, onChallengeComplete, onModuleComplete, onCourseComplete, startModuleTimer } = useCourseProgress();
   const [highlightControls, setHighlightControls] = useState<string[]>([]);
-  // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
+
+  // Challenges state
+  const [showChallenges, setShowChallenges] = useState(searchParams.get("mode") === "challenges");
+  const [challengeProgress, setChallengeProgress] = useState<ChallengeProgress>(loadChallengeProgress);
+  const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
+  const [challengeFilter, setChallengeFilter] = useState<"all" | Difficulty>("all");
+  const { setPageContext } = useAmmyContext();
+  const challengeStats = useMemo(() => getCompletionStats(challengeProgress), [challengeProgress]);
+  const filteredChallenges = challengeFilter === "all" ? challenges : challenges.filter(c => c.difficulty === challengeFilter);
+  const refreshChallengeProgress = () => setChallengeProgress(loadChallengeProgress());
 
   const handleSelectLevel = (level: CourseLevel) => {
     setSelectedLevel(level);
@@ -332,6 +346,18 @@ export default function TeachingLab() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowChallenges(!showChallenges)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors border ${
+              showChallenges ? "bg-warning/10 border-warning/30 text-warning" : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Target className="w-3 h-3" />
+            Challenges
+            {challengeStats.completed > 0 && (
+              <span className="text-[8px] font-mono ml-1">{challengeStats.completed}/{challengeStats.total}</span>
+            )}
+          </button>
+          <button
             onClick={() => { setSelectedLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); setHighlightControls([]); }}
             className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -381,11 +407,57 @@ export default function TeachingLab() {
           />
         </div>
 
-        {/* Right: Course sidebar or Learning panel */}
+        {/* Right: Course sidebar, Learning panel, or Challenges */}
         <div className={`w-72 border-l border-border shrink-0 transition-opacity duration-500 ${
-          courseActive || showMetrics || showLearning ? "opacity-100" : "opacity-20 pointer-events-none"
+          courseActive || showMetrics || showLearning || showChallenges ? "opacity-100" : "opacity-20 pointer-events-none"
         }`}>
-          {courseActive && !courseComplete ? (
+          {showChallenges ? (
+            activeChallenge ? (
+              <div className="h-full overflow-y-auto">
+                <ChallengeWorkbench
+                  challenge={activeChallenge}
+                  onBack={() => setActiveChallenge(null)}
+                  onProgressUpdate={refreshChallengeProgress}
+                />
+              </div>
+            ) : (
+              <div className="h-full overflow-y-auto p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-warning" />
+                    Challenges
+                  </h3>
+                  <span className="text-[9px] font-mono text-muted-foreground">{challengeStats.completed}/{challengeStats.total} done</span>
+                </div>
+                {/* Filter */}
+                <div className="flex gap-1">
+                  {(["all", "beginner", "intermediate", "expert"] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setChallengeFilter(f)}
+                      className={`px-2 py-0.5 rounded text-[9px] font-medium transition-colors ${
+                        challengeFilter === f ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                {/* Challenge list */}
+                <div className="space-y-2">
+                  {filteredChallenges.map((challenge, i) => (
+                    <ChallengeCard
+                      key={challenge.id}
+                      challenge={challenge}
+                      progress={challengeProgress}
+                      onClick={() => setActiveChallenge(challenge)}
+                      index={i}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          ) : courseActive && !courseComplete ? (
             <CourseSidebar
               currentModule={courseModule}
               currentStep={courseStep}

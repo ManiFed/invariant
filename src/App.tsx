@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import BeginnerMode from "./pages/BeginnerMode";
 import AdvancedMode from "./pages/AdvancedMode";
@@ -60,7 +60,7 @@ const App = () => (
             <Route path="/labs/mev" element={<MEVLab />} />
             <Route path="/labs/compiler" element={<CompilerLab />} />
             <Route path="/labs/amm-builder" element={<AMMBuilderLab />} />
-            <Route path="/challenges" element={<Challenges />} />
+            <Route path="/challenges" element={<Navigate to="/learn?mode=challenges" replace />} />
             {/* Forecast Lab — separate service */}
             <Route path={forecastRoute()} element={<ForecastIndex />} />
             <Route path={forecastRoute("/lessons")} element={<Lessons />} />
