@@ -160,7 +160,11 @@ const NavCard = ({
   >
     <div className="flex items-center justify-between mb-3">
       <div className="text-foreground">{icon}</div>
-      {badge}
+      {badge && (
+        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${badgeColor || "border-primary/30 text-primary"}`}>
+          {badge}
+        </span>
+      )}
     </div>
     <h3 className="text-sm font-semibold text-foreground mb-1">{title}</h3>
     <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
