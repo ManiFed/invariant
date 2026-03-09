@@ -20,11 +20,21 @@ import { useAmmyContext } from "@/lib/ammy-context";
 
 export default function TeachingLab() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { progress, onStepComplete, onQuizAnswer, onChallengeComplete, onModuleComplete, onCourseComplete, startModuleTimer } = useCourseProgress();
   const [highlightControls, setHighlightControls] = useState<string[]>([]);
-  // Level selection state
   const [selectedLevel, setSelectedLevel] = useState<CourseLevel | null>(null);
+
+  // Challenges state
+  const [showChallenges, setShowChallenges] = useState(searchParams.get("mode") === "challenges");
+  const [challengeProgress, setChallengeProgress] = useState<ChallengeProgress>(loadChallengeProgress);
+  const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
+  const [challengeFilter, setChallengeFilter] = useState<"all" | Difficulty>("all");
+  const { setPageContext } = useAmmyContext();
+  const challengeStats = useMemo(() => getCompletionStats(challengeProgress), [challengeProgress]);
+  const filteredChallenges = challengeFilter === "all" ? challenges : challenges.filter(c => c.difficulty === challengeFilter);
+  const refreshChallengeProgress = () => setChallengeProgress(loadChallengeProgress());
 
   const handleSelectLevel = (level: CourseLevel) => {
     setSelectedLevel(level);
