@@ -62,6 +62,8 @@ export const AMM_CATEGORY_LABELS: Record<AMMBlockCategory, string> = {
   modifier: "Modifiers",
   conditional: "Conditionals",
   fee: "Fee Logic",
+  multiasset: "Multi-Asset",
+  timevar: "Time-Variance",
 };
 
 // ─── BLOCK DEFINITIONS ──────────────────────────────────────
