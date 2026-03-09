@@ -391,6 +391,8 @@ export const COURSE_MODULES: CourseModule[] = [
       },
     ],
   },
+  {
+    id: "arbitrage",
     title: "Arbitrage Mechanics",
     subtitle: "How prices stay accurate",
     emoji: "⚡",
