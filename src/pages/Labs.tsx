@@ -16,9 +16,6 @@ const labs = [
   { route: "/labs/replay", name: "Live Market Replay", icon: History, color: "chart-1",
     desc: "Replay historical market scenarios — Black Thursday, LUNA collapse, DeFi Summer — through any library AMM.",
     bullets: ["8 curated scenarios", "Animated playback", "Drawdown detection"] },
-  { route: "/labs/mev", name: "MEV Impact Analyzer", icon: Shield, color: "destructive",
-    desc: "Simulate sandwich attacks, backrun arbitrage, and JIT liquidity. Quantify value leakage from any design.",
-    bullets: ["Protection Score 0-100", "Value flow breakdown", "Configurable attacker budget"] },
 ];
 
 const Labs = () => {
