@@ -183,10 +183,15 @@ export function AsciiCurveHero() {
           /* ── incoming trade projectile ── */
           if (tradeState === 'incoming') {
             const targetRow = Math.round(padTop + usableRows * (1 - Math.min(1, Math.max(0, (tradeWorldY - yMin) / (yMax - yMin)))));
-            // Trade comes from top-right, diagonally
-            const startCol = padLeft + usableCols + 5;
-            const startRow = padTop - 5;
-            const currentCol = startCol + (padLeft + Math.round(tradeScreenX) - startCol) * impactProgress;
+            const targetCol = padLeft + Math.round(tradeScreenX);
+            // Entry point depends on direction
+            let startCol: number, startRow: number;
+            if (tradeDirection === 0) { startCol = padLeft + usableCols + 5; startRow = padTop - 5; }
+            else if (tradeDirection === 1) { startCol = targetCol; startRow = padTop - 8; }
+            else if (tradeDirection === 2) { startCol = padLeft - 5; startRow = padTop - 5; }
+            else if (tradeDirection === 3) { startCol = padLeft + usableCols + 8; startRow = targetRow; }
+            else { startCol = padLeft + usableCols + 5; startRow = padTop + usableRows + 5; }
+            const currentCol = startCol + (targetCol - startCol) * impactProgress;
             const currentRow = startRow + (targetRow - startRow) * impactProgress;
             
             const dx = Math.abs(col - currentCol);
