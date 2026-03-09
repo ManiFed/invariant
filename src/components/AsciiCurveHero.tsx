@@ -41,7 +41,7 @@ export function AsciiCurveHero() {
     let impactX = 0;
     let impactProgress = 0;
     let curveOffset = 0; // Temporary curve displacement from trade impact
-    let nextTradeDelay = Math.random() * 120 + 60; // frames until next trade
+    let nextTradeDelay = Math.random() * 40 + 20; // frames until next trade
 
     const draw = (time = 0) => {
       const isDark = document.documentElement.classList.contains('dark');
