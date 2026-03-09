@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, ChevronUp, ChevronDown, GitCompare } from "lucide-react";
+import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, ChevronUp, ChevronDown, GitCompare, Zap } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
