@@ -51,6 +51,8 @@ export const AMM_CATEGORY_COLORS: Record<AMMBlockCategory, string> = {
   modifier: "hsl(280, 60%, 55%)",
   conditional: "hsl(350, 65%, 50%)",
   fee: "hsl(190, 70%, 45%)",
+  multiasset: "hsl(30, 75%, 50%)",
+  timevar: "hsl(260, 65%, 55%)",
 };
 
 export const AMM_CATEGORY_LABELS: Record<AMMBlockCategory, string> = {
