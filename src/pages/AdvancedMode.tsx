@@ -11,6 +11,7 @@ import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import DeploymentExport from "@/components/advanced/DeploymentExport";
 import FeeStructureEditor from "@/components/advanced/FeeStructureEditor";
 import AMMComparison from "@/components/advanced/AMMComparison";
+import MEVLab from "@/pages/MEVLab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
