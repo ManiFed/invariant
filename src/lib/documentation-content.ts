@@ -873,12 +873,13 @@ See **Mathematical Reference → Arbitrage & Toxic Flow** for derivations.`,
 - Produces ERC-20 compatible AMM contract
 - Supports all block types including multi-asset and time-variance
 - Includes: swap(), addLiquidity(), removeLiquidity(), getSpotPrice() functions
-- Uses OpenZeppelin libraries for security
+- Uses OpenZeppelin libraries for security (ReentrancyGuard, IERC20)
 
 **Gas Profiling:**
 - Estimated gas per swap operation (based on contract complexity)
 - Gas for liquidity operations
 - Comparison against known AMMs (Uniswap V2 ~150k gas, V3 ~180k)
+- Category breakdown: Read vs Write vs Admin functions
 
 **Optimization Passes:**
 - **Constant Folding** — Pre-compute pure-constant expressions
@@ -890,6 +891,73 @@ See **Mathematical Reference → Arbitrage & Toxic Flow** for derivations.`,
 - Division-by-zero detection (when reserves approach zero)
 - Rounding direction analysis (should round against trader)
 - Reentrancy guard recommendations`,
+      },
+      {
+        id: "ds-testnet",
+        title: "Simulated Testnet & Contract Interaction",
+        content: `After compiling, you can deploy to a **simulated testnet** and interact with your contract in real-time. This is a fully in-browser simulation — no wallet or real blockchain required.
+
+**Deployment Pipeline (4 automated steps):**
+1. **Compile** — Bytecode generation with optimizer settings
+2. **Estimate Gas** — Deployment cost estimation
+3. **Deploy** — Simulated transaction broadcast
+4. **Verify** — Source code verification on simulated explorer
+
+Each step shows progress with a visual stepper. Deployment takes ~5 seconds total.
+
+**Test Account:**
+Upon deployment, you receive a pre-funded test account:
+- **100 ETH** for gas fees
+- **1,000,000 Token A** and **1,000,000 Token B** for testing
+- Contract is initialized with **500,000 A / 500,000 B** reserves
+
+**Contract Interaction Panel:**
+After deployment, a function browser shows all contract functions with their signatures and mutability types:
+- 🟢 **View functions** (green badge) — Free to call, read-only. Example: \`getReserves()\`, \`getSpotPrice()\`, \`getBinWeights()\`
+- 🔵 **Write functions** (blue badge) — Cost gas, modify state. Example: \`swap()\`, \`addLiquidity()\`, \`removeLiquidity()\`
+
+**How to Test a Complete Swap:**
+1. Deploy your contract
+2. Select \`swap\` from the function list
+3. Set \`aToB\` = \`true\` (swap Token A → Token B)
+4. Set \`amountIn\` = \`5000\` (amount of Token A to swap)
+5. Click "Call swap()"
+6. Console shows: amount received, fee charged, gas used, and updated reserves
+7. The Account State panel updates balances in real-time
+
+**How to Test Liquidity Operations:**
+1. Select \`addLiquidity\`
+2. Set \`amountA\` = \`10000\`, \`amountB\` = \`10000\`
+3. Click "Call addLiquidity()" → LP tokens are minted proportionally
+4. To withdraw: select \`removeLiquidity\`, set \`lpTokens\` = amount to burn
+
+**How to Collect Fees:**
+1. Execute several swaps first (fees accumulate with each swap at 0.30% rate)
+2. Select \`collectFees\` → displays total accumulated fees in A and B
+3. Fees remain in contract reserves, increasing LP token backing value
+
+**Account State Dashboard:**
+A real-time 8-metric dashboard shows:
+- ETH balance (decreases with each write transaction ~0.003-0.008 ETH)
+- Token A and Token B wallet balances
+- LP token holdings
+- Contract reserve A and B (updates after swaps/liquidity ops)
+- Accumulated fees (A and B separately)
+- Block number and transaction count
+
+**Console Output:**
+- Every function call produces a detailed log line with timestamp
+- Successful calls show: function name, inputs, return value, gas used
+- Failed calls show: "REVERTED" with reason (insufficient balance, bad output, etc.)
+- View functions are labeled "(view, no gas)" — they don't cost ETH
+
+**Tips:**
+- Start with small swap amounts (1,000-5,000) to observe price impact
+- After multiple swaps in one direction, observe how reserves become imbalanced
+- Use \`getSpotPrice()\` between swaps to track price movement
+- Try to "arbitrage" by swapping back and forth — notice the fee drag
+- Add liquidity at different reserve ratios to see how LP token minting changes`,
+        tip: "The testnet is fully simulated in-browser. No wallet, no real tokens, no blockchain connection needed. State resets on each new deployment.",
       },
     ],
   },
