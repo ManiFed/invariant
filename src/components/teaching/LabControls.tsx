@@ -43,6 +43,7 @@ interface Props {
   onReset: () => void;
   isRunning: boolean;
   onToggleRun: () => void;
+  highlightControls?: string[];
 }
 
 function HelpButton({ id }: {id: string;}) {
