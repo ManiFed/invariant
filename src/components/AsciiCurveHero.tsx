@@ -35,9 +35,13 @@ export function AsciiCurveHero() {
 
     let frameId = 0;
 
-    /* ── persistent state for the animated trade marker ── */
-    let tradeProgress = 0; // 0 → 1 along curve
-    let tradeDir = 1;
+    /* ── persistent state for the animated trade ── */
+    let tradeState: 'idle' | 'incoming' | 'impact' | 'sliding' | 'recovering' = 'idle';
+    let tradeTimer = 0;
+    let impactX = 0;
+    let impactProgress = 0;
+    let curveOffset = 0; // Temporary curve displacement from trade impact
+    let nextTradeDelay = Math.random() * 120 + 60; // frames until next trade
 
     const draw = (time = 0) => {
       const isDark = document.documentElement.classList.contains('dark');
@@ -49,6 +53,12 @@ export function AsciiCurveHero() {
       const accentFg = isDark
         ? (a: number) => `rgba(120, 200, 160, ${a})`
         : (a: number) => `rgba(20, 120, 80, ${a})`;
+      const tradeFg = isDark
+        ? (a: number) => `rgba(255, 180, 100, ${a})`
+        : (a: number) => `rgba(200, 100, 30, ${a})`;
+      const impactFg = isDark
+        ? (a: number) => `rgba(255, 120, 80, ${a})`
+        : (a: number) => `rgba(220, 80, 40, ${a})`;
       const labelColor = isDark
         ? 'rgba(160, 180, 210, 0.50)'
         : 'rgba(80, 90, 110, 0.50)';
@@ -71,43 +81,83 @@ export function AsciiCurveHero() {
 
       const t = time * 0.00025;
 
-      /* ── animated invariant k and liquidity center ── */
-      const k = 1.0 + 0.3 * Math.sin(t * 0.35);
+      /* ── base invariant k and liquidity ── */
+      const baseK = 1.0 + 0.15 * Math.sin(t * 0.35);
       const liqCenter = 1.0 + 0.4 * Math.sin(t * 0.22);
       const liqWidth = 0.55 + 0.15 * Math.cos(t * 0.3);
 
-      /* ── trade marker slides along curve ── */
+      /* ── trade animation state machine ── */
       if (!reduceMotion) {
-        tradeProgress += tradeDir * 0.0024;
-        if (tradeProgress > 1) {
-          tradeProgress = 1;
-          tradeDir = -1;
-        }
-        if (tradeProgress < 0) {
-          tradeProgress = 0;
-          tradeDir = 1;
+        tradeTimer++;
+        
+        if (tradeState === 'idle' && tradeTimer > nextTradeDelay) {
+          // Start a new trade
+          tradeState = 'incoming';
+          tradeTimer = 0;
+          impactX = 0.5 + Math.random() * 0.4; // Random position on curve (normalized)
+          impactProgress = 0;
+        } else if (tradeState === 'incoming') {
+          // Trade approaching the curve
+          impactProgress = Math.min(1, impactProgress + 0.04);
+          if (impactProgress >= 1) {
+            tradeState = 'impact';
+            tradeTimer = 0;
+            curveOffset = 0.15 + Math.random() * 0.1; // Impact magnitude
+          }
+        } else if (tradeState === 'impact') {
+          // Flash effect at impact
+          if (tradeTimer > 8) {
+            tradeState = 'sliding';
+            tradeTimer = 0;
+          }
+        } else if (tradeState === 'sliding') {
+          // Curve slides to new position
+          impactProgress = Math.min(1, tradeTimer / 30);
+          if (impactProgress >= 1) {
+            tradeState = 'recovering';
+            tradeTimer = 0;
+          }
+        } else if (tradeState === 'recovering') {
+          // Curve recovers back
+          curveOffset *= 0.92;
+          if (curveOffset < 0.005) {
+            tradeState = 'idle';
+            tradeTimer = 0;
+            curveOffset = 0;
+            nextTradeDelay = Math.random() * 100 + 50;
+          }
         }
       }
 
-      /* map trade progress to x-domain */
+      /* ── apply trade impact to k ── */
+      const k = baseK * (1 + curveOffset * 0.3);
+
+      /* map impact position to screen coordinates */
       const xMin = 0.18;
       const xMax = 3.5;
-      const tradeX = xMin + tradeProgress * (xMax - xMin);
-      const tradeY = ammCurve(tradeX, k);
+      const tradeScreenX = impactX * usableCols;
+      const tradeWorldX = xMin + impactX * (xMax - xMin);
+      const tradeWorldY = ammCurve(tradeWorldX, k);
+      const yMin = k / xMax;
+      const yMax = k / xMin;
 
       for (let ci = 0; ci < usableCols; ci++) {
-        const xFrac = ci / (usableCols - 1); // 0-1
+        const xFrac = ci / (usableCols - 1);
         const x = xMin + xFrac * (xMax - xMin);
-        const y = ammCurve(x, k); // reserve-y
+        
+        /* Apply local curve displacement near impact point */
+        let localOffset = 0;
+        if (tradeState === 'sliding' || tradeState === 'recovering') {
+          const distFromImpact = Math.abs(xFrac - impactX);
+          const falloff = Math.exp(-distFromImpact * distFromImpact * 20);
+          localOffset = curveOffset * falloff * 0.5;
+        }
+        
+        const y = ammCurve(x, k * (1 + localOffset));
 
-        /* Map y → row.  y ranges roughly from k/xMax to k/xMin.
-           We want high y at top (small row index). */
-        const yMin = k / xMax;
-        const yMax = k / xMin;
         const yNorm = Math.min(1, Math.max(0, (y - yMin) / (yMax - yMin)));
         const curveRow = Math.round(padTop + usableRows * (1 - yNorm));
 
-        /* liquidity heat for this column */
         const liq = liquidityBump(x, liqCenter, liqWidth);
 
         for (let ri = 0; ri < usableRows; ri++) {
@@ -115,12 +165,13 @@ export function AsciiCurveHero() {
           const col = padLeft + ci;
 
           let intensity = 0;
+          let isTradeElement = false;
+          let isImpactZone = false;
 
           /* ── liquidity heat beneath the curve ── */
-          const cellYNorm = 1 - ri / (usableRows - 1); // 0 = bottom, 1 = top
+          const cellYNorm = 1 - ri / (usableRows - 1);
           const cellY = yMin + cellYNorm * (yMax - yMin);
           if (cellY <= y) {
-            // below curve = "reserve area"
             const depth = liq * 0.32;
             intensity = Math.max(intensity, depth);
           }
@@ -131,46 +182,87 @@ export function AsciiCurveHero() {
           else if (distToCurve === 1) intensity = Math.max(intensity, 0.62);
           else if (distToCurve === 2) intensity = Math.max(intensity, 0.28);
 
-          /* ── trade marker glow ── */
-          const dxTrade = Math.abs(ci - Math.round((tradeX - xMin) / (xMax - xMin) * (usableCols - 1)));
-          const tradeRowNorm = Math.min(1, Math.max(0, (tradeY - yMin) / (yMax - yMin)));
-          const tradeRow = Math.round(padTop + usableRows * (1 - tradeRowNorm));
-          const dyTrade = Math.abs(row - tradeRow);
-          const tradeDist = Math.sqrt(dxTrade * dxTrade + dyTrade * dyTrade);
-          const isTradeZone = tradeDist < 4;
+          /* ── incoming trade projectile ── */
+          if (tradeState === 'incoming') {
+            const targetRow = Math.round(padTop + usableRows * (1 - Math.min(1, Math.max(0, (tradeWorldY - yMin) / (yMax - yMin)))));
+            // Trade comes from top-right, diagonally
+            const startCol = padLeft + usableCols + 5;
+            const startRow = padTop - 5;
+            const currentCol = startCol + (padLeft + Math.round(tradeScreenX) - startCol) * impactProgress;
+            const currentRow = startRow + (targetRow - startRow) * impactProgress;
+            
+            const dx = Math.abs(col - currentCol);
+            const dy = Math.abs(row - currentRow);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (dist < 3) {
+              isTradeElement = true;
+              intensity = Math.max(intensity, 1 - dist / 3);
+            }
+            // Trail
+            if (impactProgress > 0.1) {
+              const trailT = impactProgress - 0.15;
+              if (trailT > 0) {
+                const trailCol = startCol + (padLeft + Math.round(tradeScreenX) - startCol) * trailT;
+                const trailRow = startRow + (targetRow - startRow) * trailT;
+                const tdx = Math.abs(col - trailCol);
+                const tdy = Math.abs(row - trailRow);
+                const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
+                if (tdist < 2) {
+                  isTradeElement = true;
+                  intensity = Math.max(intensity, 0.4 * (1 - tdist / 2));
+                }
+              }
+            }
+          }
 
-          if (intensity < 0.06 && !isTradeZone) continue;
+          /* ── impact flash ── */
+          if (tradeState === 'impact') {
+            const targetRow = Math.round(padTop + usableRows * (1 - Math.min(1, Math.max(0, (tradeWorldY - yMin) / (yMax - yMin)))));
+            const dx = Math.abs(col - (padLeft + Math.round(tradeScreenX)));
+            const dy = Math.abs(row - targetRow);
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const flashRadius = 4 + tradeTimer * 0.5;
+            if (dist < flashRadius) {
+              isImpactZone = true;
+              intensity = Math.max(intensity, 0.9 * (1 - dist / flashRadius));
+            }
+          }
+
+          if (intensity < 0.06) continue;
 
           const charIndex = Math.min(
             chars.length - 1,
             Math.floor(intensity * (chars.length - 1)),
           );
 
-          if (isTradeZone && tradeDist < 2.5) {
-            /* trade dot gets accent color */
-            const glow = Math.max(0, 1 - tradeDist / 2.5);
-            const tradeCharIdx = Math.min(chars.length - 1, Math.floor(glow * (chars.length - 1)));
-            context.fillStyle = accentFg(0.25 + glow * 0.7);
-            context.fillText(
-              chars[tradeCharIdx],
-              col * stepX,
-              row * stepY + stepY / 2,
-            );
+          if (isImpactZone) {
+            context.fillStyle = impactFg(0.3 + intensity * 0.7);
+          } else if (isTradeElement) {
+            context.fillStyle = tradeFg(0.3 + intensity * 0.7);
           } else {
-            context.fillStyle = fg(0.08 + intensity * 0.62);
-            context.fillText(
-              chars[charIndex],
-              col * stepX,
-              row * stepY + stepY / 2,
-            );
+            // Highlight curve near impact during sliding
+            const nearImpact = tradeState === 'sliding' || tradeState === 'recovering';
+            const distFromImpactCol = Math.abs(ci - Math.round(tradeScreenX));
+            if (nearImpact && distToCurve <= 1 && distFromImpactCol < 6) {
+              const glow = Math.max(0, 1 - distFromImpactCol / 6) * curveOffset * 3;
+              context.fillStyle = accentFg(0.08 + intensity * 0.62 + glow * 0.4);
+            } else {
+              context.fillStyle = fg(0.08 + intensity * 0.62);
+            }
           }
+          
+          context.fillText(
+            chars[charIndex],
+            col * stepX,
+            row * stepY + stepY / 2,
+          );
         }
       }
 
       /* ── axis labels ── */
       context.fillStyle = labelColor;
       context.fillText('reserve x →', (padLeft + 1) * stepX, (rows - 1) * stepY + stepY / 2);
-      // vertical label letter-by-letter
       const yLabel = 'reserve y';
       for (let i = 0; i < yLabel.length; i++) {
         context.fillText(
@@ -180,9 +272,26 @@ export function AsciiCurveHero() {
         );
       }
 
-      /* ── title label ── */
+      /* ── title label with trade indicator ── */
       context.fillStyle = labelColor;
-      context.fillText('x · y = k', (padLeft + usableCols - 10) * stepX, (padTop - 1) * stepY + stepY / 2);
+      const formula = 'x · y = k';
+      context.fillText(formula, (padLeft + usableCols - 10) * stepX, (padTop - 1) * stepY + stepY / 2);
+      
+      // Trade status indicator
+      if (tradeState !== 'idle') {
+        const statusX = (padLeft + usableCols - 18) * stepX;
+        const statusY = (padTop - 1) * stepY + stepY / 2;
+        if (tradeState === 'incoming') {
+          context.fillStyle = isDark ? 'rgba(255, 180, 100, 0.7)' : 'rgba(200, 100, 30, 0.7)';
+          context.fillText('TRADE →', statusX, statusY);
+        } else if (tradeState === 'impact') {
+          context.fillStyle = isDark ? 'rgba(255, 120, 80, 0.9)' : 'rgba(220, 80, 40, 0.9)';
+          context.fillText('IMPACT!', statusX, statusY);
+        } else if (tradeState === 'sliding' || tradeState === 'recovering') {
+          context.fillStyle = isDark ? 'rgba(120, 200, 160, 0.7)' : 'rgba(20, 120, 80, 0.7)';
+          context.fillText('slippage', statusX, statusY);
+        }
+      }
     };
 
     const resize = () => {
