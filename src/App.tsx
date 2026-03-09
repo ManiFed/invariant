@@ -48,6 +48,7 @@ const App = () => (
             <Route path="/docs" element={<Documentation />} />
             <Route path="/library" element={<Library />} />
             <Route path="/labs" element={<Labs />} />
+            <Route path="/labs/design-studio" element={<AMMDesignStudio />} />
             <Route path="/labs/multi-asset" element={<MultiAssetLab />} />
             <Route path="/labs/time-variance" element={<TimeVarianceLab />} />
             <Route path="/labs/discover" element={<DiscoveryAtlas />} />
