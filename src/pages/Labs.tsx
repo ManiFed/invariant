@@ -1,12 +1,9 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers, History, Shield, Wrench, Puzzle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Compass, Dna, Layers, History } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const labs = [
-  { route: "/labs/design-studio", name: "AMM Design Studio", icon: Puzzle, color: "chart-3",
-    desc: "Unified visual AMM design environment — block coding, multi-asset invariants, time-variant curves, and a full Solidity compilation pipeline.",
-    bullets: ["Visual block builder", "3+ token multi-asset", "Time-variant keyframes", "Solidity compiler & deploy"] },
   { route: "/labs/discovery", name: "Invariant Atlas", icon: Compass, color: "chart-3",
     desc: "Continuous global discovery with user-defined experiment runs, evolutionary searches, and configurable objectives.",
     bullets: ["64-bin liquidity representation", "Multi-objective scoring", "Pareto frontier tracking"] },
@@ -19,9 +16,6 @@ const labs = [
   { route: "/labs/replay", name: "Live Market Replay", icon: History, color: "chart-1",
     desc: "Replay historical market scenarios — Black Thursday, LUNA collapse, DeFi Summer — through any library AMM.",
     bullets: ["8 curated scenarios", "Animated playback", "Drawdown detection"] },
-  { route: "/labs/mev", name: "MEV Impact Analyzer", icon: Shield, color: "destructive",
-    desc: "Simulate sandwich attacks, backrun arbitrage, and JIT liquidity. Quantify value leakage from any design.",
-    bullets: ["Protection Score 0-100", "Value flow breakdown", "Configurable attacker budget"] },
 ];
 
 const Labs = () => {

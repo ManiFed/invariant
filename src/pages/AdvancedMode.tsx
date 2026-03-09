@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, ChevronUp, ChevronDown, GitCompare } from "lucide-react";
+import { ArrowLeft, Code2, Cpu, Search, BarChart3, Shield, Rocket, DollarSign, AlertTriangle, Upload, BookOpen, ChevronUp, ChevronDown, GitCompare, Zap } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import InvariantEditor from "@/components/advanced/InvariantEditor";
 import MonteCarloEngine from "@/components/advanced/MonteCarloEngine";
@@ -11,6 +11,7 @@ import StabilityAnalysis from "@/components/advanced/StabilityAnalysis";
 import DeploymentExport from "@/components/advanced/DeploymentExport";
 import FeeStructureEditor from "@/components/advanced/FeeStructureEditor";
 import AMMComparison from "@/components/advanced/AMMComparison";
+import MEVLab from "@/pages/MEVLab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const tabs = [
@@ -21,7 +22,8 @@ const tabs = [
   { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Model toxic flow and MEV extraction", step: 5 },
   { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Compare depth, efficiency, slippage", step: 6 },
   { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 7 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 8 },
+  { id: "mev", label: "MEV Analyzer", icon: Zap, desc: "Sandwich, JIT, backrun simulation", step: 8 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 9 },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
@@ -307,6 +309,7 @@ const AdvancedMode = () => {
               {activeTab === "arbitrage" && <ArbitrageEngine savedInvariant={savedInvariant} savedFees={savedFees} />}
               {activeTab === "liquidity" && <LiquidityAnalyzer savedInvariant={savedInvariant} />}
               {activeTab === "stability" && <StabilityAnalysis savedInvariant={savedInvariant} savedFees={savedFees} />}
+              {activeTab === "mev" && <MEVLab embedded />}
               {activeTab === "deploy" && <DeploymentExport savedInvariant={savedInvariant} savedFees={savedFees} />}
             </motion.div>
           </AnimatePresence>

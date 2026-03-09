@@ -44,7 +44,7 @@ function generateSuggestions(result: MEVResult, bins: number[]): { title: string
   return suggestions;
 }
 
-export default function MEVLab() {
+export default function MEVLab({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const colors = useChartColors();
   const [designs, setDesigns] = useState<{ id: string; name: string; bins: number[] }[]>([]);
@@ -145,17 +145,19 @@ export default function MEVLab() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <span className="text-sm font-bold text-foreground tracking-tight">MEV IMPACT ANALYZER</span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
-        </div>
-        <ThemeToggle />
-      </header>
+    <div className={`${embedded ? "" : "min-h-screen"} bg-background`}>
+      {!embedded && (
+        <header className="border-b border-border px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-bold text-foreground tracking-tight">MEV IMPACT ANALYZER</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
+          </div>
+          <ThemeToggle />
+        </header>
+      )}
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="grid lg:grid-cols-[280px_1fr] gap-6">
