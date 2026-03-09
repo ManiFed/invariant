@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { useChartTheme } from "@/hooks/use-chart-theme";
+import { useChartColors } from "@/hooks/use-chart-theme";
 import {
   type AMMDesign,
   evaluateAMMCurve,
