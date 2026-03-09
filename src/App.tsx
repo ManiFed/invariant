@@ -60,7 +60,7 @@ const App = () => (
             <Route path="/labs/mev" element={<MEVLab />} />
             <Route path="/labs/compiler" element={<CompilerLab />} />
             <Route path="/labs/amm-builder" element={<AMMBuilderLab />} />
-            <Route path="/challenges" element={<Challenges />} />
+            <Route path="/challenges" element={<Navigate to="/learn?mode=challenges" replace />} />
             {/* Forecast Lab — separate service */}
             <Route path={forecastRoute()} element={<ForecastIndex />} />
             <Route path={forecastRoute("/lessons")} element={<Lessons />} />
