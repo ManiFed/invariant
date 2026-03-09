@@ -346,6 +346,18 @@ export default function TeachingLab() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowChallenges(!showChallenges)}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors border ${
+              showChallenges ? "bg-warning/10 border-warning/30 text-warning" : "bg-secondary border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Target className="w-3 h-3" />
+            Challenges
+            {challengeStats.completed > 0 && (
+              <span className="text-[8px] font-mono ml-1">{challengeStats.completed}/{challengeStats.total}</span>
+            )}
+          </button>
+          <button
             onClick={() => { setSelectedLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); setHighlightControls([]); }}
             className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
           >
