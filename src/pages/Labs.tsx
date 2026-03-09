@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers, History, Shield, Wrench } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers, History, Shield, Wrench, Puzzle } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const labs = [
@@ -10,6 +10,9 @@ const labs = [
   { route: "/labs/strategy", name: "Liquidity Strategy Lab", icon: Layers, color: "chart-4",
     desc: "Design, backtest, and compare LP strategies over Monte Carlo price simulations against passive LPing.",
     bullets: ["4 strategy presets", "Up to 5k MC paths", "Fee vs IL attribution"] },
+  { route: "/labs/amm-builder", name: "AMM Block Builder", icon: Puzzle, color: "chart-3",
+    desc: "Visual drag-and-drop block coding to design custom AMM invariants. Export to Solidity or JSON.",
+    bullets: ["Curve templates", "Operations & modifiers", "Live formula preview"] },
   { route: "/labs/dna", name: "AMM DNA Visualizer", icon: Dna, color: "chart-5",
     desc: "Radial genome rings, feature radar arcs, and lineage trees tracing evolutionary ancestry across generations.",
     bullets: ["64-bin genome fingerprint", "Side-by-side comparison", "Lineage tree exploration"] },
