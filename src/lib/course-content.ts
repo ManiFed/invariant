@@ -240,6 +240,7 @@ export const COURSE_MODULES: CourseModule[] = [
           "This means each additional unit costs more than the previous one. This difference between the expected price and the actual average price is called slippage.",
         ],
         visual: "trade-animation",
+        highlightControls: ["tradeSize", "direction"],
       },
       {
         type: "lesson",
