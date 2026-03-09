@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function AMMCurvePreview({ design, k = 10000, showBaseline = true }: Props) {
-  const chartTheme = useChartTheme();
+  const colors = useChartColors();
 
   const { curveData, baselineData, compiled } = useMemo(() => {
     const curveData = evaluateAMMCurve(design, k, 100);
