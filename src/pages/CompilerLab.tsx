@@ -47,7 +47,7 @@ const STEPS = [
 
 type StepId = typeof STEPS[number]["id"];
 
-export default function CompilerLab() {
+export default function CompilerLab({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const colors = useChartColors();
   const [designs, setDesigns] = useState<{ id: string; name: string; bins: number[]; formula: string; params: Record<string, number> }[]>([]);
