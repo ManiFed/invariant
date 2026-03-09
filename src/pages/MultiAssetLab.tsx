@@ -68,7 +68,7 @@ function loadPairFees(): Record<string, number[]> | null {
   try { const raw = sessionStorage.getItem(PAIR_FEE_SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 
-const MultiAssetLab = () => {
+const MultiAssetLab = ({ embedded = false }: { embedded?: boolean }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
