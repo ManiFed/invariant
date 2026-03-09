@@ -280,7 +280,147 @@ export default function TeachingLab() {
     );
   }
 
+  // Challenge metrics derived from simulation state
+  const challengeMetrics = useMemo(() => {
+    const currentPrice = poolPrice(pool);
+    const ilVal = history.length > 0 ? history[history.length - 1].ilPct : 0;
+    return {
+      slippage: lastTrade ? lastTrade.slippagePct : 0,
+      price: currentPrice,
+      il: ilVal,
+      reserveRatio: pool.x / pool.y,
+      feeAccum: pool.totalFees,
+    };
+  }, [pool, history, lastTrade]);
+
   // Determine what to show based on progress
+  const showControls = courseComplete || revealedSections.has("controls") || (courseActive && courseModule >= 3);
+  const showCurve = courseComplete || revealedSections.has("curve");
+  const showReserves = courseComplete || revealedSections.has("reserves");
+  const showMetrics = courseComplete || revealedSections.has("metrics");
+  const showPriceChart = courseComplete || revealedSections.has("price-chart");
+  const showLearning = courseComplete || revealedSections.has("learning");
+
+  return (
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      {/* Header */}
+      <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-bold text-foreground tracking-tight">AMM TEACHING LAB</span>
+          {!courseComplete && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
+              MODULE {courseModule + 1}/{activeModules.length}
+            </span>
+          )}
+          {courseComplete && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-success/30 text-success">
+              COMPLETE ✓
+            </span>
+          )}
+          {/* XP Display in header */}
+          {progress.xp > 0 && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-warning/10 border border-warning/20 text-warning">
+              ⭐ {progress.xp} XP
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setSelectedLevel(null); setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); setHighlightControls([]); }}
+            className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Change Level
+          </button>
+          {courseComplete && (
+            <button
+              onClick={() => { setCourseActive(true); setCourseModule(0); setCourseStep(0); setCompletedModules(0); setHighlightControls([]); }}
+              className="text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Restart Course
+            </button>
+          )}
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* Three columns */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left: Controls */}
+        <div className={`w-80 border-r border-border shrink-0 transition-opacity duration-500 ${showControls ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
+          <LabControls
+            tab={tab}
+            onTabChange={setTab}
+            controls={controls}
+            onChange={handleControlChange}
+            onExecuteTrade={handleExecuteTrade}
+            onReset={handleReset}
+            isRunning={isRunning}
+            onToggleRun={() => setIsRunning(r => !r)}
+            highlightControls={highlightControls}
+          />
+        </div>
+
+        {/* Center: Simulation */}
+        <div className={`flex-1 min-w-0 transition-opacity duration-500 ${(showCurve || showReserves) ? "opacity-100" : "opacity-20 pointer-events-none"}`}>
+          <LabSimulation
+            pool={pool}
+            history={history}
+            lastTrade={lastTrade}
+            tab={tab}
+            rangeLower={controls.rangeLower}
+            rangeUpper={controls.rangeUpper}
+            showCurve={showCurve}
+            showReserves={showReserves}
+            showPriceChart={showPriceChart}
+          />
+        </div>
+
+        {/* Right: Course sidebar or Learning panel */}
+        <div className={`w-72 border-l border-border shrink-0 transition-opacity duration-500 ${
+          courseActive || showMetrics || showLearning ? "opacity-100" : "opacity-20 pointer-events-none"
+        }`}>
+          {courseActive && !courseComplete ? (
+            <CourseSidebar
+              currentModule={courseModule}
+              currentStep={courseStep}
+              onAdvanceStep={handleAdvanceStep}
+              onGoBack={handleGoBack}
+              onCompleteModule={handleCompleteModule}
+              onSkipCourse={handleSkipCourse}
+              totalModules={activeModules.length}
+              completedModules={completedModules}
+              onNavigateModule={handleNavigateModule}
+              modules={activeModules}
+              xp={progress.xp}
+              badges={progress.badges}
+              quizStreak={progress.quizStreak}
+              onQuizAnswer={onQuizAnswer}
+              onStepComplete={onStepComplete}
+              onChallengeComplete={onChallengeComplete}
+              challengeMetrics={challengeMetrics}
+              onHighlightControlsChange={setHighlightControls}
+            />
+          ) : (
+            <LabLearning
+              pool={pool}
+              history={history}
+              lastTrade={lastTrade}
+              tab={tab}
+              initialX={initialX.current}
+              initialY={initialY.current}
+              initialPrice={initialPrice.current}
+              rangeLower={controls.rangeLower}
+              rangeUpper={controls.rangeUpper}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
   const showControls = courseComplete || revealedSections.has("controls") || (courseActive && courseModule >= 3);
   const showCurve = courseComplete || revealedSections.has("curve");
   const showReserves = courseComplete || revealedSections.has("reserves");
