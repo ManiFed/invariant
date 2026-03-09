@@ -698,14 +698,36 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
                 )}
               </div>
 
+              {/* Account state panel */}
+              {deployStatus?.contractAddress && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+                  {[
+                    { label: "ETH Balance", value: `${testnetState.ethBalance.toFixed(4)} ETH`, warn: testnetState.ethBalance < 1 },
+                    { label: "Token A", value: testnetState.tokenABalance.toLocaleString() },
+                    { label: "Token B", value: testnetState.tokenBBalance.toLocaleString() },
+                    { label: "LP Tokens", value: testnetState.lpTokens.toLocaleString() },
+                    { label: "Reserve A", value: testnetState.contractReserveA.toLocaleString() },
+                    { label: "Reserve B", value: testnetState.contractReserveB.toLocaleString() },
+                    { label: "Fees (A/B)", value: `${testnetState.accumulatedFeesA.toLocaleString()} / ${testnetState.accumulatedFeesB.toLocaleString()}` },
+                    { label: "Block / Txs", value: `#${testnetState.blockNumber.toLocaleString()} / ${testnetState.txCount}` },
+                  ].map(m => (
+                    <div key={m.label} className="p-2 rounded-lg bg-secondary border border-border text-center">
+                      <p className="text-[8px] text-muted-foreground">{m.label}</p>
+                      <p className={`text-[10px] font-mono font-bold ${m.warn ? "text-warning" : "text-foreground"}`}>{m.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Interaction panel - only after deployment */}
               {deployStatus?.contractAddress && compiled && (
-                <div className="grid lg:grid-cols-2 gap-4">
+                <div className="grid lg:grid-cols-2 gap-4 mt-4">
                   <div className="border border-border rounded-xl p-4 bg-card">
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center gap-2 mb-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-                      <Tip text="Call functions on your deployed contract. View functions are free; write functions cost gas."><h3 className="text-xs font-bold text-foreground">Contract Interaction</h3></Tip>
+                      <Tip text="Call functions on your deployed contract. View functions are free; write functions cost gas and update state."><h3 className="text-xs font-bold text-foreground">Contract Interaction</h3></Tip>
                     </div>
+                    <p className="text-[9px] text-muted-foreground mb-3">💡 Try: swap(aToB=true, amountIn=5000) to swap Token A → B. Or addLiquidity(amountA=10000, amountB=10000).</p>
                     <div className="space-y-1 mb-4 max-h-36 overflow-y-auto">
                       {compiled.abi.filter(a => a.type === "function").map((fn, i) => (
                         <button key={i} onClick={() => { setInteractFn(fn.name); setInteractInputs({}); }}
@@ -728,7 +750,7 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
                           {fn.inputs.map(input => (
                             <div key={input.name} className="flex items-center gap-2">
                               <label className="text-[10px] text-muted-foreground w-20">{input.name}</label>
-                              <input type="text" placeholder={`${input.type} value`}
+                              <input type="text" placeholder={input.name === "aToB" ? "true / false" : `${input.type} value`}
                                 value={interactInputs[input.name] || ""}
                                 onChange={e => setInteractInputs(prev => ({ ...prev, [input.name]: e.target.value }))}
                                 className="flex-1 px-2 py-1.5 rounded-lg bg-secondary border border-border text-xs font-mono text-foreground" />
@@ -745,12 +767,14 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
 
                   <div className="border border-border rounded-xl bg-card overflow-hidden">
                     <div className="px-4 py-2 border-b border-border flex items-center justify-between">
-                      <span className="text-[10px] font-mono text-muted-foreground">Console Output</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">Console Output ({interactLog.length} entries)</span>
                       <button onClick={() => setInteractLog([])} className="text-[10px] text-muted-foreground hover:text-foreground">Clear</button>
                     </div>
                     <div className="p-3 max-h-64 overflow-y-auto font-mono text-[10px] space-y-0.5">
                       {interactLog.length === 0 && <p className="text-muted-foreground">Call a function to see output here...</p>}
-                      {interactLog.map((log, i) => <p key={i} className="text-foreground">{log}</p>)}
+                      {interactLog.map((log, i) => (
+                        <p key={i} className={`${log.includes("REVERTED") ? "text-destructive" : log.includes("→") ? "text-foreground" : "text-muted-foreground"}`}>{log}</p>
+                      ))}
                     </div>
                   </div>
                 </div>
