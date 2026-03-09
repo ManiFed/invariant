@@ -22,7 +22,8 @@ const tabs = [
   { id: "arbitrage", label: "Arbitrage", icon: Search, desc: "Model toxic flow and MEV extraction", step: 5 },
   { id: "liquidity", label: "Liquidity", icon: BarChart3, desc: "Compare depth, efficiency, slippage", step: 6 },
   { id: "stability", label: "Stability", icon: Shield, desc: "Run diagnostic checks for edge cases", step: 7 },
-  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 8 },
+  { id: "mev", label: "MEV Analyzer", icon: Zap, desc: "Sandwich, JIT, backrun simulation", step: 8 },
+  { id: "deploy", label: "Deploy", icon: Rocket, desc: "Export as Solidity, JSON, or docs", step: 9 },
 ] as const;
 
 type TabId = typeof tabs[number]["id"];
