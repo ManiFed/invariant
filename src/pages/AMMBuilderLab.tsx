@@ -57,7 +57,7 @@ const PRESETS: { name: string; blocks: () => AMMBlockInstance[] }[] = [
   },
 ];
 
-export default function AMMBuilderLab() {
+export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [design, setDesign] = useState<AMMDesign>(DEFAULT_DESIGN);
   const [k, setK] = useState(10000);
