@@ -2,7 +2,20 @@ export interface DocSubsection {
   id: string;
   title: string;
   content: string;
-  interactive?: "il-calculator" | "slippage-explorer" | "curve-comparison" | "fee-breakeven" | "monte-carlo-mini" | "mev-visualizer" | "block-taxonomy" | "strategy-block-taxonomy" | "challenge-list" | "scenario-list" | "regime-table" | "family-table" | "crossover-diagram";
+  interactive?:
+    | "il-calculator"
+    | "slippage-explorer"
+    | "curve-comparison"
+    | "fee-breakeven"
+    | "monte-carlo-mini"
+    | "mev-visualizer"
+    | "block-taxonomy"
+    | "strategy-block-taxonomy"
+    | "challenge-list"
+    | "scenario-list"
+    | "regime-table"
+    | "family-table"
+    | "crossover-diagram";
   tip?: string;
   links?: { label: string; anchor: string }[];
 }
@@ -50,18 +63,6 @@ export const documentationSections: DocSection[] = [
 - **Cloud Edge Function** — AI assistant (Ammy) Q&A endpoint
 
 **Key technologies:** React 18, TypeScript, Tailwind CSS, Framer Motion, Recharts, Radix UI, Web Workers, Vite.`,
-      },
-      {
-        id: "about-philosophy",
-        title: "Philosophy",
-        content: `We believe the best way to learn finance is to break things in a sandbox. Every chart is interactive, every parameter is adjustable, and every formula is visible. There are no black boxes.
-
-**Design Principles:**
-1. **Progressive Disclosure** — Start with templates → advance to custom invariants → explore evolutionary discovery
-2. **Show the Math** — Every metric displays its formula. Hover for explanations. No hidden calculations.
-3. **Real Consequences** — Parameters have tradeoffs. Low fees mean less revenue. Tight ranges mean higher IL. The simulator doesn't sugarcoat.
-4. **Reproducibility** — Deterministic RNG (seeded PRNGs) ensures identical results for identical inputs
-5. **Open Source** — Full codebase available on GitHub. Fork it, extend it, learn from it.`,
       },
     ],
   },

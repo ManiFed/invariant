@@ -316,10 +316,6 @@ const Documentation = () => {
         <main className="flex-1 max-w-3xl mx-auto px-6 sm:px-8 py-10">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <h1 className="text-3xl font-bold text-foreground mb-1">Platform Documentation</h1>
-            <p className="text-sm text-muted-foreground mb-8 leading-relaxed">
-              Complete reference for Invariant Studio — every feature, formula, and workflow. Includes interactive
-              calculators and cross-linked mathematical models.
-            </p>
             {/* Mobile search */}
             <div className="lg:hidden mb-6 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
