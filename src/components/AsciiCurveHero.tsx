@@ -206,7 +206,7 @@ export function AsciiCurveHero() {
             if (impactProgress > 0.1) {
               const trailT = impactProgress - 0.15;
               if (trailT > 0) {
-                const trailCol = startCol + (padLeft + Math.round(tradeScreenX) - startCol) * trailT;
+                const trailCol = startCol + (targetCol - startCol) * trailT;
                 const trailRow = startRow + (targetRow - startRow) * trailT;
                 const tdx = Math.abs(col - trailCol);
                 const tdy = Math.abs(row - trailRow);
