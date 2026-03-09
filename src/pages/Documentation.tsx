@@ -77,8 +77,8 @@ function SlippageExplorer() {
             <XAxis dataKey="trade" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" label={{ value: "Trade Size (% of reserves)", fontSize: 9, position: "bottom" }} />
             <YAxis tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" unit="%" />
             <Tooltip contentStyle={{ fontSize: 10, background: "hsl(var(--background))", border: "1px solid hsl(var(--border))" }} />
-            <Line dataKey="cp" stroke={colors.chart1} name="Constant Product" strokeWidth={2} dot={false} />
-            <Line dataKey="stable" stroke={colors.chart3} name="StableSwap" strokeWidth={2} dot={false} />
+            <Line dataKey="cp" stroke={colors.series[0]} name="Constant Product" strokeWidth={2} dot={false} />
+            <Line dataKey="stable" stroke={colors.series[1]} name="StableSwap" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
