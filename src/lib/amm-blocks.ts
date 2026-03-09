@@ -150,6 +150,68 @@ export const AMM_BLOCK_DEFINITIONS: AMMBlockDefinition[] = [
     { key: "mid", label: "Mid Vol Fee", type: "number", default: 0.003, min: 0, max: 0.1, step: 0.001 },
     { key: "high", label: "High Vol Fee", type: "number", default: 0.01, min: 0, max: 0.1, step: 0.001 },
   ], output: "number", description: "Step-wise fee tiers based on volatility" },
+
+  // 7. MULTI-ASSET — Pools with 3+ tokens
+  { id: "var_z", label: "Z Reserves", category: "multiasset", subcategory: "Variables", color: AMM_CATEGORY_COLORS.multiasset, params: [], output: "number", description: "Reserve amount of token Z (3rd asset)", symbol: "z" },
+  { id: "var_w", label: "W Reserves", category: "multiasset", subcategory: "Variables", color: AMM_CATEGORY_COLORS.multiasset, params: [], output: "number", description: "Reserve amount of token W (4th asset)", symbol: "w" },
+  { id: "var_asset_n", label: "Asset N", category: "multiasset", subcategory: "Variables", color: AMM_CATEGORY_COLORS.multiasset, params: [
+    { key: "index", label: "Index", type: "number", default: 0, min: 0, max: 7, step: 1 },
+  ], output: "number", description: "Reserve of Nth asset in pool", symbol: "rₙ" },
+  { id: "curve_multi_weighted", label: "Multi-Asset Weighted", category: "multiasset", subcategory: "Curves", color: AMM_CATEGORY_COLORS.multiasset, params: [
+    { key: "wx", label: "Weight X", type: "number", default: 0.33, min: 0.01, max: 0.99, step: 0.01 },
+    { key: "wy", label: "Weight Y", type: "number", default: 0.33, min: 0.01, max: 0.99, step: 0.01 },
+    { key: "wz", label: "Weight Z", type: "number", default: 0.34, min: 0.01, max: 0.99, step: 0.01 },
+  ], output: "formula", description: "Balancer-style 3-asset weighted pool", symbol: "x^wₓ×y^wᵧ×z^w_z=k" },
+  { id: "curve_multi_stable", label: "Multi-Asset StableSwap", category: "multiasset", subcategory: "Curves", color: AMM_CATEGORY_COLORS.multiasset, params: [
+    { key: "amp", label: "Amplification", type: "number", default: 100, min: 1, max: 5000, step: 10 },
+    { key: "n", label: "Num Assets", type: "number", default: 3, min: 2, max: 8, step: 1 },
+  ], output: "formula", description: "Curve-style multi-asset stableswap", symbol: "An^n Σxᵢ + D = An^n D + D^(n+1)/(n^n Πxᵢ)" },
+  { id: "op_sum_all", label: "Sum All (Σ)", category: "multiasset", subcategory: "Operations", color: AMM_CATEGORY_COLORS.multiasset, params: [], output: "number", description: "Sum of all asset reserves", symbol: "Σxᵢ" },
+  { id: "op_product_all", label: "Product All (Π)", category: "multiasset", subcategory: "Operations", color: AMM_CATEGORY_COLORS.multiasset, params: [], output: "number", description: "Product of all asset reserves", symbol: "Πxᵢ" },
+  { id: "op_geometric_mean", label: "Geometric Mean", category: "multiasset", subcategory: "Operations", color: AMM_CATEGORY_COLORS.multiasset, params: [], output: "number", description: "Geometric mean of all reserves", symbol: "(Πxᵢ)^(1/n)" },
+  { id: "mod_asset_weight", label: "Per-Asset Weight", category: "multiasset", subcategory: "Modifiers", color: AMM_CATEGORY_COLORS.multiasset, params: [
+    { key: "asset", label: "Asset Index", type: "number", default: 0, min: 0, max: 7, step: 1 },
+    { key: "weight", label: "Weight", type: "number", default: 0.25, min: 0.01, max: 0.99, step: 0.01 },
+  ], output: "number", description: "Apply weight to specific asset" },
+
+  // 8. TIME-VARIANCE — Parameters that change over time
+  { id: "var_time", label: "Current Time (t)", category: "timevar", subcategory: "Variables", color: AMM_CATEGORY_COLORS.timevar, params: [], output: "number", description: "Current time in simulation", symbol: "t" },
+  { id: "var_elapsed", label: "Elapsed Time", category: "timevar", subcategory: "Variables", color: AMM_CATEGORY_COLORS.timevar, params: [], output: "number", description: "Time since pool creation", symbol: "Δt" },
+  { id: "var_epoch", label: "Current Epoch", category: "timevar", subcategory: "Variables", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "duration", label: "Epoch Duration", type: "number", default: 86400, min: 1, max: 31536000, step: 1 },
+  ], output: "number", description: "Current epoch number (time ÷ duration)", symbol: "epoch" },
+  { id: "mod_time_decay", label: "Time Decay", category: "timevar", subcategory: "Modifiers", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "halflife", label: "Half-life", type: "number", default: 3600, min: 1, max: 86400, step: 1 },
+  ], inputs: 1, output: "number", description: "Exponentially decay value over time", symbol: "× e^(-t/τ)" },
+  { id: "mod_time_ramp", label: "Time Ramp", category: "timevar", subcategory: "Modifiers", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "start", label: "Start Value", type: "number", default: 0, min: 0, max: 1000000, step: 0.01 },
+    { key: "end", label: "End Value", type: "number", default: 1, min: 0, max: 1000000, step: 0.01 },
+    { key: "duration", label: "Duration", type: "number", default: 3600, min: 1, max: 86400, step: 1 },
+  ], output: "number", description: "Linear ramp from start to end over duration", symbol: "ramp(t)" },
+  { id: "mod_time_oscillate", label: "Oscillate", category: "timevar", subcategory: "Modifiers", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "amplitude", label: "Amplitude", type: "number", default: 0.1, min: 0, max: 1, step: 0.01 },
+    { key: "period", label: "Period", type: "number", default: 3600, min: 1, max: 86400, step: 1 },
+  ], inputs: 1, output: "number", description: "Oscillate value sinusoidally over time", symbol: "× sin(2πt/T)" },
+  { id: "keyframe_lerp", label: "Keyframe Lerp", category: "timevar", subcategory: "Keyframes", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "t0", label: "Time 0", type: "number", default: 0, min: 0, max: 100000, step: 1 },
+    { key: "v0", label: "Value 0", type: "number", default: 0, min: 0, max: 1000000, step: 0.01 },
+    { key: "t1", label: "Time 1", type: "number", default: 100, min: 0, max: 100000, step: 1 },
+    { key: "v1", label: "Value 1", type: "number", default: 1, min: 0, max: 1000000, step: 0.01 },
+  ], output: "number", description: "Linear interpolation between two keyframes", symbol: "lerp(v₀,v₁,t)" },
+  { id: "keyframe_step", label: "Keyframe Step", category: "timevar", subcategory: "Keyframes", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "switchTime", label: "Switch At", type: "number", default: 50, min: 0, max: 100000, step: 1 },
+    { key: "before", label: "Before Value", type: "number", default: 0, min: 0, max: 1000000, step: 0.01 },
+    { key: "after", label: "After Value", type: "number", default: 1, min: 0, max: 1000000, step: 0.01 },
+  ], output: "number", description: "Step function at specified time", symbol: "step(t)" },
+  { id: "cond_time_before", label: "IF Time <", category: "timevar", subcategory: "Conditionals", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "threshold", label: "Time", type: "number", default: 100, min: 0, max: 100000, step: 1 },
+  ], acceptsChildren: true, output: "formula", description: "Apply when time is before threshold" },
+  { id: "cond_time_after", label: "IF Time >", category: "timevar", subcategory: "Conditionals", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "threshold", label: "Time", type: "number", default: 100, min: 0, max: 100000, step: 1 },
+  ], acceptsChildren: true, output: "formula", description: "Apply when time is after threshold" },
+  { id: "cond_epoch_is", label: "IF Epoch =", category: "timevar", subcategory: "Conditionals", color: AMM_CATEGORY_COLORS.timevar, params: [
+    { key: "epoch", label: "Epoch", type: "number", default: 0, min: 0, max: 1000, step: 1 },
+  ], acceptsChildren: true, output: "formula", description: "Apply during specific epoch" },
 ];
 
 // ─── HELPERS ──────────────────────────────────────────────────
