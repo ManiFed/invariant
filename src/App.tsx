@@ -10,6 +10,7 @@ import TeachingLab from "./pages/TeachingLab";
 import Documentation from "./pages/Documentation";
 import Library from "./pages/Library";
 import Labs from "./pages/Labs";
+import AMMDesignStudio from "./pages/AMMDesignStudio";
 import MultiAssetLab from "./pages/MultiAssetLab";
 import TimeVarianceLab from "./pages/TimeVarianceLab";
 import DiscoveryAtlas from "./pages/DiscoveryAtlas";
