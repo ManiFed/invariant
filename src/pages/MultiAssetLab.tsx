@@ -68,7 +68,7 @@ function loadPairFees(): Record<string, number[]> | null {
   try { const raw = sessionStorage.getItem(PAIR_FEE_SESSION_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 
-const MultiAssetLab = () => {
+const MultiAssetLab = ({ embedded = false }: { embedded?: boolean }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
@@ -149,29 +149,31 @@ const MultiAssetLab = () => {
   const multiAssetExpr = assets.map(a => `${a.symbol}^${a.weight}`).join(" · ") + " = k";
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /></button>
-          <Boxes className="w-4 h-4 text-chart-1" />
-          <span className="text-sm font-bold text-foreground tracking-tight">MULTI-ASSET LAB</span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
-            <Upload className="w-3 h-3" /> Import AMM
-          </button>
-          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
-          <button
-            onClick={() => setActiveTab("invariant")}
-            className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors cursor-pointer"
-          >
-            <span className="text-[9px] text-muted-foreground">Active:</span>
-            <span className="text-[10px] font-mono text-foreground truncate max-w-48">{savedInvariant ? savedInvariant.expression : multiAssetExpr}</span>
-          </button>
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className={`${embedded ? "" : "min-h-screen"} bg-background flex flex-col flex-1`}>
+      {!embedded && (
+        <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /></button>
+            <Boxes className="w-4 h-4 text-chart-1" />
+            <span className="text-sm font-bold text-foreground tracking-tight">MULTI-ASSET LAB</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+              <Upload className="w-3 h-3" /> Import AMM
+            </button>
+            <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
+            <button
+              onClick={() => setActiveTab("invariant")}
+              className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors cursor-pointer"
+            >
+              <span className="text-[9px] text-muted-foreground">Active:</span>
+              <span className="text-[10px] font-mono text-foreground truncate max-w-48">{savedInvariant ? savedInvariant.expression : multiAssetExpr}</span>
+            </button>
+            <ThemeToggle />
+          </div>
+        </header>
+      )}
 
       {/* Import Dialog */}
       <Dialog open={showImport} onOpenChange={setShowImport}>

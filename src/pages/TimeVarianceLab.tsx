@@ -84,7 +84,7 @@ function loadTVConfig(): TimeVarianceConfig {
   };
 }
 
-const TimeVarianceLab = () => {
+const TimeVarianceLab = ({ embedded = false }: { embedded?: boolean }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("invariant");
   const [hovered, setHovered] = useState(false);
@@ -231,28 +231,30 @@ const TimeVarianceLab = () => {
     : tvConfig.keyframes[0];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /></button>
-          <Clock className="w-4 h-4 text-chart-2" />
-          <span className="text-sm font-bold text-foreground tracking-tight">TIME-VARIANCE LAB</span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
-            <Upload className="w-3 h-3" /> Import AMM
-          </button>
-          <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
-          {savedInvariant && (
-            <button onClick={() => setActiveTab("invariant")} className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors cursor-pointer">
-              <span className="text-[9px] text-muted-foreground">Active:</span>
-              <span className="text-[10px] font-mono text-foreground">{savedInvariant.expression}</span>
+    <div className={`${embedded ? "" : "min-h-screen"} bg-background flex flex-col flex-1`}>
+      {!embedded && (
+        <header className="border-b border-border px-6 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /></button>
+            <Clock className="w-4 h-4 text-chart-2" />
+            <span className="text-sm font-bold text-foreground tracking-tight">TIME-VARIANCE LAB</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">EXPERIMENTAL</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border">
+              <Upload className="w-3 h-3" /> Import AMM
             </button>
-          )}
-          <ThemeToggle />
-        </div>
-      </header>
+            <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleJsonUpload} />
+            {savedInvariant && (
+              <button onClick={() => setActiveTab("invariant")} className="flex items-center gap-2 px-3 py-1 rounded-lg bg-secondary border border-border hover:bg-accent transition-colors cursor-pointer">
+                <span className="text-[9px] text-muted-foreground">Active:</span>
+                <span className="text-[10px] font-mono text-foreground">{savedInvariant.expression}</span>
+              </button>
+            )}
+            <ThemeToggle />
+          </div>
+        </header>
+      )}
 
       {/* Import Dialog */}
       <Dialog open={showImport} onOpenChange={setShowImport}>

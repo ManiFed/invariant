@@ -4,15 +4,15 @@ import { ArrowLeft, ArrowRight, Boxes, Clock, Compass, Dna, Layers, History, Shi
 import ThemeToggle from "@/components/ThemeToggle";
 
 const labs = [
+  { route: "/labs/design-studio", name: "AMM Design Studio", icon: Puzzle, color: "chart-3",
+    desc: "Unified visual AMM design environment — block coding, multi-asset invariants, time-variant curves, and a full Solidity compilation pipeline.",
+    bullets: ["Visual block builder", "3+ token multi-asset", "Time-variant keyframes", "Solidity compiler & deploy"] },
   { route: "/labs/discovery", name: "Invariant Atlas", icon: Compass, color: "chart-3",
     desc: "Continuous global discovery with user-defined experiment runs, evolutionary searches, and configurable objectives.",
     bullets: ["64-bin liquidity representation", "Multi-objective scoring", "Pareto frontier tracking"] },
   { route: "/labs/strategy", name: "Liquidity Strategy Lab", icon: Layers, color: "chart-4",
     desc: "Design, backtest, and compare LP strategies over Monte Carlo price simulations against passive LPing.",
     bullets: ["4 strategy presets", "Up to 5k MC paths", "Fee vs IL attribution"] },
-  { route: "/labs/amm-builder", name: "AMM Block Builder", icon: Puzzle, color: "chart-3",
-    desc: "Visual drag-and-drop block coding to design custom AMM invariants. Export to Solidity or JSON.",
-    bullets: ["Curve templates", "Operations & modifiers", "Live formula preview"] },
   { route: "/labs/dna", name: "AMM DNA Visualizer", icon: Dna, color: "chart-5",
     desc: "Radial genome rings, feature radar arcs, and lineage trees tracing evolutionary ancestry across generations.",
     bullets: ["64-bin genome fingerprint", "Side-by-side comparison", "Lineage tree exploration"] },
@@ -22,15 +22,6 @@ const labs = [
   { route: "/labs/mev", name: "MEV Impact Analyzer", icon: Shield, color: "destructive",
     desc: "Simulate sandwich attacks, backrun arbitrage, and JIT liquidity. Quantify value leakage from any design.",
     bullets: ["Protection Score 0-100", "Value flow breakdown", "Configurable attacker budget"] },
-  { route: "/labs/compiler", name: "Invariant Compiler", icon: Wrench, color: "chart-2",
-    desc: "Full pipeline: Solidity generation → compile → gas profile → storage layout → test suite → testnet deploy.",
-    bullets: ["Per-function gas profiling", "Storage layout viz", "Simulated deployment"] },
-  { route: "/labs/multi-asset", name: "Multi-Asset AMMs", icon: Boxes, color: "chart-1",
-    desc: "Design invariants across 3+ tokens with 3D surface plots, pairwise slicing, and price matrix heatmaps.",
-    bullets: ["Asset table editor", "3D surface visualization", "Price matrix heatmap"] },
-  { route: "/labs/time-variance", name: "Time-Variance AMMs", icon: Clock, color: "chart-2",
-    desc: "AMMs that evolve over time. Animate curves, adjust parameters at keyframes, build time-dependent functions.",
-    bullets: ["Keyframe timeline editor", "Continuous playback", "Snapshot comparison"] },
 ];
 
 const Labs = () => {

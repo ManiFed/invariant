@@ -57,7 +57,7 @@ const PRESETS: { name: string; blocks: () => AMMBlockInstance[] }[] = [
   },
 ];
 
-export default function AMMBuilderLab() {
+export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [design, setDesign] = useState<AMMDesign>(DEFAULT_DESIGN);
   const [k, setK] = useState(10000);
@@ -141,42 +141,43 @@ export default function AMMBuilderLab() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("/labs")}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <Boxes className="w-4 h-4 text-chart-3" />
-          <span className="text-sm font-bold text-foreground tracking-tight">
-            AMM Block Builder
-          </span>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
-            VISUAL
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={exportJSON}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-secondary text-foreground text-[10px] font-medium hover:bg-accent border border-border transition-colors"
-          >
-            <FileJson className="w-3 h-3" />
-            Export JSON
-          </button>
-          <button
-            onClick={exportSolidity}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-[10px] font-medium hover:opacity-90 transition-opacity"
-          >
-            <Code className="w-3 h-3" />
-            Export Solidity
-          </button>
-          <ThemeToggle />
-        </div>
-      </header>
+    <div className={`${embedded ? "" : "min-h-screen"} bg-background flex flex-col flex-1`}>
+      {!embedded && (
+        <header className="border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/labs")}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <Boxes className="w-4 h-4 text-chart-3" />
+            <span className="text-sm font-bold text-foreground tracking-tight">
+              AMM Block Builder
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-warning/30 text-warning">
+              VISUAL
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportJSON}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-secondary text-foreground text-[10px] font-medium hover:bg-accent border border-border transition-colors"
+            >
+              <FileJson className="w-3 h-3" />
+              Export JSON
+            </button>
+            <button
+              onClick={exportSolidity}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-[10px] font-medium hover:opacity-90 transition-opacity"
+            >
+              <Code className="w-3 h-3" />
+              Export Solidity
+            </button>
+            <ThemeToggle />
+          </div>
+        </header>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">

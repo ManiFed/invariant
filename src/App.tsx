@@ -10,6 +10,7 @@ import TeachingLab from "./pages/TeachingLab";
 import Documentation from "./pages/Documentation";
 import Library from "./pages/Library";
 import Labs from "./pages/Labs";
+import AMMDesignStudio from "./pages/AMMDesignStudio";
 import MultiAssetLab from "./pages/MultiAssetLab";
 import TimeVarianceLab from "./pages/TimeVarianceLab";
 import DiscoveryAtlas from "./pages/DiscoveryAtlas";
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/docs" element={<Documentation />} />
             <Route path="/library" element={<Library />} />
             <Route path="/labs" element={<Labs />} />
+            <Route path="/labs/design-studio" element={<AMMDesignStudio />} />
             <Route path="/labs/multi-asset" element={<MultiAssetLab />} />
             <Route path="/labs/time-variance" element={<TimeVarianceLab />} />
             <Route path="/labs/discover" element={<DiscoveryAtlas />} />
