@@ -272,6 +272,8 @@ export const COURSE_MODULES: CourseModule[] = [
           "Try it yourself! Use the controls on the left to set trade size to 50, then 100, then 200. Watch how slippage accelerates.",
         ],
         visual: "slippage-nonlinear",
+        miniSim: "slippage-explorer",
+        highlightControls: ["tradeSize"],
       },
       {
         type: "quiz",
