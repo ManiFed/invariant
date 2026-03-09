@@ -65,6 +65,21 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
   const [showCode, setShowCode] = useState(false);
   const [tooltip, setTooltip] = useState<string | null>(null);
 
+  // ── Testnet State Tracking ──
+  const [testnetState, setTestnetState] = useState({
+    ethBalance: 100,
+    tokenABalance: 1_000_000,
+    tokenBBalance: 1_000_000,
+    contractReserveA: 500_000,
+    contractReserveB: 500_000,
+    lpTokens: 0,
+    totalSupply: 1_000_000,
+    accumulatedFeesA: 0,
+    accumulatedFeesB: 0,
+    txCount: 0,
+    blockNumber: 19_500_000,
+  });
+
   useEffect(() => {
     supabase.from("library_amms").select("id, name, bins, formula, params").then(({ data }) => {
       if (data) {
@@ -104,18 +119,134 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
     setDeployStatus({ step: "compiling", progress: 0 });
     setStep("deploy");
     await simulateDeployment(setDeployStatus);
-  }, []);
+    // Reset testnet state on fresh deploy
+    setTestnetState({
+      ethBalance: 100,
+      tokenABalance: 1_000_000,
+      tokenBBalance: 1_000_000,
+      contractReserveA: 500_000,
+      contractReserveB: 500_000,
+      lpTokens: 0,
+      totalSupply: 1_000_000,
+      accumulatedFeesA: 0,
+      accumulatedFeesB: 0,
+      txCount: 0,
+      blockNumber: deployStatus?.blockNumber || 19_500_000,
+    });
+    setInteractLog(prev => [...prev,
+      `[${new Date().toLocaleTimeString()}] 📦 Contract deployed. Initial reserves: 500,000 A / 500,000 B`,
+      `[${new Date().toLocaleTimeString()}] 💰 Test account funded: 100 ETH, 1,000,000 Token A, 1,000,000 Token B`,
+    ]);
+  }, [deployStatus]);
 
   const handleInteract = useCallback((fnName: string) => {
-    const inputValues = Object.entries(interactInputs).map(([k, v]) => `${k}=${v}`).join(", ");
-    const gasUsed = 20000 + Math.floor(Math.random() * 80000);
     const ts = new Date().toLocaleTimeString();
-    if (fnName.startsWith("get") || fnName.includes("reserve") || fnName.includes("price")) {
-      setInteractLog(prev => [...prev, `[${ts}] ${fnName}(${inputValues}) → ${(Math.random() * 100000).toFixed(2)}  (${gasUsed.toLocaleString()} gas, view)`]);
-    } else {
-      const txHash = "0x" + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join("") + "...";
-      setInteractLog(prev => [...prev, `[${ts}] ${fnName}(${inputValues}) → tx: ${txHash}  (${gasUsed.toLocaleString()} gas)`]);
-    }
+    const inputValues = Object.entries(interactInputs).map(([k, v]) => `${k}=${v}`).join(", ");
+
+    setTestnetState(prev => {
+      const next = { ...prev, txCount: prev.txCount + 1, blockNumber: prev.blockNumber + 1 };
+
+      // Simulate realistic function behavior
+      if (fnName === "swap") {
+        const aToB = interactInputs["aToB"] === "true";
+        const amountIn = parseInt(interactInputs["amountIn"] || "1000") || 1000;
+        const feeAmount = Math.floor(amountIn * 0.003);
+        const netInput = amountIn - feeAmount;
+
+        if (aToB) {
+          const newA = next.contractReserveA + netInput;
+          const k = next.contractReserveA * next.contractReserveB;
+          const amountOut = Math.floor(next.contractReserveB - k / newA);
+          if (amountOut > 0 && amountOut < next.contractReserveB && amountIn <= next.tokenABalance) {
+            next.tokenABalance -= amountIn;
+            next.tokenBBalance += amountOut;
+            next.contractReserveA = newA;
+            next.contractReserveB -= amountOut;
+            next.accumulatedFeesA += feeAmount;
+            next.ethBalance -= 0.005; // gas
+            setInteractLog(p => [...p,
+              `[${ts}] swap(true, ${amountIn}) → received ${amountOut.toLocaleString()} Token B  (fee: ${feeAmount}, gas: ~65,432)`,
+              `[${ts}]   Reserves: ${newA.toLocaleString()} A / ${(next.contractReserveB).toLocaleString()} B  |  Price: ${(next.contractReserveB / newA).toFixed(6)}`,
+            ]);
+          } else {
+            setInteractLog(p => [...p, `[${ts}] ✗ swap() REVERTED: ${amountIn > next.tokenABalance ? "Insufficient balance" : "Bad output amount"}`]);
+          }
+        } else {
+          const newB = next.contractReserveB + netInput;
+          const k = next.contractReserveA * next.contractReserveB;
+          const amountOut = Math.floor(next.contractReserveA - k / newB);
+          if (amountOut > 0 && amountOut < next.contractReserveA && amountIn <= next.tokenBBalance) {
+            next.tokenBBalance -= amountIn;
+            next.tokenABalance += amountOut;
+            next.contractReserveB = newB;
+            next.contractReserveA -= amountOut;
+            next.accumulatedFeesB += feeAmount;
+            next.ethBalance -= 0.005;
+            setInteractLog(p => [...p,
+              `[${ts}] swap(false, ${amountIn}) → received ${amountOut.toLocaleString()} Token A  (fee: ${feeAmount}, gas: ~65,432)`,
+              `[${ts}]   Reserves: ${(next.contractReserveA).toLocaleString()} A / ${newB.toLocaleString()} B  |  Price: ${(newB / next.contractReserveA).toFixed(6)}`,
+            ]);
+          } else {
+            setInteractLog(p => [...p, `[${ts}] ✗ swap() REVERTED: ${amountIn > next.tokenBBalance ? "Insufficient balance" : "Bad output amount"}`]);
+          }
+        }
+      } else if (fnName === "addLiquidity") {
+        const amtA = parseInt(interactInputs["amountA"] || "10000") || 10000;
+        const amtB = parseInt(interactInputs["amountB"] || "10000") || 10000;
+        if (amtA <= next.tokenABalance && amtB <= next.tokenBBalance) {
+          const lpMinted = Math.floor(Math.sqrt(amtA * amtB));
+          next.tokenABalance -= amtA;
+          next.tokenBBalance -= amtB;
+          next.contractReserveA += amtA;
+          next.contractReserveB += amtB;
+          next.lpTokens += lpMinted;
+          next.totalSupply += lpMinted;
+          next.ethBalance -= 0.008;
+          setInteractLog(p => [...p, `[${ts}] addLiquidity(${amtA.toLocaleString()}, ${amtB.toLocaleString()}) → minted ${lpMinted.toLocaleString()} LP tokens  (gas: ~124,891)`]);
+        } else {
+          setInteractLog(p => [...p, `[${ts}] ✗ addLiquidity() REVERTED: Insufficient token balance`]);
+        }
+      } else if (fnName === "removeLiquidity") {
+        const lpAmt = parseInt(interactInputs["lpTokens"] || "1000") || 1000;
+        if (lpAmt <= next.lpTokens && next.totalSupply > 0) {
+          const amtA = Math.floor((lpAmt * next.contractReserveA) / next.totalSupply);
+          const amtB = Math.floor((lpAmt * next.contractReserveB) / next.totalSupply);
+          next.lpTokens -= lpAmt;
+          next.totalSupply -= lpAmt;
+          next.tokenABalance += amtA;
+          next.tokenBBalance += amtB;
+          next.contractReserveA -= amtA;
+          next.contractReserveB -= amtB;
+          next.ethBalance -= 0.006;
+          setInteractLog(p => [...p, `[${ts}] removeLiquidity(${lpAmt.toLocaleString()}) → received ${amtA.toLocaleString()} A + ${amtB.toLocaleString()} B  (gas: ~98,234)`]);
+        } else {
+          setInteractLog(p => [...p, `[${ts}] ✗ removeLiquidity() REVERTED: ${lpAmt > next.lpTokens ? "Insufficient LP tokens" : "Zero supply"}`]);
+        }
+      } else if (fnName === "collectFees") {
+        const feesA = next.accumulatedFeesA;
+        const feesB = next.accumulatedFeesB;
+        next.accumulatedFeesA = 0;
+        next.accumulatedFeesB = 0;
+        next.ethBalance -= 0.003;
+        setInteractLog(p => [...p, `[${ts}] collectFees() → ${feesA.toLocaleString()} A fees + ${feesB.toLocaleString()} B fees collected  (gas: ~42,156)`]);
+      } else if (fnName.startsWith("get") || fnName.includes("reserve") || fnName.includes("price") || fnName.includes("Bin")) {
+        // View functions — no gas cost
+        let result: string;
+        if (fnName === "getReserves" || fnName === "reserveA") result = `(${next.contractReserveA.toLocaleString()}, ${next.contractReserveB.toLocaleString()})`;
+        else if (fnName === "getSpotPrice") result = (next.contractReserveB / next.contractReserveA).toFixed(8);
+        else if (fnName === "getBinWeights") result = `uint256[64] array (view only)`;
+        else if (fnName === "totalSupply") result = next.totalSupply.toLocaleString();
+        else result = (Math.random() * 100000).toFixed(2);
+        setInteractLog(p => [...p, `[${ts}] ${fnName}(${inputValues}) → ${result}  (view, no gas)`]);
+        return prev; // Don't update state for views
+      } else {
+        const gasUsed = 20000 + Math.floor(Math.random() * 80000);
+        next.ethBalance -= 0.003;
+        setInteractLog(p => [...p, `[${ts}] ${fnName}(${inputValues}) → success  (${gasUsed.toLocaleString()} gas)`]);
+      }
+
+      return next;
+    });
   }, [interactInputs]);
 
   const currentDesign = designs.find(d => d.id === selectedDesign);
