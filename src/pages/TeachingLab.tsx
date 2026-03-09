@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Monitor } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -12,6 +12,7 @@ import { INTERMEDIATE_MODULES, INTERMEDIATE_TAB_MAP } from "@/lib/intermediate-c
 import { ADVANCED_MODULES, ADVANCED_TAB_MAP } from "@/lib/advanced-course-content";
 import { createPool, executeTrade, executeArbitrage, gbmStep, poolPrice, calcIL, lpValue, hodlValue, type PoolState, type TradeResult, type HistoryPoint } from "@/lib/amm-engine";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useCourseProgress } from "@/hooks/use-course-progress";
 
 export default function TeachingLab() {
   const navigate = useNavigate();
