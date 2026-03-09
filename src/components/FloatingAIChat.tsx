@@ -65,16 +65,6 @@ export default function FloatingAIChat() {
       {/* Unread nudge bubble */}
       <AnimatePresence>
         {hasUnread && !open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8, x: 10 }}
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            exit={{ opacity: 0, scale: 0.8, x: 10 }}
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            className="fixed bottom-[4.5rem] right-4 z-50 max-w-[11rem] px-2.5 py-1.5 rounded-xl rounded-br-sm bg-primary text-primary-foreground text-[10px] shadow-lg cursor-pointer"
-            onClick={() => { setOpen(true); setHasUnread(false); }}
-          >
-            {greeting}
-          </motion.div>
         )}
       </AnimatePresence>
 
