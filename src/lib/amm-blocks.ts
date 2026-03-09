@@ -228,6 +228,8 @@ export function getAMMBlocksByCategory(): Record<AMMBlockCategory, Record<string
     modifier: {},
     conditional: {},
     fee: {},
+    multiasset: {},
+    timevar: {},
   };
   for (const block of AMM_BLOCK_DEFINITIONS) {
     if (!grouped[block.category][block.subcategory]) {
