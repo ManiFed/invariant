@@ -526,6 +526,8 @@ export const COURSE_MODULES: CourseModule[] = [
           "The key question for LPs: do the fees earned exceed the impermanent loss suffered?",
         ],
         visual: "fees-diagram",
+        miniSim: "fee-calculator",
+        highlightControls: ["feeRate"],
       },
       {
         type: "quiz",
