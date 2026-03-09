@@ -147,16 +147,18 @@ export default function CompilerLab({ embedded = false }: { embedded?: boolean }
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT COMPILER</span>
-        </div>
-        <ThemeToggle />
-      </header>
+    <div className={`${embedded ? "" : "min-h-screen"} bg-background flex-1`}>
+      {!embedded && (
+        <header className="border-b border-border px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate("/labs")} className="text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-bold text-foreground tracking-tight">INVARIANT COMPILER</span>
+          </div>
+          <ThemeToggle />
+        </header>
+      )}
 
       {/* ── Pipeline Stepper ── */}
       <div className="border-b border-border bg-card">
