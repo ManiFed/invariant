@@ -7,8 +7,8 @@ import {
   Map,
   Fingerprint,
   Radio,
-  Wifi,
-  HardDrive,
+  User,
+  Settings2,
   Loader2,
   FlaskConical,
   Radar,
@@ -79,11 +79,10 @@ type Experiment = {
   scoreHistory: number[];
 };
 
-const SYNC_BADGE: Record<SyncMode, { icon: typeof Wifi; label: string; className: string }> = {
-  live: { icon: Wifi, label: "LIVE SYNC", className: "bg-chart-1/5 border-chart-1/20 text-chart-1" },
-  persisted: { icon: HardDrive, label: "PERSISTENT", className: "bg-chart-4/5 border-chart-4/20 text-chart-4" },
-  memory: { icon: HardDrive, label: "LOCAL", className: "bg-secondary border-border text-muted-foreground" },
-  loading: { icon: Loader2, label: "CONNECTING", className: "bg-secondary border-border text-muted-foreground" },
+const SYNC_BADGE: Record<SyncMode, { icon: typeof User; label: string; className: string }> = {
+  local: { icon: User, label: "PERSONAL RUNNING", className: "bg-chart-4/5 border-chart-4/20 text-chart-4" },
+  "local-paused": { icon: User, label: "PERSONAL PAUSED", className: "bg-secondary border-border text-muted-foreground" },
+  loading: { icon: Loader2, label: "RESTORING", className: "bg-secondary border-border text-muted-foreground" },
 };
 
 const scoreForObjective = (candidate: Candidate, objective: ObjectiveType): number => {
@@ -123,9 +122,11 @@ const DiscoveryAtlas = () => {
     selectCandidate,
     clearSelection,
     syncMode,
-    role,
     togglePersistence,
     ingestExperimentCandidates,
+    settings,
+    updateLocalSettings,
+    maxArchiveLimit,
   } = useDiscoveryEngine();
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [geometrySubview, setGeometrySubview] = useState<GeometrySubview>("observatory");
@@ -302,7 +303,7 @@ const DiscoveryAtlas = () => {
   const detailCandidate = activeView === "detail" ? selectedCandidate || detailCandidateRef.current : selectedCandidate;
   const badge = SYNC_BADGE[syncMode];
   const BadgeIcon = badge.icon;
-  const canToggle = syncMode === "persisted" || syncMode === "memory" || syncMode === "live";
+  const canToggle = syncMode !== "loading";
 
   const contributors = useMemo(
     () => ["all", ...new Set(state.archive.map((candidate) => candidate.contributor).filter(Boolean) as string[])],
@@ -361,11 +362,9 @@ const DiscoveryAtlas = () => {
               onClick={togglePersistence}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${badge.className}`}
               title={
-                syncMode === "live"
-                  ? "Cloud stream is shared globally and updates in real time."
-                  : syncMode === "persisted"
-                    ? "Saving to IndexedDB. Click to switch to in-memory."
-                    : "In-memory only. Click to enable persistence."
+                syncMode === "local"
+                  ? "Your private discovery engine is running and auto-saving to localStorage."
+                  : "Your local archive is paused. Click to resume discovery."
               }
             >
               <BadgeIcon className="w-3 h-3" />
@@ -379,7 +378,7 @@ const DiscoveryAtlas = () => {
           )}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-success/5 border border-success/20">
             <Radio className="w-3 h-3 text-success animate-pulse" />
-            <span className="text-[9px] font-medium text-success">LIVE</span>
+            <span className="text-[9px] font-medium text-success">LOCAL ONLY</span>
           </div>
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary border border-border">
             <span className="text-[9px] font-mono text-muted-foreground">
@@ -392,6 +391,24 @@ const DiscoveryAtlas = () => {
               <span className="text-[9px] font-mono text-muted-foreground">{genRate} gen/s</span>
             </div>
           )}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary border border-border">
+            <Settings2 className="w-3 h-3 text-muted-foreground" />
+            <label className="text-[9px] font-mono text-muted-foreground">Archive cap</label>
+            <input
+              type="number"
+              min={500}
+              max={maxArchiveLimit}
+              step={100}
+              value={settings.archiveLimit}
+              onChange={(event) => {
+                const nextLimit = Number(event.target.value);
+                if (Number.isFinite(nextLimit)) {
+                  updateLocalSettings({ archiveLimit: nextLimit });
+                }
+              }}
+              className="w-20 px-1 py-0.5 text-[9px] rounded border border-border bg-background"
+            />
+          </div>
           <ThemeToggle />
         </div>
       </header>

@@ -10,45 +10,29 @@ import {
   runGeneration,
   learnMlRecommendation,
   normalizeBins,
-  NUM_BINS,
-  TOTAL_LIQUIDITY,
 } from "@/lib/discovery-engine";
-import {
-  loadAtlasState,
-  triggerGeneration,
-  backupAtlasState,
-} from "@/lib/atlas-cloud";
-import {
-  AtlasSync,
-  buildPopulationsFromArchive,
-  type SyncRole,
-  type RemoteStateExtras,
-} from "@/lib/atlas-sync";
-import {
-  saveAtlasState,
-  loadAtlasStateFromDB,
-} from "@/lib/atlas-persistence";
 
-const LOCAL_ARCHIVE_LIMIT = 5000;
-const CLOUD_ARCHIVE_LIMIT = 5000;
+const LOCAL_ARCHIVE_LIMIT = 20000;
+const DEFAULT_CUSTOM_ARCHIVE_LIMIT = 12000;
 const TICK_INTERVAL = 35;
-const PERSIST_INTERVAL = 3000;
-const CLOUD_KEEPALIVE_INTERVAL = 45000;
-const CLOUD_BACKUP_INTERVAL = 60000; // Backup to cloud every 60s
-const CLOUD_STALE_AFTER_MS = 90000;
+const PERSIST_INTERVAL = 1500;
 const REGIME_CYCLE: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
+const LOCAL_STATE_KEY = "atlas-discovery-local-state-v1";
+const LOCAL_SETTINGS_KEY = "atlas-discovery-local-settings-v1";
 
-function clampArchive<T>(archive: T[], limit = LOCAL_ARCHIVE_LIMIT): T[] {
+type LocalDiscoverySettings = {
+  archiveLimit: number;
+  autoRun: boolean;
+};
+
+const DEFAULT_SETTINGS: LocalDiscoverySettings = {
+  archiveLimit: DEFAULT_CUSTOM_ARCHIVE_LIMIT,
+  autoRun: true,
+};
+
+function clampArchive<T>(archive: T[], limit: number): T[] {
   if (archive.length <= limit) return archive;
   return archive.slice(-limit);
-}
-
-function normalizeLoadedState(next: EngineState): EngineState {
-  return {
-    ...next,
-    archive: clampArchive(next.archive),
-    activityLog: next.activityLog.slice(-200),
-  };
 }
 
 function hasRecoverableState(next: EngineState | null | undefined): next is EngineState {
@@ -62,7 +46,109 @@ function hasRecoverableState(next: EngineState | null | undefined): next is Engi
   });
 }
 
-export type SyncMode = "live" | "persisted" | "memory" | "loading";
+function loadSettings(): LocalDiscoverySettings {
+  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<LocalDiscoverySettings>;
+    const archiveLimit = Math.min(LOCAL_ARCHIVE_LIMIT, Math.max(500, Number(parsed.archiveLimit ?? DEFAULT_CUSTOM_ARCHIVE_LIMIT)));
+    return {
+      archiveLimit,
+      autoRun: parsed.autoRun ?? true,
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+function saveSettings(settings: LocalDiscoverySettings) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function serializeState(state: EngineState, archiveLimit: number) {
+  return JSON.stringify({
+    ...state,
+    archive: clampArchive(state.archive, archiveLimit).map((candidate) => ({
+      ...candidate,
+      bins: Array.from(candidate.bins),
+    })),
+    populations: {
+      "low-vol": {
+        ...state.populations["low-vol"],
+        candidates: state.populations["low-vol"].candidates.map((candidate) => ({ ...candidate, bins: Array.from(candidate.bins) })),
+        champion: state.populations["low-vol"].champion ? { ...state.populations["low-vol"].champion, bins: Array.from(state.populations["low-vol"].champion.bins) } : null,
+        metricChampions: Object.fromEntries(Object.entries(state.populations["low-vol"].metricChampions).map(([key, value]) => [key, value ? { ...value, bins: Array.from(value.bins) } : null])),
+      },
+      "high-vol": {
+        ...state.populations["high-vol"],
+        candidates: state.populations["high-vol"].candidates.map((candidate) => ({ ...candidate, bins: Array.from(candidate.bins) })),
+        champion: state.populations["high-vol"].champion ? { ...state.populations["high-vol"].champion, bins: Array.from(state.populations["high-vol"].champion.bins) } : null,
+        metricChampions: Object.fromEntries(Object.entries(state.populations["high-vol"].metricChampions).map(([key, value]) => [key, value ? { ...value, bins: Array.from(value.bins) } : null])),
+      },
+      "jump-diffusion": {
+        ...state.populations["jump-diffusion"],
+        candidates: state.populations["jump-diffusion"].candidates.map((candidate) => ({ ...candidate, bins: Array.from(candidate.bins) })),
+        champion: state.populations["jump-diffusion"].champion ? { ...state.populations["jump-diffusion"].champion, bins: Array.from(state.populations["jump-diffusion"].champion.bins) } : null,
+        metricChampions: Object.fromEntries(Object.entries(state.populations["jump-diffusion"].metricChampions).map(([key, value]) => [key, value ? { ...value, bins: Array.from(value.bins) } : null])),
+      },
+      "regime-shift": {
+        ...state.populations["regime-shift"],
+        candidates: state.populations["regime-shift"].candidates.map((candidate) => ({ ...candidate, bins: Array.from(candidate.bins) })),
+        champion: state.populations["regime-shift"].champion ? { ...state.populations["regime-shift"].champion, bins: Array.from(state.populations["regime-shift"].champion.bins) } : null,
+        metricChampions: Object.fromEntries(Object.entries(state.populations["regime-shift"].metricChampions).map(([key, value]) => [key, value ? { ...value, bins: Array.from(value.bins) } : null])),
+      },
+    },
+  });
+}
+
+function deserializeCandidate(candidate: any): Candidate {
+  return {
+    ...candidate,
+    bins: new Float64Array(candidate.bins ?? []),
+  };
+}
+
+function deserializeState(raw: string, archiveLimit: number): EngineState | null {
+  try {
+    const parsed = JSON.parse(raw);
+    const regimes: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
+    const populations = Object.fromEntries(
+      regimes.map((regimeId) => {
+        const pop = parsed.populations?.[regimeId];
+        if (!pop) {
+          return [regimeId, createInitialState().populations[regimeId]];
+        }
+        const metricChampions = Object.fromEntries(
+          Object.entries(pop.metricChampions ?? {}).map(([key, value]) => [key, value ? deserializeCandidate(value) : null]),
+        );
+        return [
+          regimeId,
+          {
+            ...pop,
+            candidates: (pop.candidates ?? []).map(deserializeCandidate),
+            champion: pop.champion ? deserializeCandidate(pop.champion) : null,
+            metricChampions,
+          },
+        ];
+      }),
+    ) as EngineState["populations"];
+
+    return {
+      populations,
+      archive: clampArchive((parsed.archive ?? []).map(deserializeCandidate), archiveLimit),
+      activityLog: (parsed.activityLog ?? []).slice(-200),
+      running: true,
+      totalGenerations: parsed.totalGenerations ?? 0,
+      archiveSize: undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export type SyncMode = "local" | "local-paused" | "loading";
 
 export function useDiscoveryEngine() {
   const [state, setState] = useState<EngineState>(() => ({
@@ -70,28 +156,18 @@ export function useDiscoveryEngine() {
     running: true,
   }));
   const [syncMode, setSyncMode] = useState<SyncMode>("loading");
-  const [role, setRole] = useState<SyncRole>("leader");
+  const [settings, setSettings] = useState<LocalDiscoverySettings>(() => loadSettings());
   const runningRef = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const unsubscribeCloudRef = useRef<(() => void) | null>(null);
-  const keepaliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const cloudBackupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const generationPulseRef = useRef<number>(Date.now());
-  const generationInFlightRef = useRef(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const initRef = useRef(false);
   const tickActiveRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const syncRef = useRef<AtlasSync | null>(null);
-  const roleRef = useRef(role);
-  roleRef.current = role;
-
-  // ─── Local engine tick (only runs when role === "leader") ─────────────────
 
   const tick = useCallback(() => {
-    if (!runningRef.current || roleRef.current !== "leader") return;
+    if (!runningRef.current) return;
 
     setState(prev => {
       const regimeIdx = prev.totalGenerations % REGIME_CYCLE.length;
@@ -111,7 +187,7 @@ export function useDiscoveryEngine() {
 
       const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig, { recommendation });
 
-      const newArchive = clampArchive([...prev.archive, ...newCandidates]);
+      const newArchive = clampArchive([...prev.archive, ...newCandidates], settings.archiveLimit);
 
       return {
         ...prev,
@@ -119,22 +195,19 @@ export function useDiscoveryEngine() {
         archive: newArchive,
         activityLog: [...prev.activityLog, ...events].slice(-200),
         totalGenerations: prev.totalGenerations + 1,
-        // Leader always shows own archive.length
         archiveSize: undefined,
       };
     });
 
     timeoutRef.current = setTimeout(tick, TICK_INTERVAL);
-  }, []);
-
-  // ─── Tick start/stop helpers ──────────────────────────────────────────────
+  }, [settings.archiveLimit]);
 
   const startTick = useCallback(() => {
-    if (tickActiveRef.current) return;
+    if (tickActiveRef.current || !settings.autoRun) return;
     tickActiveRef.current = true;
     runningRef.current = true;
     tick();
-  }, [tick]);
+  }, [settings.autoRun, tick]);
 
   const stopTick = useCallback(() => {
     tickActiveRef.current = false;
@@ -145,159 +218,53 @@ export function useDiscoveryEngine() {
     }
   }, []);
 
-  // ─── Initialization: Realtime channel → IndexedDB → Fresh start ────────────
-
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
 
-    let cancelled = false;
-
-    const refreshFromCloud = async () => {
-      const { state: cloudState } = await loadAtlasState();
-      if (cancelled || !cloudState) return;
-      setState(normalizeLoadedState(cloudState));
-    };
-
-    (async () => {
-      // 1. Try cross-tab BroadcastChannel sync
-      const sync = new AtlasSync(
-        () => stateRef.current,
-        // onRemoteState: adopt the leader's state
-        (archive, totalGenerations, extras: RemoteStateExtras) => {
-          setState(prev => {
-            // Filter out any malformed candidates before processing
-            const safeArchive = archive.filter(c => c != null && typeof c.score === "number" && Number.isFinite(c.score));
-            const trimmedArchive = clampArchive(safeArchive);
-            const populations = buildPopulationsFromArchive(trimmedArchive, extras.populationInfo);
-            return {
-              ...prev,
-              archive: trimmedArchive,
-              populations,
-              totalGenerations,
-              activityLog: extras.activityLog.slice(-200),
-              archiveSize: extras.archiveSize,
-            };
-          });
-        },
-        // onRoleChange: sync layer detected a role transition
-        (newRole: SyncRole) => {
-          setRole(newRole);
-        },
-        // onLeaderGoodbye: new leader should immediately save state
-        () => {
-          // Immediately persist when we get promoted from a goodbye
-          void saveAtlasState(stateRef.current);
-          void backupAtlasState(stateRef.current);
-        },
-      );
-      syncRef.current = sync;
-
-      const { receivedState, role: initialRole } = await sync.connect();
-      if (cancelled) { sync.cleanup(); return; }
-
-      if (sync.connected) {
-        setRole(initialRole);
-        setSyncMode("live");
-
-        // If no peer responded, recover from cloud first, then IndexedDB.
-        if (!receivedState) {
-          const { state: cloudState } = await loadAtlasState();
-          const persistedState = await loadAtlasStateFromDB();
-          if (!cancelled) {
-            const pickedState = (() => {
-              if (cloudState && persistedState) {
-                return cloudState.totalGenerations >= persistedState.totalGenerations ? cloudState : persistedState;
-              }
-              return cloudState || persistedState;
-            })();
-
-            if (hasRecoverableState(pickedState)) {
-              setState(normalizeLoadedState(pickedState));
-            }
-          }
-        }
-
-        keepaliveIntervalRef.current = setInterval(() => {
-          if (cancelled || roleRef.current !== "leader") return;
-
-          const staleFor = Date.now() - generationPulseRef.current;
-          if (staleFor > CLOUD_STALE_AFTER_MS) {
-            void refreshFromCloud();
-            void triggerGeneration();
-          }
-        }, CLOUD_KEEPALIVE_INTERVAL);
-
-        return;
+    const raw = window.localStorage.getItem(LOCAL_STATE_KEY);
+    if (raw) {
+      const recovered = deserializeState(raw, settings.archiveLimit);
+      if (hasRecoverableState(recovered)) {
+        setState(recovered);
       }
+    }
 
-      // 2. Realtime unavailable — fall back to IndexedDB (always leader locally)
-      setRole("leader");
-      const persistedState = await loadAtlasStateFromDB();
-      if (!cancelled && hasRecoverableState(persistedState)) {
-        setState(normalizeLoadedState(persistedState));
+    setSyncMode(settings.autoRun ? "local" : "local-paused");
+
+    const flushNow = () => {
+      try {
+        window.localStorage.setItem(LOCAL_STATE_KEY, serializeState(stateRef.current, settings.archiveLimit));
+      } catch (error) {
+        console.warn("Failed to save local discovery state", error);
       }
-      setSyncMode("persisted");
-    })();
-
-    return () => {
-      cancelled = true;
-      // Send goodbye so followers promote instantly
-      syncRef.current?.sendGoodbye();
-      unsubscribeCloudRef.current?.();
-      if (keepaliveIntervalRef.current) clearInterval(keepaliveIntervalRef.current);
-      if (cloudBackupIntervalRef.current) clearInterval(cloudBackupIntervalRef.current);
-      // Final backup on teardown
-      void saveAtlasState(stateRef.current);
-      void backupAtlasState(stateRef.current);
-      syncRef.current?.cleanup();
-      syncRef.current = null;
     };
-  }, []);
-
-  useEffect(() => {
-    if (syncMode !== "live") return;
-
-    const backupNow = () => {
-      if (roleRef.current !== "leader") return;
-      void backupAtlasState(stateRef.current);
-    };
-
-    // Initial backup right away
-    backupNow();
-    cloudBackupIntervalRef.current = setInterval(backupNow, CLOUD_BACKUP_INTERVAL);
 
     const onBeforeUnload = () => {
-      // Send goodbye broadcast for instant follower promotion
-      syncRef.current?.sendGoodbye();
-      // Final backup
-      backupNow();
-      void saveAtlasState(stateRef.current);
+      flushNow();
     };
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        backupNow();
-        void saveAtlasState(stateRef.current);
-      }
+      if (document.visibilityState === "hidden") flushNow();
     };
 
     window.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("beforeunload", onBeforeUnload);
 
     return () => {
-      if (cloudBackupIntervalRef.current) clearInterval(cloudBackupIntervalRef.current);
       window.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("beforeunload", onBeforeUnload);
-      backupNow();
+      flushNow();
     };
-  }, [syncMode, role]);
+  }, [settings.archiveLimit, settings.autoRun]);
 
   useEffect(() => {
-    if (syncMode === "loading" || syncMode === "memory") return;
-
     const persist = () => {
-      saveAtlasState(stateRef.current);
+      try {
+        window.localStorage.setItem(LOCAL_STATE_KEY, serializeState(stateRef.current, settings.archiveLimit));
+      } catch (error) {
+        console.warn("Failed to save local discovery state", error);
+      }
     };
 
     persist();
@@ -305,11 +272,24 @@ export function useDiscoveryEngine() {
 
     return () => {
       if (persistIntervalRef.current) clearInterval(persistIntervalRef.current);
-      saveAtlasState(stateRef.current);
+      persist();
     };
-  }, [syncMode]);
+  }, [settings.archiveLimit]);
 
-  // ─── Fork seed injection from Library ─────────────────────────────────────
+  useEffect(() => {
+    if (syncMode === "loading") return;
+    if (settings.autoRun) {
+      setSyncMode("local");
+      startTick();
+    } else {
+      setSyncMode("local-paused");
+      stopTick();
+    }
+
+    return () => {
+      stopTick();
+    };
+  }, [settings.autoRun, startTick, stopTick, syncMode]);
 
   useEffect(() => {
     if (syncMode === "loading") return;
@@ -370,30 +350,24 @@ export function useDiscoveryEngine() {
     }
   }, [syncMode]);
 
-  // ─── Start/stop engine based on sync mode and role ────────────────────────
-
-  useEffect(() => {
-    if (syncMode === "loading") return;
-
-    if (role === "leader") {
-      startTick();
-    } else {
-      stopTick();
-    }
-
-    return () => {
-      stopTick();
-    };
-  }, [syncMode, role, startTick, stopTick]);
+  const updateLocalSettings = useCallback((next: Partial<LocalDiscoverySettings>) => {
+    setSettings(prev => {
+      const merged = {
+        ...prev,
+        ...next,
+      };
+      const normalized = {
+        archiveLimit: Math.min(LOCAL_ARCHIVE_LIMIT, Math.max(500, merged.archiveLimit)),
+        autoRun: merged.autoRun,
+      };
+      saveSettings(normalized);
+      return normalized;
+    });
+  }, []);
 
   const togglePersistence = useCallback(() => {
-    if (syncMode === "live") return;
-    setSyncMode(prev => {
-      if (prev === "persisted") return "memory";
-      if (prev === "memory") return "persisted";
-      return prev;
-    });
-  }, [syncMode]);
+    updateLocalSettings({ autoRun: !settings.autoRun });
+  }, [settings.autoRun, updateLocalSettings]);
 
   const selectCandidate = useCallback((id: string) => {
     setState(currentState => {
@@ -414,12 +388,11 @@ export function useDiscoveryEngine() {
     });
   }, []);
 
-
   const ingestExperimentCandidates = useCallback((candidates: Candidate[], note?: string) => {
     if (candidates.length === 0) return;
 
     setState(prev => {
-      const archive = clampArchive([...prev.archive, ...candidates]);
+      const archive = clampArchive([...prev.archive, ...candidates], settings.archiveLimit);
 
       const activityLog = [
         ...prev.activityLog,
@@ -438,7 +411,7 @@ export function useDiscoveryEngine() {
         activityLog,
       };
     });
-  }, []);
+  }, [settings.archiveLimit]);
 
   const clearSelection = useCallback(() => {
     setSelectedCandidate(null);
@@ -450,8 +423,11 @@ export function useDiscoveryEngine() {
     selectCandidate,
     clearSelection,
     syncMode,
-    role,
+    role: "solo" as const,
     togglePersistence,
     ingestExperimentCandidates,
+    settings,
+    updateLocalSettings,
+    maxArchiveLimit: LOCAL_ARCHIVE_LIMIT,
   };
 }
