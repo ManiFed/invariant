@@ -1,13 +1,13 @@
-import { useMemo, useEffect } from "react";
+import { useEffect } from "react";
 import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, ExternalLink, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, List } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area,
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
-import { documentationSections, type DocSubsection } from "@/lib/documentation-content";
+import { documentationSections } from "@/lib/documentation-content";
 import { useState } from "react";
 
 // ── Interactive Widgets ──
@@ -248,8 +248,9 @@ export default function DocsSection() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 sm:px-8 py-10">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+    <div className="mx-auto w-full max-w-7xl px-6 sm:px-8 py-10">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-10">
+        <article>
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-6">
           <Link to="/docs" className="hover:text-foreground transition-colors">Docs</Link>
@@ -257,19 +258,10 @@ export default function DocsSection() {
           <span className="text-foreground font-medium">{section.title}</span>
         </div>
 
-        <h1 className="text-2xl font-bold text-foreground mb-8 border-b border-border pb-3">
+        <h1 className="text-4xl font-bold text-foreground mb-3">
           {section.title}
         </h1>
-
-        {/* Mobile search */}
-        <div className="lg:hidden mb-6 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search documentation..."
-            className="w-full pl-8 pr-3 py-2 text-xs bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
+        <p className="text-muted-foreground mb-8 text-base">Comprehensive guide and reference details for this chapter.</p>
 
         {/* Subsections */}
         <div className="space-y-10">
@@ -282,7 +274,7 @@ export default function DocsSection() {
               viewport={{ once: true }}
               transition={{ delay: 0.03 }}
             >
-              <h3 className="text-sm font-bold text-foreground mb-2">{sub.title}</h3>
+              <h2 className="text-2xl font-semibold text-foreground mb-3">{sub.title}</h2>
               {sub.tip && (
                 <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-3 text-xs text-primary">
                   💡 {sub.tip}
@@ -326,6 +318,26 @@ export default function DocsSection() {
             <div />
           )}
         </div>
+        </article>
+
+        <aside className="hidden xl:block">
+          <div className="sticky top-28">
+            <h3 className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+              <List className="w-3.5 h-3.5" /> On this page
+            </h3>
+            <nav className="space-y-2 border-l border-border pl-4">
+              {section.subsections.map((sub) => (
+                <a
+                  key={sub.id}
+                  href={`#${sub.id}`}
+                  className="block text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {sub.title}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </aside>
       </motion.div>
     </div>
   );
