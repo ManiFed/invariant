@@ -51,6 +51,7 @@ const App = () => (
             <Route path="/docs" element={<DocsLayout />}>
               <Route index element={<DocsIndex />} />
               <Route path=":sectionId" element={<DocsSection />} />
+              <Route path=":sectionId/:subsectionId" element={<DocsSection />} />
             </Route>
             {/* Legacy redirect */}
             <Route path="/documentation" element={<Navigate to="/docs" replace />} />
