@@ -23,11 +23,19 @@ const LOCAL_SETTINGS_KEY = "atlas-discovery-local-settings-v1";
 type LocalDiscoverySettings = {
   archiveLimit: number;
   autoRun: boolean;
+  tickIntervalMs: number;
+  regimeMode: "cycle" | "focus";
+  focusRegime: RegimeId;
+  mlMode: "off" | "balanced" | "aggressive";
 };
 
 const DEFAULT_SETTINGS: LocalDiscoverySettings = {
   archiveLimit: DEFAULT_CUSTOM_ARCHIVE_LIMIT,
   autoRun: true,
+  tickIntervalMs: TICK_INTERVAL,
+  regimeMode: "cycle",
+  focusRegime: "low-vol",
+  mlMode: "balanced",
 };
 
 function clampArchive<T>(archive: T[], limit: number): T[] {
@@ -56,6 +64,10 @@ function loadSettings(): LocalDiscoverySettings {
     return {
       archiveLimit,
       autoRun: parsed.autoRun ?? true,
+      tickIntervalMs: Math.min(300, Math.max(15, Number(parsed.tickIntervalMs ?? TICK_INTERVAL))),
+      regimeMode: parsed.regimeMode === "focus" ? "focus" : "cycle",
+      focusRegime: REGIME_CYCLE.includes(parsed.focusRegime as RegimeId) ? (parsed.focusRegime as RegimeId) : "low-vol",
+      mlMode: parsed.mlMode === "off" || parsed.mlMode === "aggressive" ? parsed.mlMode : "balanced",
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -171,7 +183,7 @@ export function useDiscoveryEngine() {
 
     setState(prev => {
       const regimeIdx = prev.totalGenerations % REGIME_CYCLE.length;
-      const regimeId = REGIME_CYCLE[regimeIdx];
+      const regimeId = settings.regimeMode === "focus" ? settings.focusRegime : REGIME_CYCLE[regimeIdx];
       const regimeConfig = REGIMES.find(r => r.id === regimeId)!;
       const population = prev.populations[regimeId] ?? {
         regime: regimeId, candidates: [], champion: null,
@@ -183,9 +195,17 @@ export function useDiscoveryEngine() {
         ...population.candidates,
         ...prev.archive.filter((candidate) => candidate.regime === regimeId).slice(-120),
       ];
-      const recommendation = learnMlRecommendation(recommendationPool);
+      const recommendation = settings.mlMode === "off" ? null : learnMlRecommendation(recommendationPool);
+      const adjustedRecommendation =
+        settings.mlMode === "aggressive" && recommendation
+          ? { ...recommendation, confidence: Math.min(1, recommendation.confidence + 0.25) }
+          : recommendation;
 
-      const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig, { recommendation });
+      const { newPopulation, newCandidates, events } = runGeneration(population, regimeConfig, {
+        recommendation: adjustedRecommendation,
+        guidanceProbabilityMultiplier: settings.mlMode === "aggressive" ? 1.35 : 1,
+        familySwitchProbabilityMultiplier: settings.mlMode === "aggressive" ? 1.25 : 1,
+      });
 
       const newArchive = clampArchive([...prev.archive, ...newCandidates], settings.archiveLimit);
 
@@ -199,8 +219,8 @@ export function useDiscoveryEngine() {
       };
     });
 
-    timeoutRef.current = setTimeout(tick, TICK_INTERVAL);
-  }, [settings.archiveLimit]);
+    timeoutRef.current = setTimeout(tick, settings.tickIntervalMs);
+  }, [settings.archiveLimit, settings.focusRegime, settings.mlMode, settings.regimeMode, settings.tickIntervalMs]);
 
   const startTick = useCallback(() => {
     if (tickActiveRef.current || !settings.autoRun) return;
@@ -359,6 +379,10 @@ export function useDiscoveryEngine() {
       const normalized = {
         archiveLimit: Math.min(LOCAL_ARCHIVE_LIMIT, Math.max(500, merged.archiveLimit)),
         autoRun: merged.autoRun,
+        tickIntervalMs: Math.min(300, Math.max(15, merged.tickIntervalMs)),
+        regimeMode: merged.regimeMode,
+        focusRegime: merged.focusRegime,
+        mlMode: merged.mlMode,
       };
       saveSettings(normalized);
       return normalized;
