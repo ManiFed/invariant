@@ -56,7 +56,7 @@ export default function DocsIndex() {
                 transition={{ delay: i * 0.04 }}
               >
                 <Link
-                  to={`/docs/${section.id}`}
+                  to={`/docs/${section.id}/${section.subsections[0]?.id}`}
                   className="block p-5 rounded-2xl border border-border hover:border-primary/40 bg-card hover:bg-secondary/40 transition-all group"
                 >
                   <div className="flex items-center gap-2 mb-2">

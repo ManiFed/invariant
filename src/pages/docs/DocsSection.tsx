@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ExternalLink, List } from "lucide-react";
 import {
@@ -8,7 +8,6 @@ import {
 } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { documentationSections } from "@/lib/documentation-content";
-import { useState } from "react";
 
 // ── Interactive Widgets ──
 
@@ -155,7 +154,7 @@ function CrossLinks({ links }: { links: { label: string; anchor: string }[] }) {
       {links.map((l) => (
         <Link
           key={l.anchor}
-          to={`/docs/math-reference#${l.anchor}`}
+          to={`/docs/math-reference/${l.anchor}`}
           className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full border border-primary/20 text-primary hover:bg-primary/10 transition-colors"
         >
           <ExternalLink className="w-2.5 h-2.5" /> {l.label}
@@ -217,8 +216,7 @@ function renderContent(content: string) {
 }
 
 export default function DocsSection() {
-  const { sectionId } = useParams();
-  const location = useLocation();
+  const { sectionId, subsectionId } = useParams();
   const navigate = useNavigate();
 
   const sectionIndex = documentationSections.findIndex((s) => s.id === sectionId);
@@ -226,15 +224,32 @@ export default function DocsSection() {
   const prevSection = sectionIndex > 0 ? documentationSections[sectionIndex - 1] : null;
   const nextSection = sectionIndex < documentationSections.length - 1 ? documentationSections[sectionIndex + 1] : null;
 
-  // Scroll to hash on mount
+  const activeSubsectionId = subsectionId ?? section?.subsections[0]?.id;
+  const activeSubsectionIndex = section
+    ? section.subsections.findIndex((sub) => sub.id === activeSubsectionId)
+    : -1;
+  const activeSubsection = section?.subsections[activeSubsectionIndex] ?? null;
+
+  const prevSubsection =
+    activeSubsectionIndex > 0 && section
+      ? section.subsections[activeSubsectionIndex - 1]
+      : null;
+  const nextSubsection =
+    section && activeSubsectionIndex > -1 && activeSubsectionIndex < section.subsections.length - 1
+      ? section.subsections[activeSubsectionIndex + 1]
+      : null;
+
+  const fallbackSubsectionId = useMemo(() => section?.subsections[0]?.id ?? "", [section]);
+
   useEffect(() => {
-    if (location.hash) {
-      const el = document.getElementById(location.hash.slice(1));
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [sectionId, activeSubsectionId]);
+
+  useEffect(() => {
+    if (section && !activeSubsection && fallbackSubsectionId) {
+      navigate(`/docs/${section.id}/${fallbackSubsectionId}`, { replace: true });
     }
-  }, [location]);
+  }, [section, activeSubsection, fallbackSubsectionId, navigate]);
 
   if (!section) {
     return (
@@ -263,53 +278,71 @@ export default function DocsSection() {
         </h1>
         <p className="text-muted-foreground mb-8 text-base">Comprehensive guide and reference details for this chapter.</p>
 
-        {/* Subsections */}
-        <div className="space-y-10">
-          {section.subsections.map((sub) => (
-            <motion.section
-              key={sub.id}
-              id={sub.id}
-              initial={{ opacity: 0, y: 8 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.03 }}
-            >
-              <h2 className="text-2xl font-semibold text-foreground mb-3">{sub.title}</h2>
-              {sub.tip && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-3 text-xs text-primary">
-                  💡 {sub.tip}
-                </div>
-              )}
-              <div className="prose-custom">{renderContent(sub.content)}</div>
-              {sub.interactive && <InteractiveWidget type={sub.interactive} />}
-              {sub.links && <CrossLinks links={sub.links} />}
-            </motion.section>
-          ))}
-        </div>
+        {activeSubsection && (
+          <motion.section
+            key={activeSubsection.id}
+            id={activeSubsection.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <h2 className="text-2xl font-semibold text-foreground mb-3">{activeSubsection.title}</h2>
+            {activeSubsection.tip && (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-3 text-xs text-primary">
+                💡 {activeSubsection.tip}
+              </div>
+            )}
+            <div className="prose-custom">{renderContent(activeSubsection.content)}</div>
+            {activeSubsection.interactive && <InteractiveWidget type={activeSubsection.interactive} />}
+            {activeSubsection.links && <CrossLinks links={activeSubsection.links} />}
+          </motion.section>
+        )}
 
         {/* Prev/Next navigation */}
         <div className="flex items-center justify-between mt-12 pt-6 border-t border-border">
-          {prevSection ? (
+          {prevSubsection ? (
             <Link
-              to={`/docs/${prevSection.id}`}
+              to={`/docs/${section.id}/${prevSubsection.id}`}
               className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group"
             >
               <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
               <div>
                 <div className="text-[9px] text-muted-foreground">Previous</div>
+                <div className="font-medium text-foreground">{prevSubsection.title}</div>
+              </div>
+            </Link>
+          ) : prevSection ? (
+            <Link
+              to={`/docs/${prevSection.id}/${prevSection.subsections[prevSection.subsections.length - 1]?.id}`}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+              <div>
+                <div className="text-[9px] text-muted-foreground">Previous chapter</div>
                 <div className="font-medium text-foreground">{prevSection.title}</div>
               </div>
             </Link>
           ) : (
             <div />
           )}
-          {nextSection ? (
+          {nextSubsection ? (
             <Link
-              to={`/docs/${nextSection.id}`}
+              to={`/docs/${section.id}/${nextSubsection.id}`}
               className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group text-right"
             >
               <div>
                 <div className="text-[9px] text-muted-foreground">Next</div>
+                <div className="font-medium text-foreground">{nextSubsection.title}</div>
+              </div>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+          ) : nextSection ? (
+            <Link
+              to={`/docs/${nextSection.id}/${nextSection.subsections[0]?.id}`}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group text-right"
+            >
+              <div>
+                <div className="text-[9px] text-muted-foreground">Next chapter</div>
                 <div className="font-medium text-foreground">{nextSection.title}</div>
               </div>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
@@ -327,13 +360,13 @@ export default function DocsSection() {
             </h3>
             <nav className="space-y-2 border-l border-border pl-4">
               {section.subsections.map((sub) => (
-                <a
+                <Link
                   key={sub.id}
-                  href={`#${sub.id}`}
-                  className="block text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  to={`/docs/${section.id}/${sub.id}`}
+                  className={`block text-sm transition-colors ${activeSubsectionId === sub.id ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   {sub.title}
-                </a>
+                </Link>
               ))}
             </nav>
           </div>

@@ -7,7 +7,7 @@ import { documentationSections } from "@/lib/documentation-content";
 
 export default function DocsLayout() {
   const navigate = useNavigate();
-  const { sectionId } = useParams();
+  const { sectionId, subsectionId } = useParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(documentationSections.map((s) => s.id))
@@ -32,6 +32,8 @@ export default function DocsLayout() {
           )
       )
     : documentationSections;
+
+  const activeSection = documentationSections.find((s) => s.id === sectionId);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -63,41 +65,10 @@ export default function DocsLayout() {
 
           <ThemeToggle />
         </div>
-
-        <div className="border-t border-border/70 px-4 sm:px-6">
-          <div className="flex overflow-x-auto scrollbar-none gap-5 py-2 text-sm">
-            <NavLink
-              to="/docs"
-              end
-              className={({ isActive }) =>
-                `whitespace-nowrap border-b-2 pb-2 transition-colors ${
-                  isActive ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-                }`
-              }
-            >
-              Welcome
-            </NavLink>
-            {documentationSections.map((section) => (
-              <NavLink
-                key={section.id}
-                to={`/docs/${section.id}`}
-                className={({ isActive }) =>
-                  `whitespace-nowrap border-b-2 pb-2 transition-colors ${
-                    isActive || sectionId === section.id
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`
-                }
-              >
-                {section.title}
-              </NavLink>
-            ))}
-          </div>
-        </div>
       </header>
 
       <div className="flex">
-        <aside className="hidden lg:flex w-80 border-r border-border/70 sticky top-[89px] h-[calc(100vh-89px)] flex-col bg-background/60">
+        <aside className="hidden lg:flex w-80 border-r border-border/70 sticky top-14 h-[calc(100vh-56px)] flex-col bg-background/60">
           <div className="p-3 border-b border-border">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
@@ -111,7 +82,7 @@ export default function DocsLayout() {
             </div>
           </div>
           <ScrollArea className="flex-1 p-3">
-            <nav className="space-y-1">
+            <nav className="space-y-1.5">
               <NavLink
                 to="/docs"
                 end
@@ -126,8 +97,12 @@ export default function DocsLayout() {
                 Overview
               </NavLink>
 
+              <div className="px-2.5 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Chapters</p>
+              </div>
+
               {filteredSections.map((section) => (
-                <div key={section.id}>
+                <div key={section.id} className="rounded-lg">
                   <div className="flex items-center">
                     <button
                       onClick={() => toggleSection(section.id)}
@@ -140,10 +115,10 @@ export default function DocsLayout() {
                       />
                     </button>
                     <NavLink
-                      to={`/docs/${section.id}`}
+                      to={`/docs/${section.id}/${section.subsections[0].id}`}
                       className={({ isActive }) =>
                         `flex-1 text-xs font-semibold py-1.5 transition-colors truncate ${
-                          isActive
+                          isActive || sectionId === section.id
                             ? "text-primary"
                             : "text-foreground hover:text-primary"
                         }`
@@ -153,12 +128,18 @@ export default function DocsLayout() {
                     </NavLink>
                   </div>
                   {expandedSections.has(section.id) && (
-                    <div className="ml-6 space-y-0.5 mb-1">
+                    <div className="ml-6 space-y-0.5 mb-1 overflow-hidden transition-all duration-200 ease-out">
                       {section.subsections.map((sub) => (
                         <NavLink
                           key={sub.id}
-                          to={`/docs/${section.id}#${sub.id}`}
-                          className="block text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5 truncate"
+                          to={`/docs/${section.id}/${sub.id}`}
+                          className={({ isActive }) =>
+                            `block rounded-md px-2 py-1 text-[11px] truncate transition-colors ${
+                              isActive || subsectionId === sub.id
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                            }`
+                          }
                         >
                           {sub.title}
                         </NavLink>
@@ -167,6 +148,31 @@ export default function DocsLayout() {
                   )}
                 </div>
               ))}
+
+              {activeSection && (
+                <div className="px-2.5 pt-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                    In this chapter
+                  </p>
+                  <div className="space-y-1">
+                    {activeSection.subsections.map((sub) => (
+                      <NavLink
+                        key={sub.id}
+                        to={`/docs/${activeSection.id}/${sub.id}`}
+                        className={({ isActive }) =>
+                          `block rounded-md px-2 py-1 text-[11px] transition-colors ${
+                            isActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                          }`
+                        }
+                      >
+                        {sub.title}
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              )}
             </nav>
           </ScrollArea>
         </aside>
