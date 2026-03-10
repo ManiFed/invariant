@@ -34,17 +34,17 @@ const SECTION_COLORS: Record<string, string> = {
 
 export default function DocsIndex() {
   return (
-    <div className="max-w-4xl mx-auto px-6 sm:px-8 py-10">
+    <div className="max-w-6xl mx-auto px-6 sm:px-8 py-10">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold text-foreground mb-2">
+        <h1 className="text-4xl font-bold text-foreground mb-2">
           Platform Documentation
         </h1>
-        <p className="text-sm text-muted-foreground mb-8 max-w-xl">
+        <p className="text-base text-muted-foreground mb-10 max-w-2xl">
           Comprehensive reference for every feature, formula, and tool in
           Invariant Studio. Select a section below to dive in.
         </p>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {documentationSections.map((section, i) => {
             const Icon = SECTION_ICONS[section.id] || Compass;
             const colorClass = SECTION_COLORS[section.id] || "text-primary";
@@ -56,8 +56,8 @@ export default function DocsIndex() {
                 transition={{ delay: i * 0.04 }}
               >
                 <Link
-                  to={`/docs/${section.id}`}
-                  className="block p-4 rounded-xl border border-border hover:border-primary/40 bg-card hover:bg-secondary/50 transition-all group"
+                  to={`/docs/${section.id}/${section.subsections[0]?.id}`}
+                  className="block p-5 rounded-2xl border border-border hover:border-primary/40 bg-card hover:bg-secondary/40 transition-all group"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <Icon className={`w-4 h-4 ${colorClass}`} />
