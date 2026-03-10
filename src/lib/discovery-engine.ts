@@ -872,12 +872,18 @@ function computeAdaptiveProfile(bins: Float64Array, params: Record<string, numbe
 export function runGeneration(
   population: PopulationState,
   regimeConfig: RegimeConfig,
-  options?: { recommendation?: MlRecommendation | null }
+  options?: {
+    recommendation?: MlRecommendation | null;
+    guidanceProbabilityMultiplier?: number;
+    familySwitchProbabilityMultiplier?: number;
+  }
 ): { newPopulation: PopulationState; newCandidates: Candidate[]; events: ActivityEntry[] } {
   const events: ActivityEntry[] = [];
   const gen = population.generation + 1;
   const allCandidates: Candidate[] = [];
   const recommendation = options?.recommendation;
+  const guidanceProbabilityMultiplier = Math.max(0, options?.guidanceProbabilityMultiplier ?? 1);
+  const familySwitchProbabilityMultiplier = Math.max(0, options?.familySwitchProbabilityMultiplier ?? 1);
   const guidanceEnabled = Boolean(recommendation && recommendation.confidence >= 0.2 && recommendation.weakestAxes.length > 0);
   const familyGuidanceEnabled = Boolean(recommendation && recommendation.confidence >= 0.25);
   const familyWeights = familyGuidanceEnabled ? recommendation?.familyWeights : undefined;
@@ -937,7 +943,8 @@ export function runGeneration(
       const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * adaptiveExplorationRate);
       for (let i = 0; i < numChildren; i++) {
         const parent = elites[i % elites.length];
-        const switchFamily = familyGuidanceEnabled && familyWeights && Math.random() < 0.35;
+        const switchFamily =
+          familyGuidanceEnabled && familyWeights && Math.random() < Math.min(1, 0.35 * familySwitchProbabilityMultiplier);
         const childFamily = switchFamily
           ? sampleFamilyByWeights(familyWeights)
           : (INVARIANT_FAMILIES.find((family) => family.id === parent.familyId) ?? INVARIANT_FAMILIES[0]);
@@ -946,7 +953,7 @@ export function runGeneration(
         if (switchFamily) {
           childBins = blendBins(childBins, parent.bins, 0.3);
         }
-        if (guidanceEnabled && recommendation && Math.random() < 0.65) {
+        if (guidanceEnabled && recommendation && Math.random() < Math.min(1, 0.65 * guidanceProbabilityMultiplier)) {
           const merged = blendBins(childBins, parent.bins, 0.35);
           childBins = mutateRemediateWeaknesses(merged, recommendation.weakestAxes, 0.08 + recommendation.confidence * 0.14);
           childBins = mutateAmplifyStrengths(childBins, recommendation.weakestAxes, 0.03 + recommendation.confidence * 0.05);

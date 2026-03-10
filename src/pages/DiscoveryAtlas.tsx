@@ -18,6 +18,8 @@ import {
   History,
   Target,
   Blend,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LiveDashboard from "@/components/labs/LiveDashboard";
@@ -40,6 +42,14 @@ type CompetitionSubview = "pareto" | "arena" | "replay";
 type ObjectiveType = "lp-value" | "slippage" | "balanced";
 type SearchStrategy = "genetic" | "cma-es" | "rl" | "bayesian" | "map-elites" | "random";
 type ObjectiveComposer = "weighted-sum" | "lexicographic" | "pareto" | "risk-adjusted" | "worst-case";
+type DiscoverTabId = Exclude<View, "detail">;
+
+type TabConfig = {
+  id: DiscoverTabId;
+  label: string;
+  icon?: typeof Map;
+  visible: boolean;
+};
 
 type ExperimentConfig = {
   contributor: string;
@@ -180,6 +190,18 @@ const DiscoveryAtlas = () => {
     source: "all",
     poolType: "all",
   });
+  const [layoutMode, setLayoutMode] = useState<"cozy" | "compact">("cozy");
+  const [tabLayout, setTabLayout] = useState<"top" | "left">("top");
+  const [showCustomization, setShowCustomization] = useState(false);
+  const [tabConfig, setTabConfig] = useState<TabConfig[]>([
+    { id: "dashboard", label: "Live Dashboard", visible: true },
+    { id: "competition", label: "Evolution", visible: true },
+    { id: "atlas", label: "Atlas Map", icon: Map, visible: true },
+    { id: "geometry", label: "Geometry & Families", visible: true },
+    { id: "experiments", label: "Experiments", visible: true },
+    { id: "finder", label: "Find My AMM", icon: Blend, visible: true },
+    { id: "methodology", label: "Methodology", visible: true },
+  ]);
   const detailCandidateRef = useRef(selectedCandidate);
 
   if (selectedCandidate) detailCandidateRef.current = selectedCandidate;
@@ -334,15 +356,25 @@ const DiscoveryAtlas = () => {
     [atlasFilters, state.archive],
   );
 
-  const tabs = [
-    { id: "dashboard" as const, label: "Live Dashboard" },
-    { id: "competition" as const, label: "Evolution" },
-    { id: "atlas" as const, label: "Atlas Map", icon: Map },
-    { id: "geometry" as const, label: "Geometry & Families" },
-    { id: "experiments" as const, label: "Experiments" },
-    { id: "finder" as const, label: "Find My AMM", icon: Blend },
-    { id: "methodology" as const, label: "Methodology" },
-  ];
+  const tabs = tabConfig.filter((tab) => tab.visible);
+
+  useEffect(() => {
+    const currentVisible = tabs.some((tab) => tab.id === activeView);
+    if (!currentVisible && activeView !== "detail") {
+      setActiveView(tabs[0]?.id ?? "dashboard");
+    }
+  }, [activeView, tabs]);
+
+  const moveTab = (index: number, direction: -1 | 1) => {
+    setTabConfig((prev) => {
+      const next = [...prev];
+      const swapIndex = index + direction;
+      if (swapIndex < 0 || swapIndex >= next.length) return prev;
+      const [item] = next.splice(index, 1);
+      next.splice(swapIndex, 0, item);
+      return next;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -409,12 +441,86 @@ const DiscoveryAtlas = () => {
               className="w-20 px-1 py-0.5 text-[9px] rounded border border-border bg-background"
             />
           </div>
+          <button
+            onClick={() => setShowCustomization((prev) => !prev)}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary border border-border text-[9px] font-medium"
+          >
+            <FlaskConical className="w-3 h-3" />
+            CUSTOMIZE
+          </button>
           <ThemeToggle />
         </div>
       </header>
 
-      <div className="border-b border-border px-6">
-        <div className="flex gap-1">
+      {showCustomization && (
+        <section className="border-b border-border px-6 py-4 grid lg:grid-cols-3 gap-4 bg-muted/20">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold">Layout control</p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <button onClick={() => setLayoutMode("cozy")} className={`px-2 py-1.5 rounded border ${layoutMode === "cozy" ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}>Cozy spacing</button>
+              <button onClick={() => setLayoutMode("compact")} className={`px-2 py-1.5 rounded border ${layoutMode === "compact" ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}>Compact spacing</button>
+              <button onClick={() => setTabLayout("top")} className={`px-2 py-1.5 rounded border ${tabLayout === "top" ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}>Top tabs</button>
+              <button onClick={() => setTabLayout("left")} className={`px-2 py-1.5 rounded border ${tabLayout === "left" ? "border-foreground text-foreground" : "border-border text-muted-foreground"}`}>Left rail</button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold">Tab visibility + order</p>
+            <div className="space-y-1.5">
+              {tabConfig.map((tab, index) => (
+                <div key={tab.id} className="flex items-center justify-between gap-2 text-xs border border-border rounded-md px-2 py-1.5 bg-background">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={tab.visible} onChange={() => setTabConfig((prev) => prev.map((entry) => entry.id === tab.id ? { ...entry, visible: !entry.visible } : entry))} />
+                    {tab.label}
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => moveTab(index, -1)} className="p-1 rounded border border-border"><ChevronUp className="w-3 h-3" /></button>
+                    <button onClick={() => moveTab(index, 1)} className="p-1 rounded border border-border"><ChevronDown className="w-3 h-3" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold">Engine + ML control</p>
+            <div className="space-y-2 text-xs">
+              <label className="flex flex-col gap-1">
+                Engine tick (ms)
+                <input
+                  type="number"
+                  min={15}
+                  max={300}
+                  value={settings.tickIntervalMs}
+                  onChange={(event) => updateLocalSettings({ tickIntervalMs: Number(event.target.value) })}
+                  className="px-2 py-1 rounded border border-border bg-background"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                Regime scheduler
+                <select className="px-2 py-1 rounded border border-border bg-background" value={settings.regimeMode} onChange={(event) => updateLocalSettings({ regimeMode: event.target.value as "cycle" | "focus" })}>
+                  <option value="cycle">Cycle all regimes</option>
+                  <option value="focus">Focus one regime</option>
+                </select>
+              </label>
+              {settings.regimeMode === "focus" && (
+                <select className="px-2 py-1 rounded border border-border bg-background" value={settings.focusRegime} onChange={(event) => updateLocalSettings({ focusRegime: event.target.value as RegimeId })}>
+                  {REGIMES.map((regime) => <option key={regime.id} value={regime.id}>{regime.label}</option>)}
+                </select>
+              )}
+              <label className="flex flex-col gap-1">
+                ML influence
+                <select className="px-2 py-1 rounded border border-border bg-background" value={settings.mlMode} onChange={(event) => updateLocalSettings({ mlMode: event.target.value as "off" | "balanced" | "aggressive" })}>
+                  <option value="off">Off (pure evolution)</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="aggressive">Aggressive guidance</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className={`border-b border-border px-6 ${tabLayout === "left" ? "py-3" : ""}`}>
+        <div className={`flex gap-1 ${tabLayout === "left" ? "flex-wrap" : ""}`}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeView === tab.id;
@@ -441,7 +547,7 @@ const DiscoveryAtlas = () => {
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+      <main className={`flex-1 overflow-y-auto ${layoutMode === "compact" ? "p-4 max-w-full" : "p-6 max-w-7xl"} mx-auto w-full`}>
         {activeView === "atlas" && (
           <section className="mb-5 grid sm:grid-cols-6 gap-2">
             <div>
