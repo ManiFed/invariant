@@ -6,6 +6,7 @@ import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, AreaChart, Area } f
 import ThemeToggle from "@/components/ThemeToggle";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import { loadLibraryAMMs, upvoteLibraryAMM, type LibraryAMM } from "@/lib/library-persistence";
+import AutoDiscoveryStatus from "@/components/library/AutoDiscoveryStatus";
 import { NUM_BINS, binPrice } from "@/lib/discovery-engine";
 import SolidityExportModal from "@/components/library/SolidityExportModal";
 import HistoricalBacktest from "@/components/library/HistoricalBacktest";
@@ -260,6 +261,11 @@ const Library = () => {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Auto-Discovery Status */}
+        <div className="mb-6">
+          <AutoDiscoveryStatus />
         </div>
 
         {/* Leaderboard View */}
