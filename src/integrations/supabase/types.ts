@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      discovery_cron_runs: {
+        Row: {
+          best_score: number | null
+          candidates_evaluated: number
+          candidates_published: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          generations_run: number
+          id: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          best_score?: number | null
+          candidates_evaluated?: number
+          candidates_published?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          generations_run?: number
+          id?: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          best_score?: number | null
+          candidates_evaluated?: number
+          candidates_published?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          generations_run?: number
+          id?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       library_amms: {
         Row: {
           author: string
