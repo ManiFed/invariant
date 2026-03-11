@@ -263,6 +263,11 @@ const Library = () => {
           </div>
         </div>
 
+        {/* Auto-Discovery Status */}
+        <div className="mb-6">
+          <AutoDiscoveryStatus />
+        </div>
+
         {/* Leaderboard View */}
         {activeFilter === "leaderboard" && (
           <div className="space-y-6">
