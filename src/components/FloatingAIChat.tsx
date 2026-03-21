@@ -35,6 +35,7 @@ const GREETINGS = [
 
 export default function FloatingAIChat() {
   const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [mood, setMood] = useState(0);
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
@@ -55,6 +56,7 @@ export default function FloatingAIChat() {
 
   // Hide on teaching lab — AI is embedded in sidebar there
   if (location.pathname === "/learn") return null;
+  if (hidden) return null;
 
   const routeCtx = ROUTE_CONTEXT[location.pathname] || `the page at ${location.pathname}`;
   const context = pageContext ? `${routeCtx}. ${pageContext}` : routeCtx;
@@ -147,35 +149,51 @@ export default function FloatingAIChat() {
         )}
       </AnimatePresence>
 
-      {/* FAB */}
-      <motion.button
-        onClick={() => { setOpen(o => !o); setHasUnread(false); }}
-        className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg flex items-center justify-center group"
-        animate={open ? {} : { y: [0, -4, 0] }}
-        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-        whileHover={{ scale: 1.12 }}
-        whileTap={{ scale: 0.88 }}
-      >
-        <AnimatePresence mode="wait">
-          {open ? (
-            <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
-              <X className="w-5 h-5" />
-            </motion.div>
-          ) : (
-            <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
-              <MessageCircle className="w-5 h-5" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {/* Ping ring when has unread */}
-        {hasUnread && !open && (
-          <motion.span
-            className="absolute inset-0 rounded-full border-2 border-primary"
-            animate={{ scale: [1, 1.5], opacity: [0.6, 0] }}
-            transition={{ duration: 1.2, repeat: Infinity }}
-          />
+      {/* FAB + dismiss */}
+      <div className="fixed bottom-4 right-4 z-50 flex items-end gap-1.5">
+        {/* Dismiss button */}
+        {!open && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={() => { setOpen(false); setHidden(true); }}
+            className="w-5 h-5 mb-3.5 rounded-full bg-muted/80 text-muted-foreground hover:bg-destructive/20 hover:text-destructive flex items-center justify-center transition-colors"
+            title="Hide Ammy"
+          >
+            <X className="w-3 h-3" />
+          </motion.button>
         )}
-      </motion.button>
+
+        {/* FAB */}
+        <motion.button
+          onClick={() => { setOpen(o => !o); setHasUnread(false); }}
+          className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg flex items-center justify-center group"
+          animate={open ? {} : { y: [0, -4, 0] }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          whileHover={{ scale: 1.12 }}
+          whileTap={{ scale: 0.88 }}
+        >
+          <AnimatePresence mode="wait">
+            {open ? (
+              <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                <X className="w-5 h-5" />
+              </motion.div>
+            ) : (
+              <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                <MessageCircle className="w-5 h-5" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Ping ring when has unread */}
+          {hasUnread && !open && (
+            <motion.span
+              className="absolute inset-0 rounded-full border-2 border-primary"
+              animate={{ scale: [1, 1.5], opacity: [0.6, 0] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+            />
+          )}
+        </motion.button>
+      </div>
     </>
   );
 }
