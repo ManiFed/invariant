@@ -53,7 +53,7 @@ export default function AutoDiscoveryStatus() {
           <div className={`w-2 h-2 rounded-full ${isRunning ? "bg-green-500 animate-pulse" : "bg-muted-foreground/40"}`} />
           <span className="text-sm font-medium text-foreground">Auto-Discovery Engine</span>
         </div>
-        <span className="text-xs text-muted-foreground">runs every 5 min</span>
+        <span className="text-xs text-muted-foreground">runs every 30 min · 200 gens · dedup enabled</span>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-3">
@@ -102,7 +102,7 @@ export default function AutoDiscoveryStatus() {
 
       {runs.length === 0 && (
         <p className="text-xs text-muted-foreground text-center py-2">
-          No cron runs yet. The engine runs automatically every 5 minutes.
+          No cron runs yet. The engine runs continuously every 30 minutes with 200 generations per session. Near-duplicate AMMs are automatically removed.
         </p>
       )}
     </motion.div>
