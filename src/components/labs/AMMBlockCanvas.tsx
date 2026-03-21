@@ -472,7 +472,7 @@ function ScratchBlock({
       {depth === 0 && (
         <div className={`ml-6 w-4 h-1.5 rounded-t-sm bg-gradient-to-r ${categoryBg(cat)}`} />
       )}
-    </motion.div>
+    </div>
   );
 }
 
