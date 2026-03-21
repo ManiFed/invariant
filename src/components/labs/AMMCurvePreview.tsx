@@ -35,7 +35,7 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
   const maxY = curveData.length > 0 ? Math.max(...curveData.map((p) => p.y)) : 200;
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col">
       {/* Formula display */}
       <div className="surface-elevated rounded-xl p-3 mb-3">
         <div className="flex items-center justify-between mb-2">
@@ -57,7 +57,7 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
       </div>
 
       {/* Curve chart */}
-      <div className="flex-1 surface-elevated rounded-xl p-3">
+      <div className="min-h-[300px] surface-elevated rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] font-semibold text-foreground">
             Curve Visualization
@@ -67,7 +67,7 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
           </span>
         </div>
 
-        <div className="h-[calc(100%-24px)]">
+        <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart margin={{ top: 10, right: 10, bottom: 20, left: 40 }}>
               <XAxis

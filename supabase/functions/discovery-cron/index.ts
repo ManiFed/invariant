@@ -1,5 +1,5 @@
-// Discovery Cron — Runs evolutionary AMM search server-side and publishes best candidates to the library.
-// Invoked by pg_cron every 5 minutes. Self-contained engine (no imports from main codebase).
+// Discovery Cron — Runs a long continuous evolutionary search and publishes best candidates.
+// Also deduplicates near-identical AMMs in the library.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -14,15 +14,18 @@ const LOG_PRICE_MIN = -2;
 const LOG_PRICE_MAX = 2;
 const BIN_WIDTH = (LOG_PRICE_MAX - LOG_PRICE_MIN) / NUM_BINS;
 const TOTAL_LIQUIDITY = 1000;
-const POPULATION_SIZE = 30;
+const POPULATION_SIZE = 40;
 const ELITE_FRACTION = 0.25;
 const FEE_RATE = 0.003;
 const ARB_THRESHOLD = 0.005;
 const FAST_PATH_STEPS = 96;
 const DT = 1 / 365;
-const GENERATIONS_PER_RUN = 20; // run 20 generations per cron invocation
-const MAX_PUBLISH_PER_RUN = 3; // publish at most 3 candidates per run
-const MIN_SCORE_TO_PUBLISH = 5.0; // only publish if score below this threshold
+
+// Continuous run config
+const GENERATIONS_PER_REGIME = 50;       // 50 gens × 4 regimes = 200 gens total per run
+const MAX_PUBLISH_PER_RUN = 5;
+const MIN_SCORE_TO_PUBLISH = 5.0;
+const SIMILARITY_THRESHOLD = 0.96;       // cosine similarity above this = duplicate
 
 type RegimeId = "low-vol" | "high-vol" | "jump-diffusion" | "regime-shift";
 type FamilyId = "piecewise-bands" | "amplified-hybrid" | "tail-shielded";
@@ -102,6 +105,19 @@ function normalizeBins(bins: Float64Array): void {
 
 function binCenter(i: number): number {
   return LOG_PRICE_MIN + (i + 0.5) * BIN_WIDTH;
+}
+
+/** Cosine similarity between two bin arrays */
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dot = 0, magA = 0, magB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    magA += a[i] * a[i];
+    magB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(magA) * Math.sqrt(magB);
+  return denom > 0 ? dot / denom : 0;
 }
 
 // ─── Family Generators ──────────────────────────────────────────────────────
@@ -259,6 +275,26 @@ function mutateBins(parent: Float64Array, intensity = 0.1): Float64Array {
   return child;
 }
 
+// ─── Crossover ──────────────────────────────────────────────────────────────
+function crossover(a: Float64Array, b: Float64Array): Float64Array {
+  const child = new Float64Array(NUM_BINS);
+  const method = Math.random();
+  if (method < 0.5) {
+    // Uniform crossover
+    for (let i = 0; i < NUM_BINS; i++) {
+      child[i] = Math.random() < 0.5 ? a[i] : b[i];
+    }
+  } else {
+    // Blend crossover
+    const alpha = 0.3 + Math.random() * 0.4;
+    for (let i = 0; i < NUM_BINS; i++) {
+      child[i] = a[i] * alpha + b[i] * (1 - alpha);
+    }
+  }
+  normalizeBins(child);
+  return child;
+}
+
 // ─── Price Path Generation ──────────────────────────────────────────────────
 function generatePricePath(regime: RegimeConfig, steps: number): Float64Array {
   const path = new Float64Array(steps + 1);
@@ -267,11 +303,11 @@ function generatePricePath(regime: RegimeConfig, steps: number): Float64Array {
   const shiftPt = isShift ? Math.floor(steps * (0.3 + Math.random() * 0.4)) : steps + 1;
   let vol = isShift ? 0.3 : regime.volatility;
   let ji = isShift ? 0 : regime.jumpIntensity;
-  let jm = regime.jumpMean;
-  let js = regime.jumpStd;
+  const jm = regime.jumpMean;
+  const js = regime.jumpStd;
 
   for (let t = 1; t <= steps; t++) {
-    if (isShift && t === shiftPt) { vol = 1.0; ji = 5; jm = -0.05; js = 0.15; }
+    if (isShift && t === shiftPt) { vol = 1.0; ji = 5; }
     const diff = (regime.drift - 0.5 * vol * vol) * DT + vol * Math.sqrt(DT) * randn();
     let jump = 0;
     if (ji > 0 && Math.random() < ji * DT) jump = jm + js * randn();
@@ -339,8 +375,6 @@ function simulatePath(bins: Float64Array, pricePath: Float64Array, regime: Regim
       totalSlippage += slippage * (size - fee);
       tradeCount++;
     }
-
-    // Arb
     const dev = Math.abs(currentLP - pricePath[t]);
     if (dev >= ARB_THRESHOLD) {
       const arbSize = dev * TOTAL_LIQUIDITY * 0.1;
@@ -349,12 +383,10 @@ function simulatePath(bins: Float64Array, pricePath: Float64Array, regime: Regim
       if (profit > 0) { arbLeakage += profit; totalFees += fee; }
     }
     currentLP = pricePath[t];
-
     const { reserveX, reserveY } = deriveReserves(workBins, currentLP);
     const price = Math.exp(currentLP);
     const lpVal = reserveX * price + reserveY + totalFees;
     hodlValue = TOTAL_LIQUIDITY * 0.5 * (price + 1);
-
     peakLpVal = Math.max(peakLpVal, lpVal);
     maxDD = Math.max(maxDD, (peakLpVal - lpVal) / peakLpVal);
     const ret = lpVal / prevLpVal - 1;
@@ -450,7 +482,7 @@ function scoreCandidate(m: MetricVector, stability: number): number {
   );
 }
 
-// ─── Main Evolution Loop ────────────────────────────────────────────────────
+// ─── Continuous Evolution Loop ──────────────────────────────────────────────
 function runEvolution(regime: RegimeConfig, generations: number): Candidate[] {
   let population: Candidate[] = [];
 
@@ -467,15 +499,15 @@ function runEvolution(regime: RegimeConfig, generations: number): Candidate[] {
   }
   population.sort((a, b) => a.score - b.score);
 
-  // Evolve
+  // Evolve continuously
   for (let g = 1; g <= generations; g++) {
     const eliteCount = Math.max(2, Math.floor(POPULATION_SIZE * ELITE_FRACTION));
     const elites = population.slice(0, eliteCount);
     const children: Candidate[] = [];
 
     // Mutate from elites
-    const numChildren = POPULATION_SIZE - Math.floor(POPULATION_SIZE * 0.2);
-    for (let i = 0; i < numChildren; i++) {
+    const numMutants = Math.floor(POPULATION_SIZE * 0.5);
+    for (let i = 0; i < numMutants; i++) {
       const parent = elites[i % elites.length];
       const childParams = mutateParams(parent.familyId, parent.familyParams);
       const childBins = mutateBins(regenerateBins(parent.familyId, childParams), 0.1);
@@ -488,8 +520,23 @@ function runEvolution(regime: RegimeConfig, generations: number): Candidate[] {
       });
     }
 
+    // Crossover from top elites
+    const numCrossover = Math.floor(POPULATION_SIZE * 0.3);
+    for (let i = 0; i < numCrossover; i++) {
+      const p1 = elites[Math.floor(Math.random() * elites.length)];
+      const p2 = elites[Math.floor(Math.random() * elites.length)];
+      const childBins = crossover(p1.bins, p2.bins);
+      const { metrics, stability } = evaluate(childBins, regime);
+      const features = computeFeatures(childBins);
+      const score = scoreCandidate(metrics, stability);
+      children.push({
+        id: nextId(), bins: childBins, familyId: p1.familyId, familyParams: p1.familyParams,
+        regime: regime.id, generation: g, metrics, features, stability, score, timestamp: Date.now(),
+      });
+    }
+
     // Random explorers
-    const numExplore = POPULATION_SIZE - numChildren;
+    const numExplore = POPULATION_SIZE - numMutants - numCrossover;
     for (let i = 0; i < numExplore; i++) {
       const { familyId, familyParams, bins } = sampleFamily();
       const { metrics, stability } = evaluate(bins, regime);
@@ -501,11 +548,58 @@ function runEvolution(regime: RegimeConfig, generations: number): Candidate[] {
       });
     }
 
-    children.sort((a, b) => a.score - b.score);
-    population = children.slice(0, POPULATION_SIZE);
+    // Merge elites + children and select
+    const merged = [...elites, ...children];
+    merged.sort((a, b) => a.score - b.score);
+    population = merged.slice(0, POPULATION_SIZE);
   }
 
   return population;
+}
+
+// ─── Deduplication ──────────────────────────────────────────────────────────
+interface LibRow {
+  id: string;
+  bins: number[] | null;
+  score: number | null;
+  family_id: string | null;
+  regime: string | null;
+}
+
+/** Find and return IDs of duplicate AMMs to delete (keeps the better one) */
+function findDuplicates(rows: LibRow[]): string[] {
+  const toDelete = new Set<string>();
+  // Only compare rows that have bins
+  const withBins = rows.filter(r => r.bins && Array.isArray(r.bins) && r.bins.length > 0);
+
+  for (let i = 0; i < withBins.length; i++) {
+    if (toDelete.has(withBins[i].id)) continue;
+    for (let j = i + 1; j < withBins.length; j++) {
+      if (toDelete.has(withBins[j].id)) continue;
+      const sim = cosineSimilarity(withBins[i].bins!, withBins[j].bins!);
+      if (sim >= SIMILARITY_THRESHOLD) {
+        // Delete the one with worse (higher) score
+        const scoreI = withBins[i].score ?? Infinity;
+        const scoreJ = withBins[j].score ?? Infinity;
+        if (scoreI <= scoreJ) {
+          toDelete.add(withBins[j].id);
+        } else {
+          toDelete.add(withBins[i].id);
+        }
+      }
+    }
+  }
+  return Array.from(toDelete);
+}
+
+/** Check if a new candidate is too similar to existing library entries */
+function isTooSimilar(candidateBins: number[], existingRows: LibRow[]): boolean {
+  for (const row of existingRows) {
+    if (!row.bins || !Array.isArray(row.bins)) continue;
+    const sim = cosineSimilarity(candidateBins, row.bins);
+    if (sim >= SIMILARITY_THRESHOLD) return true;
+  }
+  return false;
 }
 
 // ─── Edge Function Handler ──────────────────────────────────────────────────
@@ -535,54 +629,72 @@ Deno.serve(async (req) => {
   const runId = runData.id;
   let totalEvaluated = 0;
   let totalPublished = 0;
+  let totalDeduplicated = 0;
   let bestScore = Infinity;
 
   try {
-    // Load existing library candidate_ids to avoid duplicates
+    // ── Step 1: Load existing library for dedup comparison ──
     const { data: existingLib } = await supabase
       .from("library_amms")
-      .select("candidate_id, score")
+      .select("id, bins, score, family_id, regime")
       .eq("category", "community")
       .order("score", { ascending: true })
-      .limit(100);
+      .limit(500);
 
-    const existingScores = new Map<string, number>();
-    const existingBestScore = (existingLib ?? []).reduce((best, row) => {
-      if (row.candidate_id) existingScores.set(row.candidate_id, row.score ?? Infinity);
-      return Math.min(best, row.score ?? Infinity);
-    }, Infinity);
+    const existingRows: LibRow[] = (existingLib ?? []) as LibRow[];
 
-    // Run evolution across all regimes
+    // ── Step 2: Deduplicate existing library entries ──
+    const dupeIds = findDuplicates(existingRows);
+    if (dupeIds.length > 0) {
+      // Delete in batches of 20
+      for (let i = 0; i < dupeIds.length; i += 20) {
+        const batch = dupeIds.slice(i, i + 20);
+        await supabase.from("library_amms").delete().in("id", batch);
+      }
+      totalDeduplicated = dupeIds.length;
+      // Remove deleted from our working set
+      const dupeSet = new Set(dupeIds);
+      const remaining = existingRows.filter(r => !dupeSet.has(r.id));
+      existingRows.length = 0;
+      existingRows.push(...remaining);
+    }
+
+    // ── Step 3: Run continuous evolution across all regimes ──
     const allBest: Candidate[] = [];
     const regimeCycle: RegimeId[] = ["low-vol", "high-vol", "jump-diffusion", "regime-shift"];
+    const totalGenerations = GENERATIONS_PER_REGIME * regimeCycle.length;
 
     for (const regimeId of regimeCycle) {
       const regime = REGIMES.find(r => r.id === regimeId)!;
-      const population = runEvolution(regime, GENERATIONS_PER_RUN);
-      totalEvaluated += POPULATION_SIZE * (GENERATIONS_PER_RUN + 1);
+      const population = runEvolution(regime, GENERATIONS_PER_REGIME);
+      totalEvaluated += POPULATION_SIZE * (GENERATIONS_PER_REGIME + 1);
 
-      // Take top 3 from each regime
-      allBest.push(...population.slice(0, 3));
+      // Take top 5 from each regime
+      allBest.push(...population.slice(0, 5));
     }
 
     // Sort all candidates globally by score
     allBest.sort((a, b) => a.score - b.score);
     bestScore = allBest[0]?.score ?? Infinity;
 
-    // Publish the best candidates that beat current library entries
+    // ── Step 4: Publish best candidates (with dedup check) ──
     const toPublish = allBest
       .filter(c => c.score < MIN_SCORE_TO_PUBLISH)
-      .filter(c => c.score < existingBestScore * 1.1) // within 10% of best existing or better
-      .slice(0, MAX_PUBLISH_PER_RUN);
+      .slice(0, MAX_PUBLISH_PER_RUN * 2); // pre-filter more, dedup will trim
 
+    let published = 0;
     for (const candidate of toPublish) {
-      // Check if already published
-      if (existingScores.has(candidate.id)) continue;
+      if (published >= MAX_PUBLISH_PER_RUN) break;
+
+      const candidateBinsArr = Array.from(candidate.bins);
+
+      // Skip if too similar to existing library entries
+      if (isTooSimilar(candidateBinsArr, existingRows)) continue;
 
       const regimeLabel = REGIMES.find(r => r.id === candidate.regime)?.label ?? candidate.regime;
       const { error: insertError } = await supabase.from("library_amms").insert({
         name: `Auto-discovered ${candidate.familyId} (${regimeLabel})`,
-        description: `Automatically discovered by the Discovery Engine cron job. Score: ${candidate.score.toFixed(4)}, Stability: ${candidate.stability.toFixed(4)}, Generation: ${candidate.generation}. Regime: ${regimeLabel}.`,
+        description: `Discovered by Discovery Engine. Score: ${candidate.score.toFixed(4)}, Stability: ${candidate.stability.toFixed(4)}, Gen: ${candidate.generation}. Regime: ${regimeLabel}.`,
         formula: `${candidate.familyId} (gen ${candidate.generation})`,
         author: "Discovery Engine (Auto)",
         category: "community",
@@ -591,7 +703,7 @@ Deno.serve(async (req) => {
         generation: candidate.generation,
         family_id: candidate.familyId,
         family_params: candidate.familyParams,
-        bins: Array.from(candidate.bins),
+        bins: candidateBinsArr,
         score: candidate.score,
         stability: candidate.stability,
         metrics: candidate.metrics as any,
@@ -600,15 +712,26 @@ Deno.serve(async (req) => {
         upvotes: 0,
       });
 
-      if (!insertError) totalPublished++;
+      if (!insertError) {
+        published++;
+        // Add to existing rows so future candidates also dedup against it
+        existingRows.push({
+          id: candidate.id,
+          bins: candidateBinsArr,
+          score: candidate.score,
+          family_id: candidate.familyId,
+          regime: candidate.regime,
+        });
+      }
     }
+    totalPublished = published;
 
-    // Update run record
+    // ── Step 5: Update run record ──
     await supabase
       .from("discovery_cron_runs")
       .update({
         finished_at: new Date().toISOString(),
-        generations_run: GENERATIONS_PER_RUN * regimeCycle.length,
+        generations_run: totalGenerations,
         candidates_evaluated: totalEvaluated,
         candidates_published: totalPublished,
         best_score: bestScore,
@@ -620,9 +743,10 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         runId,
-        generationsRun: GENERATIONS_PER_RUN * regimeCycle.length,
+        generationsRun: totalGenerations,
         candidatesEvaluated: totalEvaluated,
         candidatesPublished: totalPublished,
+        duplicatesRemoved: totalDeduplicated,
         bestScore,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
