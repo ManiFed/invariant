@@ -35,6 +35,7 @@ const GREETINGS = [
 
 export default function FloatingAIChat() {
   const [open, setOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [mood, setMood] = useState(0);
   const [hasUnread, setHasUnread] = useState(false);
   const location = useLocation();
