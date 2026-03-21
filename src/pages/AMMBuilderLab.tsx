@@ -415,6 +415,15 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
               onUpdateParam={handleUpdateParam}
               onAddChild={addChild}
               onAddInput={addInput}
+              onDropBlock={(blockId, targetUid, position) => {
+                if (targetUid && position === "child") {
+                  addChild(targetUid, blockId);
+                } else if (targetUid && position === "input") {
+                  addInput(targetUid, blockId);
+                } else {
+                  addBlock(blockId);
+                }
+              }}
             />
           </div>
         </div>
