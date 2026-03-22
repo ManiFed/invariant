@@ -24,6 +24,33 @@ If you see `DATABASE_URL is not configured`, do this from the repo root:
 
 If you do not have PostgreSQL yet, you can still run most of the UI, but Atlas persistence endpoints (`/api/atlas/*`) will return `503` until `DATABASE_URL` is set.
 
+## Deploying the app with a serverless API layer
+
+The repo now includes Vercel-style serverless API functions under `api/` for:
+
+- `POST /api/ai/chat`
+- `GET /api/price-history`
+- `GET /api/atlas/status`
+- `GET /api/atlas/state`
+- `POST /api/atlas/generate`
+- `POST /api/atlas/backup`
+
+This lets you deploy the frontend as static assets while keeping Atlas persistence, price history, and AI chat on serverless functions instead of a long-running Node backend. The frontend defaults already target `/api/*`, so no client-side path changes are required when deploying to a compatible platform.
+
+### Vercel deployment checklist
+
+1. Import the repo into Vercel.
+2. Keep the default build command: `npm run build`.
+3. Keep the output directory: `dist`.
+4. Set these environment variables in the Vercel project:
+   - `OPENROUTER_API_KEY`
+   - `OPENROUTER_MODEL` *(optional)*
+   - `OPENROUTER_BASE_URL` *(optional)*
+   - `DATABASE_URL` *(or one of the PostgreSQL fallback names)*
+5. Deploy. `vercel.json` rewrites SPA routes to `index.html` while preserving `/api/*` function routes.
+
+If you still want to run everything locally with the Node server, `server.mjs` remains available.
+
 ## Deploying Forecast Lab as a standalone Railway service
 
 Use repository-root deployment for Forecast Lab (required):
