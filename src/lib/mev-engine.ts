@@ -99,8 +99,23 @@ function computeSwapOutput(
 }
 
 export function simulateMEV(config: MEVSimConfig): MEVResult {
+  if (!config.bins || config.bins.length === 0) {
+    throw new Error("MEV simulation requires at least one bin");
+  }
+  if (config.feeRate < 0 || config.feeRate >= 1) {
+    throw new Error("Fee rate must be in [0, 1)");
+  }
+  if (config.numBlocks <= 0 || config.numBlocks > 100_000) {
+    throw new Error("numBlocks must be between 1 and 100,000");
+  }
+  if (config.swapsPerBlock <= 0 || config.swapsPerBlock > 1000) {
+    throw new Error("swapsPerBlock must be between 1 and 1,000");
+  }
+  if (config.attackerBudget <= 0) {
+    throw new Error("attackerBudget must be positive");
+  }
   const { bins, feeRate, numBlocks, swapsPerBlock, attackerBudget } = config;
-  
+
   let reserveX = 100;
   let reserveY = 200_000;
   const events: MEVEvent[] = [];

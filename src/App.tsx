@@ -6,6 +6,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import BeginnerMode from "./pages/BeginnerMode";
 import AdvancedMode from "./pages/AdvancedMode";
+import PoolComparison from "./pages/PoolComparison";
+import KeyboardShortcutsHelp from "./components/KeyboardShortcutsHelp";
+import { useKeyboardShortcuts } from "./hooks/use-keyboard-shortcuts";
 import TeachingLab from "./pages/TeachingLab";
 import DocsLayout from "./pages/docs/DocsLayout";
 import DocsIndex from "./pages/docs/DocsIndex";
@@ -35,6 +38,11 @@ import { forecastRoute } from "./forecasting/lib/routes";
 
 const queryClient = new QueryClient();
 
+const AppShortcuts = () => {
+  const { showHelp, setShowHelp, shortcuts } = useKeyboardShortcuts();
+  return <KeyboardShortcutsHelp open={showHelp} onClose={() => setShowHelp(false)} shortcuts={shortcuts} />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -42,10 +50,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AmmyContextProvider>
+          <AppShortcuts />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/beginner" element={<BeginnerMode />} />
             <Route path="/advanced" element={<AdvancedMode />} />
+            <Route path="/compare" element={<PoolComparison />} />
             <Route path="/learn" element={<TeachingLab />} />
             {/* Multi-page Documentation */}
             <Route path="/docs" element={<DocsLayout />}>

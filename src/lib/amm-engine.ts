@@ -1,5 +1,12 @@
 // Pure AMM simulation engine — no React dependencies
 
+export class AMMError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AMMError";
+  }
+}
+
 export interface PoolState {
   x: number;       // Reserve X
   y: number;       // Reserve Y
@@ -32,6 +39,12 @@ export interface HistoryPoint {
 }
 
 export function createPool(x: number, y: number, feeRate: number): PoolState {
+  if (x <= 0 || y <= 0) {
+    throw new AMMError("Pool reserves must be positive");
+  }
+  if (feeRate < 0 || feeRate >= 1) {
+    throw new AMMError("Fee rate must be in [0, 1)");
+  }
   return { x, y, k: x * y, feeRate, totalFees: 0 };
 }
 
@@ -40,6 +53,12 @@ export function poolPrice(pool: PoolState): number {
 }
 
 export function executeTrade(pool: PoolState, inputAmount: number, direction: "buyY" | "buyX"): { pool: PoolState; result: TradeResult } {
+  if (inputAmount <= 0) {
+    throw new AMMError("Trade input amount must be positive");
+  }
+  if (!Number.isFinite(inputAmount)) {
+    throw new AMMError("Trade input amount must be a finite number");
+  }
   const priceBefore = poolPrice(pool);
   const fee = inputAmount * pool.feeRate;
   const effectiveInput = inputAmount - fee;
@@ -76,6 +95,9 @@ export function executeTrade(pool: PoolState, inputAmount: number, direction: "b
 }
 
 export function executeArbitrage(pool: PoolState, externalPrice: number): { pool: PoolState; arbProfit: number; traded: boolean } {
+  if (externalPrice <= 0 || !Number.isFinite(externalPrice)) {
+    throw new AMMError("External price must be a positive finite number");
+  }
   const pPrice = poolPrice(pool);
   const deviation = Math.abs(pPrice - externalPrice) / externalPrice;
 
@@ -108,10 +130,16 @@ export function executeArbitrage(pool: PoolState, externalPrice: number): { pool
 
 // Geometric Brownian Motion step
 export function gbmStep(currentPrice: number, volatility: number, dt: number): number {
+  if (currentPrice <= 0 || !Number.isFinite(currentPrice)) {
+    throw new AMMError("Current price must be a positive finite number");
+  }
+  if (dt <= 0) {
+    throw new AMMError("Time step (dt) must be positive");
+  }
   const drift = 0;
   const u1 = Math.random();
   const u2 = Math.random();
-  const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  const z = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2);
   const logReturn = (drift - 0.5 * volatility * volatility) * dt + volatility * Math.sqrt(dt) * z;
   return currentPrice * Math.exp(logReturn);
 }

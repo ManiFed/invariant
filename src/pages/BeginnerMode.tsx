@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, Zap, ArrowRightLeft, Target, Droplets, Activity, SkipForward, SkipBack, Crosshair, Ruler } from "lucide-react";
+import { ArrowLeft, ArrowRight, Play, Pause, RotateCcw, Info, TrendingDown, DollarSign, BarChart3, AlertTriangle, ChevronRight, ChevronLeft, HelpCircle, CheckCircle2, Zap, ArrowRightLeft, Target, Droplets, Activity, SkipForward, SkipBack, Crosshair, Ruler, Share2, Rocket } from "lucide-react";
+import { buildShareUrl, extractDesignFromUrl, copyToClipboard, type ShareableDesign } from "@/lib/share-utils";
 import { Legend } from "recharts";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -54,6 +55,24 @@ const BeginnerMode = () => {
   const [showLearnMore, setShowLearnMore] = useState<Template | null>(null);
   const [swapAmount, setSwapAmount] = useState(1000);
   const [showSwapResult, setShowSwapResult] = useState(false);
+
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // Load shared design from URL on mount
+  useEffect(() => {
+    const shared = extractDesignFromUrl();
+    if (shared) {
+      setSelectedTemplate(shared.type);
+      setLiquidity(shared.liquidity);
+      setTokenAPrice(shared.tokenAPrice);
+      setTokenBPrice(shared.tokenBPrice);
+      if (shared.volatility === "Low" || shared.volatility === "Medium" || shared.volatility === "High") {
+        setVolatility(shared.volatility);
+      }
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   // Guided tour state
   const [guideStep, setGuideStep] = useState(0);
@@ -178,6 +197,49 @@ const BeginnerMode = () => {
           <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-success/30 text-success bg-success/5">GUIDED</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              const design: ShareableDesign = {
+                name: templates.find(t => t.id === selectedTemplate)?.name || "Custom Pool",
+                type: selectedTemplate,
+                liquidity,
+                feeRate,
+                tokenAPrice,
+                tokenBPrice,
+                volatility,
+              };
+              const url = buildShareUrl(design);
+              const ok = await copyToClipboard(url);
+              if (ok) {
+                setShareCopied(true);
+                setTimeout(() => setShareCopied(false), 2000);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border"
+          >
+            <Share2 className="w-3 h-3" />
+            {shareCopied ? "Copied!" : "Share"}
+          </button>
+          <button
+            onClick={() => {
+              // Export current config to Advanced Mode via sessionStorage
+              const inv = {
+                expression: templates.find(t => t.id === selectedTemplate)?.formula || "x * y = k",
+                presetId: "custom",
+                weightA: selectedTemplate === "weighted" ? 0.8 : 0.5,
+                weightB: selectedTemplate === "weighted" ? 0.2 : 0.5,
+                kValue: liquidity,
+                amplification: selectedTemplate === "stable_swap" ? 100 : 10,
+                rangeLower: 0.5,
+                rangeUpper: 2.0,
+              };
+              sessionStorage.setItem("advanced_invariant", JSON.stringify(inv));
+              navigate("/advanced");
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-foreground text-xs font-medium hover:bg-accent transition-colors border border-border"
+          >
+            <Rocket className="w-3 h-3" /> Advanced
+          </button>
           <button onClick={() => setIsRunning(!isRunning)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
             {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
             {isRunning ? "Pause" : "Simulate"}

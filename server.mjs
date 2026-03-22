@@ -100,11 +100,25 @@ function sendJson(res, statusCode, payload) {
   return true;
 }
 
+const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
+
 async function readJsonBody(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let totalSize = 0;
+  for await (const chunk of req) {
+    totalSize += chunk.length;
+    if (totalSize > MAX_BODY_SIZE) {
+      throw new Error('Request body too large');
+    }
+    chunks.push(chunk);
+  }
   const body = Buffer.concat(chunks).toString('utf8');
-  return body ? JSON.parse(body) : {};
+  if (!body) return {};
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error('Invalid JSON in request body');
+  }
 }
 
 async function ensureAtlasTables() {
@@ -348,6 +362,11 @@ async function handlePriceApi(req, res, pathname, searchParams) {
 }
 
 const server = createServer(async (req, res) => {
+  // Security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
   const requestUrl = req.url || '/';
   const [pathPart, queryPart] = requestUrl.split('?');
   const requestPath = decodeURIComponent(pathPart);
@@ -355,12 +374,27 @@ const server = createServer(async (req, res) => {
   const normalized = path.normalize(requestPath).replace(/^([.][.][/\\])+/, '');
   const candidatePath = path.join(distDir, normalized);
 
-  const aiHandled = await handleAiApi(req, res, requestPath);
-  if (aiHandled) return;
-  const priceHandled = await handlePriceApi(req, res, requestPath, searchParams);
-  if (priceHandled) return;
-  const atlasHandled = await handleAtlasApi(req, res, requestPath);
-  if (atlasHandled) return;
+  // Prevent path traversal
+  if (!candidatePath.startsWith(distDir)) {
+    res.statusCode = 403;
+    res.end('Forbidden');
+    return;
+  }
+
+  try {
+    const aiHandled = await handleAiApi(req, res, requestPath);
+    if (aiHandled) return;
+    const priceHandled = await handlePriceApi(req, res, requestPath, searchParams);
+    if (priceHandled) return;
+    const atlasHandled = await handleAtlasApi(req, res, requestPath);
+    if (atlasHandled) return;
+  } catch (err) {
+    console.error('Unhandled API error:', err);
+    if (!res.headersSent) {
+      sendJson(res, 500, { error: 'Internal server error' });
+    }
+    return;
+  }
 
   try {
     const candidateStat = await stat(candidatePath);
