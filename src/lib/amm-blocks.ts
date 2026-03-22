@@ -1,17 +1,18 @@
 // AMM Block Coding System — Type definitions and compiler for visual AMM curve design
 
-export type AMMBlockCategory = "primitive" | "operation" | "curve" | "modifier" | "conditional" | "fee" | "multiasset" | "timevar" | "oracle" | "security";
+export type AMMBlockCategory = "primitive" | "operation" | "curve" | "modifier" | "conditional" | "fee" | "multiasset" | "timevar" | "oracle" | "security" | "governance" | "composability";
 
 export interface AMMBlockParam {
   key: string;
   label: string;
-  type: "number" | "select";
-  default: number | string;
+  type: "number" | "select" | "slider" | "toggle" | "expression";
+  default: number | string | boolean;
   min?: number;
   max?: number;
   step?: number;
   options?: { label: string; value: string }[];
   unit?: string;
+  placeholder?: string; // For expression type
 }
 
 export interface AMMBlockDefinition {
@@ -31,9 +32,12 @@ export interface AMMBlockDefinition {
 export interface AMMBlockInstance {
   uid: string;
   blockId: string;
-  params: Record<string, number | string>;
+  params: Record<string, number | string | boolean>;
   children: AMMBlockInstance[];
   inputs: AMMBlockInstance[]; // Connected input blocks
+  notes?: string; // User annotations/comments
+  collapsed?: boolean; // Persist collapse state
+  color?: string; // User-customizable color override
 }
 
 export interface AMMDesign {
@@ -41,6 +45,19 @@ export interface AMMDesign {
   name: string;
   blocks: AMMBlockInstance[];
   rootFormula?: string;
+  macros?: AMMBlockMacro[]; // User-saved block compositions
+  description?: string; // Design description
+  tags?: string[]; // Design tags for organization
+}
+
+export interface AMMBlockMacro {
+  id: string;
+  name: string;
+  description: string;
+  blocks: AMMBlockInstance[];
+  category: AMMBlockCategory;
+  createdAt: string;
+  color?: string;
 }
 
 // Category colors (HSL-based)
@@ -55,6 +72,8 @@ export const AMM_CATEGORY_COLORS: Record<AMMBlockCategory, string> = {
   timevar: "hsl(260, 65%, 55%)",
   oracle: "hsl(45, 85%, 50%)",
   security: "hsl(0, 70%, 50%)",
+  governance: "hsl(170, 65%, 45%)",
+  composability: "hsl(310, 60%, 50%)",
 };
 
 export const AMM_CATEGORY_LABELS: Record<AMMBlockCategory, string> = {
@@ -68,6 +87,8 @@ export const AMM_CATEGORY_LABELS: Record<AMMBlockCategory, string> = {
   timevar: "Time-Variance",
   oracle: "Oracle & Pricing",
   security: "Security & Guards",
+  governance: "Governance",
+  composability: "Composability",
 };
 
 // ─── BLOCK DEFINITIONS ──────────────────────────────────────
@@ -307,6 +328,162 @@ export const AMM_BLOCK_DEFINITIONS: AMMBlockDefinition[] = [
   { id: "guard_oracle_check", label: "Oracle Price Check", category: "security", subcategory: "Protection", color: AMM_CATEGORY_COLORS.security, params: [
     { key: "maxDeviation", label: "Max Deviation", type: "number", default: 5, min: 0.1, max: 50, step: 0.1, unit: "%" },
   ], output: "number", description: "Compare pool price vs oracle and halt on deviation", symbol: "Δoracle" },
+
+  // 11. GOVERNANCE — DAO and protocol governance mechanisms
+  { id: "gov_vote_weight", label: "Vote Weight", category: "governance", subcategory: "Voting", color: AMM_CATEGORY_COLORS.governance, params: [
+    { key: "quorum", label: "Quorum %", type: "slider", default: 50, min: 1, max: 100, step: 1, unit: "%" },
+    { key: "minHolding", label: "Min Holding", type: "number", default: 100, min: 0, max: 1000000, step: 1 },
+  ], output: "number", description: "Governance vote weight based on token holdings", symbol: "vote" },
+  { id: "gov_timelock", label: "Timelock", category: "governance", subcategory: "Execution", color: AMM_CATEGORY_COLORS.governance, params: [
+    { key: "delay", label: "Delay (s)", type: "number", default: 86400, min: 3600, max: 604800, step: 3600 },
+    { key: "gracePeriod", label: "Grace (s)", type: "number", default: 172800, min: 3600, max: 1209600, step: 3600 },
+  ], output: "number", description: "Timelock delay before parameter changes execute", symbol: "⏱lock" },
+  { id: "gov_param_bounds", label: "Parameter Bounds", category: "governance", subcategory: "Constraints", color: AMM_CATEGORY_COLORS.governance, params: [
+    { key: "paramName", label: "Parameter", type: "select", default: "amp", options: [
+      { label: "Amplification", value: "amp" },
+      { label: "Fee Rate", value: "fee" },
+      { label: "Weight", value: "weight" },
+      { label: "Price Band", value: "priceBand" },
+    ] },
+    { key: "maxChange", label: "Max Change %", type: "slider", default: 10, min: 1, max: 50, step: 1, unit: "%" },
+    { key: "cooldown", label: "Cooldown (s)", type: "number", default: 3600, min: 60, max: 86400, step: 60 },
+  ], output: "number", description: "Constrain how much a parameter can change per governance action", symbol: "bounds" },
+  { id: "gov_multisig", label: "Multisig Gate", category: "governance", subcategory: "Execution", color: AMM_CATEGORY_COLORS.governance, params: [
+    { key: "threshold", label: "Threshold", type: "number", default: 3, min: 1, max: 20, step: 1 },
+    { key: "total", label: "Total Signers", type: "number", default: 5, min: 1, max: 50, step: 1 },
+  ], output: "number", description: "Require M-of-N multisig approval for parameter changes", symbol: "M/N" },
+  { id: "gov_emergency_shutdown", label: "Emergency Shutdown", category: "governance", subcategory: "Safety", color: AMM_CATEGORY_COLORS.governance, params: [
+    { key: "enabled", label: "Enabled", type: "toggle", default: true },
+    { key: "guardianCount", label: "Guardians", type: "number", default: 3, min: 1, max: 10, step: 1 },
+  ], output: "number", description: "Emergency shutdown mechanism with guardian multisig", symbol: "🛑" },
+  { id: "gov_fee_distribution", label: "Fee Distribution", category: "governance", subcategory: "Revenue", color: AMM_CATEGORY_COLORS.governance, params: [
+    { key: "lpShare", label: "LP Share %", type: "slider", default: 80, min: 0, max: 100, step: 1, unit: "%" },
+    { key: "protocolShare", label: "Protocol %", type: "slider", default: 15, min: 0, max: 100, step: 1, unit: "%" },
+    { key: "buybackShare", label: "Buyback %", type: "slider", default: 5, min: 0, max: 100, step: 1, unit: "%" },
+  ], output: "number", description: "Split fee revenue between LPs, protocol, and buyback", symbol: "split" },
+  { id: "gov_incentive_multiplier", label: "Incentive Multiplier", category: "governance", subcategory: "Revenue", color: AMM_CATEGORY_COLORS.governance, params: [
+    { key: "boostFactor", label: "Boost", type: "slider", default: 2.5, min: 1, max: 10, step: 0.1 },
+    { key: "lockDuration", label: "Lock (days)", type: "number", default: 30, min: 1, max: 365, step: 1 },
+  ], inputs: 1, output: "number", description: "Boost rewards based on lock duration (ve-style)", symbol: "boost" },
+
+  // 12. COMPOSABILITY — Cross-protocol hooks and integration
+  { id: "comp_flash_loan_hook", label: "Flash Loan Hook", category: "composability", subcategory: "Hooks", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "maxBorrow", label: "Max Borrow %", type: "slider", default: 50, min: 1, max: 100, step: 1, unit: "%" },
+    { key: "flashFee", label: "Flash Fee", type: "number", default: 0.0009, min: 0, max: 0.01, step: 0.0001, unit: "%" },
+  ], output: "number", description: "Allow flash loans from pool reserves with fee", symbol: "⚡loan" },
+  { id: "comp_callback", label: "Swap Callback", category: "composability", subcategory: "Hooks", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "hookType", label: "Hook", type: "select", default: "beforeSwap", options: [
+      { label: "Before Swap", value: "beforeSwap" },
+      { label: "After Swap", value: "afterSwap" },
+      { label: "Before LP", value: "beforeLP" },
+      { label: "After LP", value: "afterLP" },
+    ] },
+    { key: "gasLimit", label: "Gas Limit", type: "number", default: 200000, min: 50000, max: 1000000, step: 10000 },
+  ], output: "number", description: "External callback hook at swap lifecycle points", symbol: "hook()" },
+  { id: "comp_reentrancy_guard", label: "Reentrancy Guard", category: "composability", subcategory: "Safety", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "strict", label: "Strict Mode", type: "toggle", default: true },
+  ], output: "number", description: "Prevent reentrancy attacks on pool functions", symbol: "🔒" },
+  { id: "comp_permit2", label: "Permit2 Integration", category: "composability", subcategory: "Auth", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "enabled", label: "Enabled", type: "toggle", default: true },
+    { key: "expiration", label: "Expiry (s)", type: "number", default: 1800, min: 60, max: 86400, step: 60 },
+  ], output: "number", description: "Enable Permit2 gasless approvals for swaps", symbol: "permit2" },
+  { id: "comp_cross_pool", label: "Cross-Pool Route", category: "composability", subcategory: "Routing", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "maxHops", label: "Max Hops", type: "number", default: 3, min: 1, max: 5, step: 1 },
+    { key: "splitRoutes", label: "Split Routes", type: "toggle", default: false },
+  ], output: "number", description: "Enable multi-hop routing through other pools", symbol: "route" },
+  { id: "comp_yield_bearing", label: "Yield-Bearing LP", category: "composability", subcategory: "Yield", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "baseAPY", label: "Base APY %", type: "slider", default: 5, min: 0, max: 100, step: 0.1, unit: "%" },
+    { key: "compounding", label: "Compound", type: "select", default: "daily", options: [
+      { label: "Continuous", value: "continuous" },
+      { label: "Daily", value: "daily" },
+      { label: "Weekly", value: "weekly" },
+    ] },
+  ], inputs: 1, output: "number", description: "LP tokens accrue yield from underlying protocol", symbol: "yield" },
+  { id: "comp_rebase_handler", label: "Rebase Handler", category: "composability", subcategory: "Tokens", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "rebaseMode", label: "Mode", type: "select", default: "wrap", options: [
+      { label: "Wrap to static", value: "wrap" },
+      { label: "Track rebase", value: "track" },
+      { label: "Accumulate", value: "accumulate" },
+    ] },
+  ], output: "number", description: "Handle rebasing tokens (stETH, AMPL, etc.)", symbol: "rebase" },
+  { id: "comp_erc4626_vault", label: "ERC-4626 Vault", category: "composability", subcategory: "Yield", color: AMM_CATEGORY_COLORS.composability, params: [
+    { key: "vaultStrategy", label: "Strategy", type: "select", default: "lending", options: [
+      { label: "Lending (Aave/Compound)", value: "lending" },
+      { label: "Staking", value: "staking" },
+      { label: "Farming", value: "farming" },
+      { label: "Custom", value: "custom" },
+    ] },
+    { key: "depositCap", label: "Deposit Cap", type: "number", default: 1000000, min: 0, max: 100000000, step: 1000 },
+  ], output: "number", description: "Route idle liquidity to ERC-4626 yield vault", symbol: "vault" },
+
+  // Advanced Math Operations (extending operations category)
+  { id: "op_polynomial", label: "Polynomial", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [
+    { key: "a3", label: "x³ coeff", type: "number", default: 0, min: -100, max: 100, step: 0.01 },
+    { key: "a2", label: "x² coeff", type: "number", default: 1, min: -100, max: 100, step: 0.01 },
+    { key: "a1", label: "x¹ coeff", type: "number", default: 0, min: -100, max: 100, step: 0.01 },
+    { key: "a0", label: "constant", type: "number", default: 0, min: -100000, max: 100000, step: 0.01 },
+  ], inputs: 1, output: "number", description: "Evaluate a³x³ + a²x² + a¹x + a⁰", symbol: "poly" },
+  { id: "op_lerp", label: "Linear Interpolate", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [
+    { key: "t", label: "t", type: "slider", default: 0.5, min: 0, max: 1, step: 0.01 },
+  ], inputs: 2, output: "number", description: "Linearly interpolate between two values by t", symbol: "lerp" },
+  { id: "op_bezier", label: "Bezier Curve", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [
+    { key: "t", label: "t", type: "slider", default: 0.5, min: 0, max: 1, step: 0.01 },
+    { key: "cp1", label: "Control P1", type: "number", default: 0.25, min: 0, max: 10, step: 0.01 },
+    { key: "cp2", label: "Control P2", type: "number", default: 0.75, min: 0, max: 10, step: 0.01 },
+  ], inputs: 2, output: "number", description: "Cubic Bezier interpolation with control points", symbol: "bez" },
+  { id: "op_ternary", label: "Ternary (A?B:C)", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [
+    { key: "threshold", label: "Threshold", type: "number", default: 0, min: -1000000, max: 1000000, step: 0.01 },
+  ], inputs: 2, output: "number", description: "If first input > threshold return first, else second", symbol: "?:" },
+  { id: "op_atan2", label: "Atan2", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [], inputs: 2, output: "number", description: "Two-argument arctangent atan2(y, x)", symbol: "atan2" },
+  { id: "op_hypot", label: "Hypotenuse", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [], inputs: 2, output: "number", description: "√(a² + b²) — Euclidean distance", symbol: "√(a²+b²)" },
+  { id: "op_sign", label: "Sign (±)", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [], inputs: 1, output: "number", description: "Returns -1, 0, or 1 based on sign of input", symbol: "sgn" },
+  { id: "op_round", label: "Round", category: "operation", subcategory: "Advanced Math", color: AMM_CATEGORY_COLORS.operation, params: [
+    { key: "decimals", label: "Decimals", type: "number", default: 2, min: 0, max: 18, step: 1 },
+  ], inputs: 1, output: "number", description: "Round to N decimal places", symbol: "round" },
+
+  // Advanced curve templates
+  { id: "curve_clipper", label: "Clipper (FMM)", category: "curve", subcategory: "Novel", color: AMM_CATEGORY_COLORS.curve, params: [
+    { key: "k_param", label: "k Parameter", type: "slider", default: 0.5, min: 0, max: 1, step: 0.01 },
+  ], output: "formula", description: "Clipper FMM — interpolates between CPMM and CSMM", symbol: "FMM(k)" },
+  { id: "curve_cosh", label: "Cosh Invariant", category: "curve", subcategory: "Novel", color: AMM_CATEGORY_COLORS.curve, params: [
+    { key: "scale", label: "Scale", type: "number", default: 1, min: 0.01, max: 100, step: 0.01 },
+  ], output: "formula", description: "Hyperbolic cosine invariant cosh(x/s) + cosh(y/s) = k", symbol: "cosh" },
+  { id: "curve_elliptic", label: "Elliptic Curve", category: "curve", subcategory: "Novel", color: AMM_CATEGORY_COLORS.curve, params: [
+    { key: "a", label: "a", type: "number", default: 1, min: 0.01, max: 100, step: 0.01 },
+    { key: "b", label: "b", type: "number", default: 1, min: 0.01, max: 100, step: 0.01 },
+  ], output: "formula", description: "Elliptic invariant (x/a)² + (y/b)² = k", symbol: "(x/a)²+(y/b)²" },
+
+  // Advanced modifiers
+  { id: "mod_quantize", label: "Quantize", category: "modifier", subcategory: "Transform", color: AMM_CATEGORY_COLORS.modifier, params: [
+    { key: "step", label: "Step Size", type: "number", default: 0.01, min: 0.0001, max: 100, step: 0.0001 },
+  ], inputs: 1, output: "number", description: "Snap value to nearest step (tick alignment)", symbol: "⌊⋅/s⌋×s" },
+  { id: "mod_exponential_decay", label: "Exp Decay", category: "modifier", subcategory: "Transform", color: AMM_CATEGORY_COLORS.modifier, params: [
+    { key: "lambda", label: "Lambda (λ)", type: "number", default: 0.01, min: 0.0001, max: 1, step: 0.0001 },
+  ], inputs: 1, output: "number", description: "Exponential decay: input × e^(-λ × distance)", symbol: "e^(-λd)" },
+  { id: "mod_moving_avg", label: "Moving Average", category: "modifier", subcategory: "Smoothing", color: AMM_CATEGORY_COLORS.modifier, params: [
+    { key: "window", label: "Window", type: "number", default: 10, min: 2, max: 100, step: 1 },
+    { key: "type", label: "Type", type: "select", default: "ema", options: [
+      { label: "EMA", value: "ema" },
+      { label: "SMA", value: "sma" },
+      { label: "WMA", value: "wma" },
+    ] },
+  ], inputs: 1, output: "number", description: "Apply moving average smoothing to value", symbol: "MA" },
+
+  // Advanced fee models
+  { id: "fee_surge", label: "Surge Fee", category: "fee", subcategory: "Dynamic", color: AMM_CATEGORY_COLORS.fee, params: [
+    { key: "base", label: "Base Fee", type: "number", default: 0.003, min: 0, max: 0.1, step: 0.001 },
+    { key: "surgeMultiplier", label: "Surge ×", type: "slider", default: 5, min: 1, max: 20, step: 0.5 },
+    { key: "threshold", label: "Volume Threshold", type: "number", default: 1000, min: 1, max: 1000000, step: 100 },
+  ], output: "number", description: "Fee surges when trading volume exceeds threshold", symbol: "surge" },
+  { id: "fee_directional", label: "Directional Fee", category: "fee", subcategory: "Dynamic", color: AMM_CATEGORY_COLORS.fee, params: [
+    { key: "buyFee", label: "Buy Fee", type: "number", default: 0.002, min: 0, max: 0.1, step: 0.001, unit: "%" },
+    { key: "sellFee", label: "Sell Fee", type: "number", default: 0.005, min: 0, max: 0.1, step: 0.001, unit: "%" },
+  ], output: "number", description: "Different fees for buy vs sell direction", symbol: "↕fee" },
+  { id: "fee_time_decay", label: "Time-Decay Fee", category: "fee", subcategory: "Dynamic", color: AMM_CATEGORY_COLORS.fee, params: [
+    { key: "initial", label: "Initial Fee", type: "number", default: 0.01, min: 0, max: 0.1, step: 0.001 },
+    { key: "floor", label: "Floor Fee", type: "number", default: 0.001, min: 0, max: 0.1, step: 0.001 },
+    { key: "halflife", label: "Half-life (s)", type: "number", default: 3600, min: 60, max: 86400, step: 60 },
+  ], output: "number", description: "Fee decays from initial to floor over time since last trade", symbol: "fee(t)" },
 ];
 
 // ─── HELPERS ──────────────────────────────────────────────────
@@ -327,6 +504,8 @@ export function getAMMBlocksByCategory(): Record<AMMBlockCategory, Record<string
     timevar: {},
     oracle: {},
     security: {},
+    governance: {},
+    composability: {},
   };
   for (const block of AMM_BLOCK_DEFINITIONS) {
     if (!grouped[block.category][block.subcategory]) {
@@ -340,7 +519,7 @@ export function getAMMBlocksByCategory(): Record<AMMBlockCategory, Record<string
 export function createAMMBlockInstance(blockId: string): AMMBlockInstance {
   const def = getAMMBlockDef(blockId);
   if (!def) throw new Error(`Unknown block: ${blockId}`);
-  const params: Record<string, number | string> = {};
+  const params: Record<string, number | string | boolean> = {};
   for (const p of def.params) {
     params[p.key] = p.default;
   }
@@ -351,6 +530,57 @@ export function createAMMBlockInstance(blockId: string): AMMBlockInstance {
     children: [],
     inputs: [],
   };
+}
+
+/** Update notes/annotations on a block */
+export function updateBlockNotes(blocks: AMMBlockInstance[], uid: string, notes: string): AMMBlockInstance[] {
+  return blocks.map(b => {
+    if (b.uid === uid) {
+      return { ...b, notes };
+    }
+    return {
+      ...b,
+      children: updateBlockNotes(b.children, uid, notes),
+      inputs: updateBlockNotes(b.inputs, uid, notes),
+    };
+  });
+}
+
+/** Update custom color override on a block */
+export function updateBlockColor(blocks: AMMBlockInstance[], uid: string, color: string | undefined): AMMBlockInstance[] {
+  return blocks.map(b => {
+    if (b.uid === uid) {
+      return { ...b, color };
+    }
+    return {
+      ...b,
+      children: updateBlockColor(b.children, uid, color),
+      inputs: updateBlockColor(b.inputs, uid, color),
+    };
+  });
+}
+
+/** Create a macro from selected blocks */
+export function createMacroFromBlocks(name: string, description: string, blocks: AMMBlockInstance[], category: AMMBlockCategory = "curve"): AMMBlockMacro {
+  return {
+    id: `macro_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    description,
+    blocks: JSON.parse(JSON.stringify(blocks)),
+    category,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Instantiate a macro into fresh block instances */
+export function instantiateMacro(macro: AMMBlockMacro): AMMBlockInstance[] {
+  const refreshUids = (block: AMMBlockInstance): AMMBlockInstance => ({
+    ...block,
+    uid: `${block.blockId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    children: block.children.map(refreshUids),
+    inputs: block.inputs.map(refreshUids),
+  });
+  return macro.blocks.map(refreshUids);
 }
 
 // ─── FORMULA COMPILER ──────────────────────────────────────────
@@ -517,6 +747,50 @@ function compileBlockToFormula(block: AMMBlockInstance): string {
   if (block.blockId === "guard_sandwich") return `antiSandwich(${block.params.delay}blks)`;
   if (block.blockId === "guard_oracle_check") return `oracleCheck(±${block.params.maxDeviation}%)`;
 
+  // Governance blocks
+  if (block.blockId === "gov_vote_weight") return `voteWeight(quorum=${block.params.quorum}%)`;
+  if (block.blockId === "gov_timelock") return `timelock(${block.params.delay}s)`;
+  if (block.blockId === "gov_param_bounds") return `bounds(${block.params.paramName}, ±${block.params.maxChange}%)`;
+  if (block.blockId === "gov_multisig") return `multisig(${block.params.threshold}/${block.params.total})`;
+  if (block.blockId === "gov_emergency_shutdown") return `emergencyShutdown(${block.params.guardianCount} guardians)`;
+  if (block.blockId === "gov_fee_distribution") return `feeDistrib(LP=${block.params.lpShare}%, proto=${block.params.protocolShare}%)`;
+  if (block.blockId === "gov_incentive_multiplier" && block.inputs.length >= 1) return `${block.params.boostFactor}× boost(${compileBlockToFormula(block.inputs[0])})`;
+
+  // Composability blocks
+  if (block.blockId === "comp_flash_loan_hook") return `flashLoan(max=${block.params.maxBorrow}%, fee=${block.params.flashFee})`;
+  if (block.blockId === "comp_callback") return `hook.${block.params.hookType}(gas=${block.params.gasLimit})`;
+  if (block.blockId === "comp_reentrancy_guard") return `reentrancyGuard(${block.params.strict ? "strict" : "basic"})`;
+  if (block.blockId === "comp_permit2") return `permit2(${block.params.enabled ? "on" : "off"})`;
+  if (block.blockId === "comp_cross_pool") return `route(hops≤${block.params.maxHops})`;
+  if (block.blockId === "comp_yield_bearing" && block.inputs.length >= 1) return `yield(${block.params.baseAPY}% ${block.params.compounding}, ${compileBlockToFormula(block.inputs[0])})`;
+  if (block.blockId === "comp_rebase_handler") return `rebase(${block.params.rebaseMode})`;
+  if (block.blockId === "comp_erc4626_vault") return `vault(${block.params.vaultStrategy}, cap=${block.params.depositCap})`;
+
+  // Advanced operations
+  if (block.blockId === "op_polynomial" && block.inputs.length >= 1) return `poly(${block.params.a3}x³+${block.params.a2}x²+${block.params.a1}x+${block.params.a0})`;
+  if (block.blockId === "op_lerp" && block.inputs.length === 2) return `lerp(${compileBlockToFormula(block.inputs[0])}, ${compileBlockToFormula(block.inputs[1])}, t=${block.params.t})`;
+  if (block.blockId === "op_bezier" && block.inputs.length === 2) return `bezier(${compileBlockToFormula(block.inputs[0])}, ${compileBlockToFormula(block.inputs[1])}, t=${block.params.t})`;
+  if (block.blockId === "op_ternary" && block.inputs.length === 2) return `(${compileBlockToFormula(block.inputs[0])} > ${block.params.threshold} ? ${compileBlockToFormula(block.inputs[0])} : ${compileBlockToFormula(block.inputs[1])})`;
+  if (block.blockId === "op_atan2" && block.inputs.length === 2) return `atan2(${compileBlockToFormula(block.inputs[0])}, ${compileBlockToFormula(block.inputs[1])})`;
+  if (block.blockId === "op_hypot" && block.inputs.length === 2) return `hypot(${compileBlockToFormula(block.inputs[0])}, ${compileBlockToFormula(block.inputs[1])})`;
+  if (block.blockId === "op_sign" && block.inputs.length >= 1) return `sgn(${compileBlockToFormula(block.inputs[0])})`;
+  if (block.blockId === "op_round" && block.inputs.length >= 1) return `round(${compileBlockToFormula(block.inputs[0])}, ${block.params.decimals})`;
+
+  // Novel curves
+  if (block.blockId === "curve_clipper") return `FMM(k=${block.params.k_param})`;
+  if (block.blockId === "curve_cosh") return `cosh(x/${block.params.scale})+cosh(y/${block.params.scale})=k`;
+  if (block.blockId === "curve_elliptic") return `(x/${block.params.a})²+(y/${block.params.b})²=k`;
+
+  // Advanced modifiers
+  if (block.blockId === "mod_quantize" && block.inputs.length >= 1) return `quantize(${compileBlockToFormula(block.inputs[0])}, step=${block.params.step})`;
+  if (block.blockId === "mod_exponential_decay" && block.inputs.length >= 1) return `expDecay(${compileBlockToFormula(block.inputs[0])}, λ=${block.params.lambda})`;
+  if (block.blockId === "mod_moving_avg" && block.inputs.length >= 1) return `MA(${compileBlockToFormula(block.inputs[0])}, ${block.params.type}(${block.params.window}))`;
+
+  // Advanced fees
+  if (block.blockId === "fee_surge") return `surgeFee(base=${block.params.base}, ×${block.params.surgeMultiplier})`;
+  if (block.blockId === "fee_directional") return `dirFee(buy=${block.params.buyFee}, sell=${block.params.sellFee})`;
+  if (block.blockId === "fee_time_decay") return `decayFee(${block.params.initial}→${block.params.floor}, t½=${block.params.halflife}s)`;
+
   return def.symbol || def.label;
 }
 
@@ -541,6 +815,9 @@ export function compileAMMDesign(design: AMMDesign): CompiledAMMFormula {
       else if (block.blockId === "curve_cpmm_v3") curveType = "concentrated-v3";
       else if (block.blockId === "curve_xyk_offset") curveType = "offset-product";
       else if (block.blockId === "curve_power") curveType = "power-law";
+      else if (block.blockId === "curve_clipper") curveType = "clipper-fmm";
+      else if (block.blockId === "curve_cosh") curveType = "cosh-invariant";
+      else if (block.blockId === "curve_elliptic") curveType = "elliptic";
     }
 
     // Extract params
@@ -834,6 +1111,99 @@ export function evaluateBlockNumeric(block: AMMBlockInstance, ctx: EvalContext):
     case "guard_sandwich": return Number(block.params.delay) || 1;
     case "guard_oracle_check": return Number(block.params.maxDeviation) / 100;
 
+    // ── Governance blocks ──
+    case "gov_vote_weight": return Number(block.params.quorum) / 100;
+    case "gov_timelock": return Number(block.params.delay) || 86400;
+    case "gov_param_bounds": return Number(block.params.maxChange) / 100;
+    case "gov_multisig": return Number(block.params.threshold) / Number(block.params.total);
+    case "gov_emergency_shutdown": return block.params.enabled ? 1 : 0;
+    case "gov_fee_distribution": return Number(block.params.lpShare) / 100;
+    case "gov_incentive_multiplier": {
+      const boost = Number(block.params.boostFactor) || 1;
+      return (a ?? 1) * boost;
+    }
+
+    // ── Composability blocks ──
+    case "comp_flash_loan_hook": return (Number(block.params.maxBorrow) / 100) * ctx.x;
+    case "comp_callback": return Number(block.params.gasLimit) || 200000;
+    case "comp_reentrancy_guard": return block.params.strict ? 1 : 0;
+    case "comp_permit2": return block.params.enabled ? 1 : 0;
+    case "comp_cross_pool": return Number(block.params.maxHops) || 3;
+    case "comp_yield_bearing": {
+      const apy = Number(block.params.baseAPY) / 100;
+      return (a ?? 1) * (1 + apy);
+    }
+    case "comp_rebase_handler": return a ?? 1;
+    case "comp_erc4626_vault": return Number(block.params.depositCap) || 1000000;
+
+    // ── Advanced Math operations ──
+    case "op_polynomial": {
+      const v = a ?? 0;
+      const a3 = Number(block.params.a3) || 0;
+      const a2 = Number(block.params.a2) || 0;
+      const a1 = Number(block.params.a1) || 0;
+      const a0 = Number(block.params.a0) || 0;
+      return a3 * v * v * v + a2 * v * v + a1 * v + a0;
+    }
+    case "op_lerp": {
+      const lerpt = Number(block.params.t) || 0.5;
+      return (a ?? 0) * (1 - lerpt) + (b ?? 0) * lerpt;
+    }
+    case "op_bezier": {
+      const bt = Number(block.params.t) || 0.5;
+      const cp1 = Number(block.params.cp1) || 0.25;
+      const cp2 = Number(block.params.cp2) || 0.75;
+      const p0 = a ?? 0, p3 = b ?? 0;
+      const u = 1 - bt;
+      return u * u * u * p0 + 3 * u * u * bt * cp1 + 3 * u * bt * bt * cp2 + bt * bt * bt * p3;
+    }
+    case "op_ternary": {
+      const thresh = Number(block.params.threshold) || 0;
+      return (a ?? 0) > thresh ? (a ?? 0) : (b ?? 0);
+    }
+    case "op_atan2": return Math.atan2(a ?? 0, b ?? 1);
+    case "op_hypot": return Math.hypot(a ?? 0, b ?? 0);
+    case "op_sign": return Math.sign(a ?? 0);
+    case "op_round": {
+      const dec = Number(block.params.decimals) || 2;
+      const factor = Math.pow(10, dec);
+      return Math.round((a ?? 0) * factor) / factor;
+    }
+
+    // ── Novel curve templates ──
+    case "curve_clipper": {
+      const kp = Number(block.params.k_param) || 0.5;
+      const cpmm = ctx.x * ctx.y;
+      const csmm = ctx.x + ctx.y;
+      return kp * cpmm + (1 - kp) * csmm;
+    }
+    case "curve_cosh": {
+      const scale = Number(block.params.scale) || 1;
+      return Math.cosh(ctx.x / scale) + Math.cosh(ctx.y / scale);
+    }
+    case "curve_elliptic": {
+      const ea = Number(block.params.a) || 1;
+      const eb = Number(block.params.b) || 1;
+      return Math.pow(ctx.x / ea, 2) + Math.pow(ctx.y / eb, 2);
+    }
+
+    // ── Advanced modifiers ──
+    case "mod_quantize": {
+      const stepSize = Number(block.params.step) || 0.01;
+      return Math.round((a ?? 0) / stepSize) * stepSize;
+    }
+    case "mod_exponential_decay": {
+      const lambda = Number(block.params.lambda) || 0.01;
+      const dist = Math.abs((a ?? 0) - Math.sqrt(ctx.k));
+      return (a ?? 0) * Math.exp(-lambda * dist);
+    }
+    case "mod_moving_avg": return a ?? 0; // simulated; moving average needs history
+
+    // ── Advanced fee models ──
+    case "fee_surge": return Number(block.params.base) || 0.003;
+    case "fee_directional": return Number(block.params.buyFee) || 0.002;
+    case "fee_time_decay": return Number(block.params.initial) || 0.01;
+
     default: return 0;
   }
 }
@@ -984,6 +1354,32 @@ export function evaluateAMMCurve(design: AMMDesign, k: number = 10000, points: n
           const n = Number(namedCurve.params.exponent) || 2;
           const remainder = k - Math.pow(x, n);
           y = remainder > 0 ? Math.pow(remainder, 1 / n) : null;
+          break;
+        }
+        case "curve_clipper": {
+          const kp = Number(namedCurve.params.k_param) || 0.5;
+          // FMM: kp * x*y + (1-kp) * (x+y) = target → solve for y
+          // kp*x*y + (1-kp)*y = target - (1-kp)*x
+          // y * (kp*x + (1-kp)) = target - (1-kp)*x
+          const eqVal = kp * Math.sqrt(k) * Math.sqrt(k) + (1 - kp) * 2 * Math.sqrt(k);
+          const denom = kp * x + (1 - kp);
+          y = denom > 0 ? (eqVal - (1 - kp) * x) / denom : null;
+          break;
+        }
+        case "curve_cosh": {
+          const sc = Number(namedCurve.params.scale) || 1;
+          const target = 2 * Math.cosh(Math.sqrt(k) / sc);
+          const coshX = Math.cosh(x / sc);
+          const remainder = target - coshX;
+          y = remainder > 1 ? Math.acosh(remainder) * sc : null;
+          break;
+        }
+        case "curve_elliptic": {
+          const ea = Number(namedCurve.params.a) || 1;
+          const eb = Number(namedCurve.params.b) || 1;
+          const target = Math.pow(Math.sqrt(k) / ea, 2) + Math.pow(Math.sqrt(k) / eb, 2);
+          const remainder = target - Math.pow(x / ea, 2);
+          y = remainder > 0 ? Math.sqrt(remainder) * eb : null;
           break;
         }
         default: y = k / x;
