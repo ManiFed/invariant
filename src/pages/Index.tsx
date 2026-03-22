@@ -1,6 +1,18 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Beaker, FileText, GraduationCap, Heart, Library, Lightbulb, FlaskConical, Puzzle, GitCompare, Keyboard } from "lucide-react";
+import {
+  ArrowRight,
+  Beaker,
+  FileText,
+  GraduationCap,
+  Heart,
+  Library,
+  Lightbulb,
+  FlaskConical,
+  Puzzle,
+  GitCompare,
+  Keyboard,
+} from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AsciiCurveHero } from "@/components/AsciiCurveHero";
 
@@ -105,15 +117,6 @@ const Index = () => {
           />
 
           <NavCard
-            title="Pool Comparison"
-            description="Compare AMM designs side-by-side with charts and radar analysis"
-            icon={<GitCompare className="w-5 h-5" />}
-            badge="New"
-            badgeColor="border-warning/30 text-warning"
-            onClick={() => navigate("/compare")}
-          />
-
-          <NavCard
             title="Documentation"
             description="Platform docs, AMM theory, and reference material"
             icon={<FileText className="w-5 h-5" />}
@@ -143,7 +146,9 @@ const Index = () => {
           <a href="https://github.com/ManiFed/invariant">open source.</a>
         </p>
         <p className="flex items-center justify-center gap-1.5 opacity-60">
-          <Keyboard className="w-3 h-3" /> Press <kbd className="font-mono px-1.5 py-0.5 rounded bg-secondary border border-border text-foreground">/</kbd> for keyboard shortcuts
+          <Keyboard className="w-3 h-3" /> Press{" "}
+          <kbd className="font-mono px-1.5 py-0.5 rounded bg-secondary border border-border text-foreground">/</kbd> for
+          keyboard shortcuts
         </p>
       </footer>
     </div>
@@ -173,7 +178,9 @@ const NavCard = ({
     <div className="flex items-center justify-between mb-3">
       <div className="text-foreground">{icon}</div>
       {badge && (
-        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${badgeColor || "border-primary/30 text-primary"}`}>
+        <span
+          className={`text-[10px] font-mono px-2 py-0.5 rounded border ${badgeColor || "border-primary/30 text-primary"}`}
+        >
           {badge}
         </span>
       )}
