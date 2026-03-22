@@ -78,10 +78,29 @@ const PoolComparison = () => {
   const navigate = useNavigate();
   const colors = useChartColors();
 
-  const [pools, setPools] = useState<PoolConfig[]>([
-    { id: makeId(), name: "Uniswap V2 Style", type: "constant_product", liquidity: 100000, feeRate: 0.003, color: POOL_COLORS[0] },
-    { id: makeId(), name: "Curve Style", type: "stable_swap", liquidity: 100000, feeRate: 0.001, color: POOL_COLORS[1] },
-  ]);
+  const [pools, setPools] = useState<PoolConfig[]>(() => {
+    try {
+      const seed = localStorage.getItem("pool-comparison-seed");
+      if (seed) {
+        localStorage.removeItem("pool-comparison-seed");
+        const parsed = JSON.parse(seed) as Array<{ name: string; type: PoolType; liquidity?: number; feeRate?: number }>;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((p, i) => ({
+            id: makeId(),
+            name: p.name,
+            type: p.type,
+            liquidity: p.liquidity ?? 100000,
+            feeRate: p.feeRate ?? 0.003,
+            color: POOL_COLORS[i % POOL_COLORS.length],
+          }));
+        }
+      }
+    } catch { /* ignore */ }
+    return [
+      { id: makeId(), name: "Uniswap V2 Style", type: "constant_product", liquidity: 100000, feeRate: 0.003, color: POOL_COLORS[0] },
+      { id: makeId(), name: "Curve Style", type: "stable_swap", liquidity: 100000, feeRate: 0.001, color: POOL_COLORS[1] },
+    ];
+  });
 
   const addPool = () => {
     if (pools.length >= 6) return;
