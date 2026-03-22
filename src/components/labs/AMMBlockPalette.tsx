@@ -29,6 +29,8 @@ function categoryBg(cat: AMMBlockCategory): string {
     timevar: "from-indigo-500 to-purple-600",
     oracle: "from-yellow-500 to-amber-500",
     security: "from-red-600 to-rose-700",
+    governance: "from-teal-500 to-emerald-600",
+    composability: "from-fuchsia-500 to-pink-600",
   };
   return map[cat] || "from-gray-500 to-gray-600";
 }

@@ -17,6 +17,10 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Zap,
+  Library,
+  Plus,
+  Tag,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import AMMBlockPalette from "@/components/labs/AMMBlockPalette";
@@ -26,15 +30,22 @@ import AMMTradeSimulator from "@/components/labs/AMMTradeSimulator";
 import {
   type AMMDesign,
   type AMMBlockInstance,
+  type AMMBlockMacro,
   createAMMBlockInstance,
   addChildToBlock,
   addInputToBlock,
   removeBlockFromTree,
   updateBlockParam,
+  updateBlockNotes,
+  updateBlockColor,
   compileAMMDesign,
   getAMMBlockDef,
   duplicateBlockInTree,
   reorderBlock,
+  createMacroFromBlocks,
+  instantiateMacro,
+  simulateTrade,
+  analyzeCurve,
 } from "@/lib/amm-blocks";
 import { downloadSolidity } from "@/lib/codegen-solidity";
 import { toast } from "sonner";
@@ -47,6 +58,7 @@ const DEFAULT_DESIGN: AMMDesign = {
 
 const HISTORY_LIMIT = 40;
 const SAVED_DESIGNS_KEY = "amm-builder-saved-designs-v1";
+const MACROS_STORAGE_KEY = "amm-builder-macros-v1";
 
 interface DesignSnapshot {
   id: string;
@@ -171,9 +183,77 @@ const PRESETS: { name: string; description: string; blocks: () => AMMBlockInstan
       return [block];
     },
   },
+  {
+    name: "Clipper FMM",
+    description: "Function Market Maker (hybrid CPMM/CSMM)",
+    blocks: () => {
+      const block = createAMMBlockInstance("curve_clipper");
+      block.params.k_param = 0.7;
+      return [block];
+    },
+  },
+  {
+    name: "Elliptic Pool",
+    description: "Elliptic invariant with custom axes",
+    blocks: () => {
+      const block = createAMMBlockInstance("curve_elliptic");
+      block.params.a = 1.5;
+      block.params.b = 1;
+      return [block];
+    },
+  },
+  {
+    name: "Governed CP + Fees",
+    description: "CP with governance, fee distribution, timelocks",
+    blocks: () => [
+      createAMMBlockInstance("curve_cp"),
+      createAMMBlockInstance("fee_base"),
+      createAMMBlockInstance("gov_fee_distribution"),
+      createAMMBlockInstance("gov_timelock"),
+      createAMMBlockInstance("gov_param_bounds"),
+    ],
+  },
+  {
+    name: "Composable Vault Pool",
+    description: "CP with flash loans, yield vault, hooks",
+    blocks: () => [
+      createAMMBlockInstance("curve_cp"),
+      createAMMBlockInstance("fee_surge"),
+      createAMMBlockInstance("comp_flash_loan_hook"),
+      createAMMBlockInstance("comp_erc4626_vault"),
+      createAMMBlockInstance("comp_callback"),
+      createAMMBlockInstance("comp_reentrancy_guard"),
+    ],
+  },
+  {
+    name: "Full Stack DEX",
+    description: "StableSwap + all safety, governance, composability",
+    blocks: () => [
+      createAMMBlockInstance("curve_stable"),
+      createAMMBlockInstance("fee_dynamic"),
+      createAMMBlockInstance("guard_max_trade"),
+      createAMMBlockInstance("guard_price_band"),
+      createAMMBlockInstance("guard_slippage"),
+      createAMMBlockInstance("comp_reentrancy_guard"),
+      createAMMBlockInstance("comp_permit2"),
+      createAMMBlockInstance("gov_multisig"),
+      createAMMBlockInstance("gov_emergency_shutdown"),
+      createAMMBlockInstance("gov_fee_distribution"),
+    ],
+  },
+  {
+    name: "ve(3,3) Pool",
+    description: "Solidly + incentive boost + directional fees",
+    blocks: () => [
+      createAMMBlockInstance("curve_solidly"),
+      createAMMBlockInstance("fee_directional"),
+      createAMMBlockInstance("gov_incentive_multiplier"),
+      createAMMBlockInstance("gov_vote_weight"),
+    ],
+  },
 ];
 
-type RightPanelTab = "preview" | "simulate" | "compare";
+type RightPanelTab = "preview" | "simulate" | "compare" | "stress" | "macros";
 
 const KEYBOARD_SHORTCUTS = [
   { keys: ["Ctrl", "Z"], action: "Undo" },
@@ -194,6 +274,12 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
   const [rightTab, setRightTab] = useState<RightPanelTab>("preview");
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [comparisonDesigns, setComparisonDesigns] = useState<DesignSnapshot[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const [macros, setMacros] = useState<AMMBlockMacro[]>([]);
+  const [macroName, setMacroName] = useState("");
+  const [macroDesc, setMacroDesc] = useState("");
+  const [designTags, setDesignTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
     try {
@@ -201,6 +287,12 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
       if (raw) setSavedDesigns(JSON.parse(raw) as DesignSnapshot[]);
     } catch {
       toast.error("Could not load saved designs from local storage");
+    }
+    try {
+      const raw = localStorage.getItem(MACROS_STORAGE_KEY);
+      if (raw) setMacros(JSON.parse(raw) as AMMBlockMacro[]);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -318,6 +410,65 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
       blocks: reorderBlock(d.blocks, uid, direction),
     }));
   }, [updateDesign]);
+
+  const handleUpdateNotes = useCallback((uid: string, notes: string) => {
+    updateDesign((d) => ({
+      ...d,
+      blocks: updateBlockNotes(d.blocks, uid, notes),
+    }));
+  }, [updateDesign]);
+
+  const handleUpdateColor = useCallback((uid: string, color: string | undefined) => {
+    updateDesign((d) => ({
+      ...d,
+      blocks: updateBlockColor(d.blocks, uid, color),
+    }));
+  }, [updateDesign]);
+
+  const saveMacro = useCallback(() => {
+    if (design.blocks.length === 0) {
+      toast.error("No blocks to save as macro");
+      return;
+    }
+    const macro = createMacroFromBlocks(
+      macroName || "Untitled Macro",
+      macroDesc || "Custom block composition",
+      design.blocks,
+    );
+    const updated = [macro, ...macros].slice(0, 50);
+    setMacros(updated);
+    localStorage.setItem(MACROS_STORAGE_KEY, JSON.stringify(updated));
+    setMacroName("");
+    setMacroDesc("");
+    toast.success(`Saved macro: ${macro.name}`);
+  }, [design.blocks, macroName, macroDesc, macros]);
+
+  const loadMacro = useCallback((macro: AMMBlockMacro) => {
+    const newBlocks = instantiateMacro(macro);
+    updateDesign((d) => ({
+      ...d,
+      blocks: [...d.blocks, ...newBlocks],
+    }));
+    toast.success(`Loaded macro: ${macro.name}`);
+  }, [updateDesign]);
+
+  const deleteMacro = useCallback((id: string) => {
+    const updated = macros.filter(m => m.id !== id);
+    setMacros(updated);
+    localStorage.setItem(MACROS_STORAGE_KEY, JSON.stringify(updated));
+    toast.success("Deleted macro");
+  }, [macros]);
+
+  const addDesignTag = useCallback(() => {
+    if (newTag.trim() && !designTags.includes(newTag.trim())) {
+      setDesignTags([...designTags, newTag.trim()]);
+      setNewTag("");
+    }
+  }, [newTag, designTags]);
+
+  const removeDesignTag = useCallback((tag: string) => {
+    setDesignTags(designTags.filter(t => t !== tag));
+  }, [designTags]);
 
   const loadPreset = (preset: (typeof PRESETS)[number]) => {
     updateDesign((current) => ({
@@ -565,6 +716,25 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
                 className="bg-transparent text-sm font-semibold text-foreground outline-none border-b border-transparent hover:border-border focus:border-foreground transition-colors"
                 placeholder="Design name..."
               />
+              {/* Tags */}
+              <div className="flex items-center gap-1 ml-2">
+                {designTags.map(tag => (
+                  <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[8px] font-medium border border-primary/20">
+                    <Tag className="w-2 h-2" />
+                    {tag}
+                    <button onClick={() => removeDesignTag(tag)} className="ml-0.5 hover:text-destructive"><X className="w-2 h-2" /></button>
+                  </span>
+                ))}
+                <div className="flex items-center">
+                  <input
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addDesignTag()}
+                    placeholder="+ tag"
+                    className="w-12 bg-transparent text-[9px] text-muted-foreground outline-none placeholder:text-muted-foreground/50"
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[9px] text-muted-foreground">k =</span>
@@ -600,6 +770,10 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
               onAddInput={addInput}
               onDuplicateBlock={handleDuplicate}
               onReorderBlock={handleReorder}
+              onUpdateNotes={handleUpdateNotes}
+              onUpdateColor={handleUpdateColor}
+              zoom={zoom}
+              onZoomChange={setZoom}
               onDropBlock={(blockId, targetUid, position) => {
                 if (targetUid && position === "child") {
                   addChild(targetUid, blockId);
@@ -616,12 +790,14 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
         {/* Right: Tabbed Panel */}
         <div className="w-96 border-l border-border flex flex-col overflow-hidden shrink-0">
           {/* Tab bar */}
-          <div className="flex items-center border-b border-border px-2 pt-2 gap-1 shrink-0">
+          <div className="flex items-center border-b border-border px-2 pt-2 gap-1 shrink-0 overflow-x-auto">
             {(
               [
                 { id: "preview", label: "Preview", icon: Eye },
                 { id: "simulate", label: "Simulate", icon: Layers },
+                { id: "stress", label: "Stress", icon: Zap },
                 { id: "compare", label: "Compare", icon: Layers },
+                { id: "macros", label: "Macros", icon: Library },
               ] as const
             ).map((tab) => {
               const Icon = tab.icon;
@@ -776,6 +952,270 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
                 )}
               </div>
             )}
+
+            {/* Stress Test Tab */}
+            {rightTab === "stress" && (
+              <StressTestPanel design={design} k={k} />
+            )}
+
+            {/* Macros Tab */}
+            {rightTab === "macros" && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide flex items-center gap-1.5">
+                  <Library className="w-3 h-3" />
+                  Block Macros
+                </p>
+                <p className="text-[9px] text-muted-foreground">
+                  Save your current block composition as a reusable macro. Load macros to add them to your design.
+                </p>
+
+                {/* Save current as macro */}
+                <div className="rounded-lg border border-border p-3 space-y-2">
+                  <p className="text-[9px] font-semibold text-foreground uppercase">Save Current Blocks as Macro</p>
+                  <input
+                    value={macroName}
+                    onChange={(e) => setMacroName(e.target.value)}
+                    placeholder="Macro name..."
+                    className="w-full bg-secondary border border-border rounded px-2 py-1 text-[10px] text-foreground outline-none"
+                  />
+                  <input
+                    value={macroDesc}
+                    onChange={(e) => setMacroDesc(e.target.value)}
+                    placeholder="Description..."
+                    className="w-full bg-secondary border border-border rounded px-2 py-1 text-[10px] text-foreground outline-none"
+                  />
+                  <button
+                    onClick={saveMacro}
+                    disabled={design.blocks.length === 0}
+                    className="inline-flex items-center gap-1 rounded bg-primary text-primary-foreground px-2 py-1 text-[10px] font-medium disabled:opacity-40 hover:opacity-90 transition-opacity"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Save Macro ({design.blocks.length} blocks)
+                  </button>
+                </div>
+
+                {/* Saved macros */}
+                {macros.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-semibold text-muted-foreground uppercase">Saved Macros</p>
+                    {macros.map((macro) => (
+                      <div key={macro.id} className="flex items-center gap-1 rounded border border-border p-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-semibold text-foreground truncate">{macro.name}</p>
+                          <p className="text-[8px] text-muted-foreground truncate">{macro.description}</p>
+                          <p className="text-[8px] text-muted-foreground">{macro.blocks.length} blocks &middot; {new Date(macro.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <button
+                          onClick={() => loadMacro(macro)}
+                          className="px-2 py-1 rounded bg-secondary text-[9px] font-medium border border-border hover:bg-accent transition-colors shrink-0"
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={() => deleteMacro(macro.id)}
+                          className="p-1 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {macros.length === 0 && (
+                  <div className="text-center py-4">
+                    <p className="text-[10px] text-muted-foreground">No saved macros yet.</p>
+                    <p className="text-[9px] text-muted-foreground mt-1">
+                      Build a block composition, then save it as a reusable macro above.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Stress Test Panel ─── */
+function StressTestPanel({ design, k }: { design: AMMDesign; k: number }) {
+  const scenarios = useMemo(() => {
+    const sqrtK = Math.sqrt(k);
+    const results = [];
+
+    // Scenario 1: Cascading sells (10 sequential 2% sells)
+    let cumOutput = 0;
+    let cumSlippage = 0;
+    for (let i = 0; i < 10; i++) {
+      const size = sqrtK * 0.02;
+      const sim = simulateTrade(design, k, size, "x-to-y");
+      cumOutput += sim.outputAmount;
+      cumSlippage += sim.slippage;
+    }
+    results.push({
+      name: "Cascading Sells (10 × 2%)",
+      description: "10 sequential 2% sells",
+      totalOutput: cumOutput,
+      avgSlippage: cumSlippage / 10,
+      worstSlippage: cumSlippage,
+    });
+
+    // Scenario 2: Whale trade (25% of pool)
+    const whaleSim = simulateTrade(design, k, sqrtK * 0.25, "x-to-y");
+    results.push({
+      name: "Whale Trade (25%)",
+      description: "Single 25% of pool trade",
+      totalOutput: whaleSim.outputAmount,
+      avgSlippage: whaleSim.slippage,
+      worstSlippage: whaleSim.priceImpact,
+    });
+
+    // Scenario 3: Small trades (100 × 0.1%)
+    let microOutput = 0;
+    let microSlippage = 0;
+    for (let i = 0; i < 100; i++) {
+      const size = sqrtK * 0.001;
+      const sim = simulateTrade(design, k, size, "x-to-y");
+      microOutput += sim.outputAmount;
+      microSlippage = Math.max(microSlippage, sim.slippage);
+    }
+    results.push({
+      name: "Micro Trades (100 × 0.1%)",
+      description: "100 very small trades",
+      totalOutput: microOutput,
+      avgSlippage: microSlippage,
+      worstSlippage: microSlippage,
+    });
+
+    // Scenario 4: Bidirectional stress (alternating buy/sell)
+    let biOutput = 0;
+    let biMaxImpact = 0;
+    for (let i = 0; i < 20; i++) {
+      const dir = i % 2 === 0 ? "x-to-y" as const : "y-to-x" as const;
+      const size = sqrtK * 0.05;
+      const sim = simulateTrade(design, k, size, dir);
+      biOutput += sim.outputAmount;
+      biMaxImpact = Math.max(biMaxImpact, sim.priceImpact);
+    }
+    results.push({
+      name: "Bidirectional (20 × 5%)",
+      description: "Alternating buy/sell 5% trades",
+      totalOutput: biOutput,
+      avgSlippage: biMaxImpact,
+      worstSlippage: biMaxImpact,
+    });
+
+    // Scenario 5: Near-boundary (trades at extremes)
+    const boundarySim = simulateTrade(design, k, sqrtK * 0.45, "x-to-y");
+    results.push({
+      name: "Boundary Trade (45%)",
+      description: "Trade at pool boundary",
+      totalOutput: boundarySim.outputAmount,
+      avgSlippage: boundarySim.slippage,
+      worstSlippage: boundarySim.priceImpact,
+    });
+
+    return results;
+  }, [design, k]);
+
+  const analytics = useMemo(() => analyzeCurve(design, k), [design, k]);
+
+  // Calculate overall resilience score (0-100)
+  const resilienceScore = useMemo(() => {
+    let score = 100;
+    for (const s of scenarios) {
+      if (s.worstSlippage > 10) score -= 15;
+      else if (s.worstSlippage > 5) score -= 8;
+      else if (s.worstSlippage > 2) score -= 3;
+    }
+    if (analytics.capitalEfficiency < 0.1) score -= 10;
+    if (analytics.liquidityConcentration < 0.2) score -= 10;
+    return Math.max(0, Math.min(100, score));
+  }, [scenarios, analytics]);
+
+  const scoreColor = resilienceScore >= 80 ? "text-emerald-500" : resilienceScore >= 50 ? "text-yellow-500" : "text-red-500";
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wide flex items-center gap-1.5">
+          <Zap className="w-3 h-3" />
+          Stress Testing
+        </p>
+        <div className={`text-lg font-bold ${scoreColor}`}>
+          {resilienceScore}
+          <span className="text-[8px] text-muted-foreground font-normal ml-0.5">/100</span>
+        </div>
+      </div>
+
+      {/* Resilience score bar */}
+      <div className="rounded border border-border p-2">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[9px] font-semibold text-foreground">Resilience Score</p>
+          <span className={`text-[10px] font-bold ${scoreColor}`}>{resilienceScore >= 80 ? "ROBUST" : resilienceScore >= 50 ? "MODERATE" : "FRAGILE"}</span>
+        </div>
+        <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${resilienceScore >= 80 ? "bg-emerald-500" : resilienceScore >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
+            style={{ width: `${resilienceScore}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Scenario results */}
+      <div className="space-y-2">
+        {scenarios.map((scenario) => {
+          const impactColor = scenario.worstSlippage < 1 ? "text-emerald-500" : scenario.worstSlippage < 5 ? "text-yellow-500" : "text-red-500";
+          const statusIcon = scenario.worstSlippage < 1 ? "PASS" : scenario.worstSlippage < 5 ? "WARN" : "FAIL";
+          const statusColor = scenario.worstSlippage < 1 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : scenario.worstSlippage < 5 ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-red-500/10 text-red-500 border-red-500/20";
+
+          return (
+            <div key={scenario.name} className="rounded border border-border p-2 space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-semibold text-foreground">{scenario.name}</p>
+                <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border ${statusColor}`}>{statusIcon}</span>
+              </div>
+              <p className="text-[8px] text-muted-foreground">{scenario.description}</p>
+              <div className="grid grid-cols-3 gap-1">
+                <div className="text-center">
+                  <p className="text-[7px] text-muted-foreground uppercase">Output</p>
+                  <p className="text-[9px] font-bold text-foreground">{scenario.totalOutput.toFixed(2)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[7px] text-muted-foreground uppercase">Avg Slip</p>
+                  <p className={`text-[9px] font-bold ${impactColor}`}>{scenario.avgSlippage.toFixed(3)}%</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[7px] text-muted-foreground uppercase">Max Impact</p>
+                  <p className={`text-[9px] font-bold ${impactColor}`}>{scenario.worstSlippage.toFixed(3)}%</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Summary */}
+      <div className="rounded-lg border border-border p-3 space-y-2">
+        <p className="text-[9px] font-semibold text-foreground uppercase">Analysis Summary</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="rounded border border-border p-1.5 text-center">
+            <p className="text-[7px] text-muted-foreground uppercase">Capital Eff.</p>
+            <p className="text-[10px] font-bold text-foreground">{(analytics.capitalEfficiency * 100).toFixed(1)}%</p>
+          </div>
+          <div className="rounded border border-border p-1.5 text-center">
+            <p className="text-[7px] text-muted-foreground uppercase">Liq Concentration</p>
+            <p className="text-[10px] font-bold text-foreground">{(analytics.liquidityConcentration * 100).toFixed(1)}%</p>
+          </div>
+          <div className="rounded border border-border p-1.5 text-center">
+            <p className="text-[7px] text-muted-foreground uppercase">Price Range</p>
+            <p className="text-[9px] font-bold text-foreground">{analytics.priceRange.min.toFixed(3)}-{analytics.priceRange.max.toFixed(3)}</p>
+          </div>
+          <div className="rounded border border-border p-1.5 text-center">
+            <p className="text-[7px] text-muted-foreground uppercase">1% Slip</p>
+            <p className="text-[10px] font-bold text-foreground">{analytics.maxSlippage1Pct.toFixed(4)}%</p>
           </div>
         </div>
       </div>
