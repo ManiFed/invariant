@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChevronRight, ChevronDown, Plus, Link2, Puzzle, GripVertical } from "lucide-react";
+import { Trash2, ChevronRight, ChevronDown, Plus, Link2, Puzzle, GripVertical, Copy, ArrowUp, ArrowDown } from "lucide-react";
 import {
   getAMMBlockDef,
   AMM_BLOCK_DEFINITIONS,
@@ -18,6 +18,8 @@ interface Props {
   onAddInput: (parentUid: string, blockId: string) => void;
   onReorderBlocks?: (blocks: AMMBlockInstance[]) => void;
   onDropBlock?: (blockId: string, targetUid?: string, position?: "child" | "input" | "after") => void;
+  onDuplicateBlock?: (uid: string) => void;
+  onReorderBlock?: (uid: string, direction: "up" | "down") => void;
 }
 
 // Drag data stored globally during drag
@@ -38,6 +40,8 @@ export default function AMMBlockCanvas({
   onAddInput,
   onReorderBlocks,
   onDropBlock,
+  onDuplicateBlock,
+  onReorderBlock,
 }: Props) {
   const [dragOverCanvas, setDragOverCanvas] = useState(false);
 
@@ -105,6 +109,8 @@ export default function AMMBlockCanvas({
             onAddChild={onAddChild}
             onAddInput={onAddInput}
             onDropBlock={onDropBlock}
+            onDuplicate={onDuplicateBlock}
+            onReorder={onReorderBlock}
           />
         ))}
       </AnimatePresence>
@@ -123,6 +129,8 @@ function categoryBg(cat: AMMBlockCategory): string {
     fee: "from-cyan-500 to-teal-600",
     multiasset: "from-orange-500 to-amber-600",
     timevar: "from-indigo-500 to-purple-600",
+    oracle: "from-yellow-500 to-amber-500",
+    security: "from-red-600 to-rose-700",
   };
   return map[cat] || "from-gray-500 to-gray-600";
 }
@@ -137,6 +145,8 @@ function categoryBgDarker(cat: AMMBlockCategory): string {
     fee: "bg-cyan-700",
     multiasset: "bg-orange-700",
     timevar: "bg-indigo-700",
+    oracle: "bg-yellow-700",
+    security: "bg-red-800",
   };
   return map[cat] || "bg-gray-700";
 }
@@ -151,6 +161,8 @@ function categoryBorder(cat: AMMBlockCategory): string {
     fee: "border-cyan-400/30",
     multiasset: "border-orange-400/30",
     timevar: "border-indigo-400/30",
+    oracle: "border-yellow-400/30",
+    security: "border-red-400/30",
   };
   return map[cat] || "border-gray-400/30";
 }
@@ -165,6 +177,8 @@ function ScratchBlock({
   onAddInput,
   onDropBlock,
   isInput,
+  onDuplicate,
+  onReorder,
 }: {
   block: AMMBlockInstance;
   depth: number;
@@ -174,6 +188,8 @@ function ScratchBlock({
   onAddInput: (parentUid: string, blockId: string) => void;
   onDropBlock?: (blockId: string, targetUid?: string, position?: "child" | "input" | "after") => void;
   isInput?: boolean;
+  onDuplicate?: (uid: string) => void;
+  onReorder?: (uid: string, direction: "up" | "down") => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState<"child" | "input" | null>(null);
@@ -346,6 +362,37 @@ function ScratchBlock({
               </div>
             )}
 
+            {/* Reorder */}
+            {onReorder && depth === 0 && (
+              <>
+                <button
+                  onClick={() => onReorder(block.uid, "up")}
+                  className="p-1 rounded-full hover:bg-white/20 transition-colors opacity-60 hover:opacity-100"
+                  title="Move up"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => onReorder(block.uid, "down")}
+                  className="p-1 rounded-full hover:bg-white/20 transition-colors opacity-60 hover:opacity-100"
+                  title="Move down"
+                >
+                  <ArrowDown className="w-3 h-3" />
+                </button>
+              </>
+            )}
+
+            {/* Duplicate */}
+            {onDuplicate && (
+              <button
+                onClick={() => onDuplicate(block.uid)}
+                className="p-1 rounded-full hover:bg-white/20 transition-colors opacity-60 hover:opacity-100"
+                title="Duplicate block"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+            )}
+
             {/* Delete */}
             <button
               onClick={() => onRemove(block.uid)}
@@ -376,6 +423,8 @@ function ScratchBlock({
                     onAddChild={onAddChild}
                     onAddInput={onAddInput}
                     onDropBlock={onDropBlock}
+                    onDuplicate={onDuplicate}
+                    onReorder={onReorder}
                     isInput
                   />
                 </div>
@@ -439,6 +488,8 @@ function ScratchBlock({
                     onAddChild={onAddChild}
                     onAddInput={onAddInput}
                     onDropBlock={onDropBlock}
+                    onDuplicate={onDuplicate}
+                    onReorder={onReorder}
                   />
                 ))}
 
