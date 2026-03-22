@@ -11,11 +11,18 @@ import {
   Redo2,
   CheckCircle2,
   AlertTriangle,
+  Keyboard,
+  Layers,
+  X,
+  Eye,
+  EyeOff,
+  Trash2,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import AMMBlockPalette from "@/components/labs/AMMBlockPalette";
 import AMMBlockCanvas from "@/components/labs/AMMBlockCanvas";
 import AMMCurvePreview from "@/components/labs/AMMCurvePreview";
+import AMMTradeSimulator from "@/components/labs/AMMTradeSimulator";
 import {
   type AMMDesign,
   type AMMBlockInstance,
@@ -26,6 +33,8 @@ import {
   updateBlockParam,
   compileAMMDesign,
   getAMMBlockDef,
+  duplicateBlockInTree,
+  reorderBlock,
 } from "@/lib/amm-blocks";
 import { downloadSolidity } from "@/lib/codegen-solidity";
 import { toast } from "sonner";
@@ -73,17 +82,20 @@ function traverseBlocks(blocks: AMMBlockInstance[], depth = 0): { total: number;
   return { total, maxDepth, unresolvedInputs };
 }
 
-const PRESETS: { name: string; blocks: () => AMMBlockInstance[] }[] = [
+const PRESETS: { name: string; description: string; blocks: () => AMMBlockInstance[] }[] = [
   {
     name: "Constant Product",
+    description: "Uniswap V2 style x*y=k",
     blocks: () => [createAMMBlockInstance("curve_cp")],
   },
   {
     name: "StableSwap (A=100)",
+    description: "Curve-style stableswap",
     blocks: () => [createAMMBlockInstance("curve_stable")],
   },
   {
     name: "80/20 Weighted",
+    description: "Balancer-style weighted pool",
     blocks: () => {
       const block = createAMMBlockInstance("curve_weighted");
       block.params.wx = 0.8;
@@ -92,8 +104,83 @@ const PRESETS: { name: string; blocks: () => AMMBlockInstance[] }[] = [
   },
   {
     name: "Concentrated (0.9-1.1)",
+    description: "Uniswap V3-style range",
     blocks: () => [createAMMBlockInstance("curve_concentrated")],
   },
+  {
+    name: "Solidly Stable",
+    description: "ve(3,3) x³y+xy³=k",
+    blocks: () => [createAMMBlockInstance("curve_solidly")],
+  },
+  {
+    name: "Power Law (n=3)",
+    description: "Generalized x³+y³=k",
+    blocks: () => {
+      const block = createAMMBlockInstance("curve_power");
+      block.params.exponent = 3;
+      return [block];
+    },
+  },
+  {
+    name: "Offset CPMM",
+    description: "(x+10)(y+10)=k offset pool",
+    blocks: () => [createAMMBlockInstance("curve_xyk_offset")],
+  },
+  {
+    name: "CP + 0.3% Fee",
+    description: "Constant product with base fee",
+    blocks: () => [
+      createAMMBlockInstance("curve_cp"),
+      createAMMBlockInstance("fee_base"),
+    ],
+  },
+  {
+    name: "StableSwap + Dynamic Fee",
+    description: "Stableswap with volatility-scaled fee",
+    blocks: () => [
+      createAMMBlockInstance("curve_stable"),
+      createAMMBlockInstance("fee_dynamic"),
+    ],
+  },
+  {
+    name: "Protected CP",
+    description: "CP with slippage guard + price band",
+    blocks: () => [
+      createAMMBlockInstance("curve_cp"),
+      createAMMBlockInstance("guard_slippage"),
+      createAMMBlockInstance("guard_price_band"),
+    ],
+  },
+  {
+    name: "Anti-MEV Pool",
+    description: "CP with anti-sandwich + oracle check",
+    blocks: () => [
+      createAMMBlockInstance("curve_cp"),
+      createAMMBlockInstance("fee_base"),
+      createAMMBlockInstance("guard_sandwich"),
+      createAMMBlockInstance("guard_oracle_check"),
+    ],
+  },
+  {
+    name: "Wide Range CL",
+    description: "Concentrated liquidity (0.5-2.0)",
+    blocks: () => {
+      const block = createAMMBlockInstance("curve_cpmm_v3");
+      block.params.lower = 0.5;
+      block.params.upper = 2.0;
+      return [block];
+    },
+  },
+];
+
+type RightPanelTab = "preview" | "simulate" | "compare";
+
+const KEYBOARD_SHORTCUTS = [
+  { keys: ["Ctrl", "Z"], action: "Undo" },
+  { keys: ["Ctrl", "Shift", "Z"], action: "Redo" },
+  { keys: ["Ctrl", "Y"], action: "Redo (alt)" },
+  { keys: ["Ctrl", "S"], action: "Save snapshot" },
+  { keys: ["Ctrl", "E"], action: "Export JSON" },
 ];
 
 export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean }) {
@@ -104,6 +191,9 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
   const [future, setFuture] = useState<AMMDesign[]>([]);
   const [importJSON, setImportJSON] = useState("");
   const [savedDesigns, setSavedDesigns] = useState<DesignSnapshot[]>([]);
+  const [rightTab, setRightTab] = useState<RightPanelTab>("preview");
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [comparisonDesigns, setComparisonDesigns] = useState<DesignSnapshot[]>([]);
 
   useEffect(() => {
     try {
@@ -158,6 +248,14 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
         event.preventDefault();
         redo();
       }
+      if (event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        saveSnapshot();
+      }
+      if (event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        exportJSON();
+      }
     };
 
     window.addEventListener("keydown", handleKeys);
@@ -206,6 +304,21 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
     }));
   }, [updateDesign]);
 
+  const handleDuplicate = useCallback((uid: string) => {
+    updateDesign((d) => ({
+      ...d,
+      blocks: duplicateBlockInTree(d.blocks, uid),
+    }));
+    toast.success("Block duplicated");
+  }, [updateDesign]);
+
+  const handleReorder = useCallback((uid: string, direction: "up" | "down") => {
+    updateDesign((d) => ({
+      ...d,
+      blocks: reorderBlock(d.blocks, uid, direction),
+    }));
+  }, [updateDesign]);
+
   const loadPreset = (preset: (typeof PRESETS)[number]) => {
     updateDesign((current) => ({
       ...current,
@@ -221,7 +334,7 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
       createdAt: new Date().toISOString(),
       blocks: cloneBlocks(design.blocks),
     };
-    const updated = [next, ...savedDesigns].slice(0, 10);
+    const updated = [next, ...savedDesigns].slice(0, 20);
     setSavedDesigns(updated);
     localStorage.setItem(SAVED_DESIGNS_KEY, JSON.stringify(updated));
     toast.success("Saved snapshot locally");
@@ -234,6 +347,22 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
       blocks: cloneBlocks(snapshot.blocks),
     }));
     toast.success(`Loaded snapshot: ${snapshot.name}`);
+  };
+
+  const deleteSnapshot = (id: string) => {
+    const updated = savedDesigns.filter((s) => s.id !== id);
+    setSavedDesigns(updated);
+    localStorage.setItem(SAVED_DESIGNS_KEY, JSON.stringify(updated));
+    toast.success("Deleted snapshot");
+  };
+
+  const toggleComparison = (snapshot: DesignSnapshot) => {
+    const exists = comparisonDesigns.find((c) => c.id === snapshot.id);
+    if (exists) {
+      setComparisonDesigns(comparisonDesigns.filter((c) => c.id !== snapshot.id));
+    } else {
+      setComparisonDesigns([...comparisonDesigns, snapshot].slice(0, 4));
+    }
   };
 
   const importFromJSON = () => {
@@ -253,7 +382,6 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
     }
   };
 
-
   const clearDesign = () => {
     updateDesign((current) => ({ ...current, blocks: [] }));
   };
@@ -261,12 +389,20 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
   const stats = useMemo(() => {
     const tree = traverseBlocks(design.blocks);
     const rootCurves = design.blocks.filter((b) => getAMMBlockDef(b.blockId)?.category === "curve").length;
+    const oracleBlocks = design.blocks.filter((b) => getAMMBlockDef(b.blockId)?.category === "oracle").length;
+    const securityBlocks = design.blocks.filter((b) => getAMMBlockDef(b.blockId)?.category === "security").length;
+    const feeBlocks = design.blocks.filter((b) => getAMMBlockDef(b.blockId)?.category === "fee").length;
     return {
       ...tree,
       rootCurves,
+      oracleBlocks,
+      securityBlocks,
+      feeBlocks,
       warnings: [
         tree.unresolvedInputs > 0 ? `${tree.unresolvedInputs} unresolved operation input(s)` : null,
         rootCurves > 1 ? "Multiple top-level curve templates detected" : null,
+        rootCurves === 0 && tree.total > 0 ? "No curve template — add one to define the invariant" : null,
+        securityBlocks > 0 && feeBlocks === 0 ? "Security guards active but no fee block defined" : null,
       ].filter(Boolean) as string[],
     };
   }, [design.blocks]);
@@ -294,6 +430,16 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
     });
     toast.success("Downloaded Solidity file");
   };
+
+  // Prepare comparison curves for the preview overlay
+  const comparisonCurves = useMemo(
+    () =>
+      comparisonDesigns.map((snap) => ({
+        name: snap.name,
+        blocks: snap.blocks,
+      })),
+    [comparisonDesigns]
+  );
 
   return (
     <div className={`${embedded ? "" : "min-h-screen"} bg-background flex flex-col flex-1`}>
@@ -342,12 +488,13 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
             <h3 className="text-[10px] font-semibold text-foreground uppercase tracking-wider mb-2">
               Presets
             </h3>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
               {PRESETS.map((p) => (
                 <button
                   key={p.name}
                   onClick={() => loadPreset(p)}
                   className="px-2 py-1 rounded bg-secondary text-[9px] text-foreground hover:bg-accent border border-border transition-colors"
+                  title={p.description}
                 >
                   {p.name}
                 </button>
@@ -359,13 +506,49 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
             <h3 className="text-[10px] font-semibold text-foreground uppercase tracking-wider">
               Block Palette
             </h3>
-            <button
-              onClick={clearDesign}
-              className="text-[9px] text-muted-foreground hover:text-destructive transition-colors"
-            >
-              Clear All
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowShortcuts(!showShortcuts)}
+                className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                title="Keyboard shortcuts"
+              >
+                <Keyboard className="w-3 h-3" />
+              </button>
+              <button
+                onClick={clearDesign}
+                className="text-[9px] text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Clear All
+              </button>
+            </div>
           </div>
+
+          {/* Keyboard shortcuts panel */}
+          {showShortcuts && (
+            <div className="mb-3 rounded-lg border border-border bg-secondary p-2 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[9px] font-semibold text-foreground uppercase">Shortcuts</p>
+                <button onClick={() => setShowShortcuts(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              {KEYBOARD_SHORTCUTS.map((shortcut) => (
+                <div key={shortcut.action} className="flex items-center justify-between text-[9px]">
+                  <span className="text-muted-foreground">{shortcut.action}</span>
+                  <div className="flex items-center gap-0.5">
+                    {shortcut.keys.map((key) => (
+                      <kbd
+                        key={key}
+                        className="px-1 py-0.5 rounded bg-background border border-border text-[8px] font-mono"
+                      >
+                        {key}
+                      </kbd>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="flex-1 overflow-hidden">
             <AMMBlockPalette onAddBlock={addBlock} />
@@ -415,6 +598,8 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
               onUpdateParam={handleUpdateParam}
               onAddChild={addChild}
               onAddInput={addInput}
+              onDuplicateBlock={handleDuplicate}
+              onReorderBlock={handleReorder}
               onDropBlock={(blockId, targetUid, position) => {
                 if (targetUid && position === "child") {
                   addChild(targetUid, blockId);
@@ -428,53 +613,167 @@ export default function AMMBuilderLab({ embedded = false }: { embedded?: boolean
           </div>
         </div>
 
-        {/* Right: Curve Preview */}
-        <div className="w-96 border-l border-border p-4 overflow-auto shrink-0">
-          <AMMCurvePreview design={design} k={k} showBaseline />
-
-          <div className="mt-4 space-y-2 rounded-lg border border-border p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide">Builder Insights</p>
-            <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <div className="rounded border border-border p-2">Blocks: <strong>{stats.total}</strong></div>
-              <div className="rounded border border-border p-2">Max Depth: <strong>{stats.maxDepth}</strong></div>
-              <div className="rounded border border-border p-2">Root Curves: <strong>{stats.rootCurves}</strong></div>
-              <div className="rounded border border-border p-2">Unresolved Inputs: <strong>{stats.unresolvedInputs}</strong></div>
-            </div>
-            {stats.warnings.length === 0 ? (
-              <p className="inline-flex items-center gap-1 text-[10px] text-emerald-500"><CheckCircle2 className="w-3 h-3" /> No structural warnings</p>
-            ) : (
-              <div className="space-y-1">
-                {stats.warnings.map((warning) => (
-                  <p key={warning} className="inline-flex items-center gap-1 text-[10px] text-warning"><AlertTriangle className="w-3 h-3" /> {warning}</p>
-                ))}
-              </div>
-            )}
+        {/* Right: Tabbed Panel */}
+        <div className="w-96 border-l border-border flex flex-col overflow-hidden shrink-0">
+          {/* Tab bar */}
+          <div className="flex items-center border-b border-border px-2 pt-2 gap-1 shrink-0">
+            {(
+              [
+                { id: "preview", label: "Preview", icon: Eye },
+                { id: "simulate", label: "Simulate", icon: Layers },
+                { id: "compare", label: "Compare", icon: Layers },
+              ] as const
+            ).map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setRightTab(tab.id)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-t-lg text-[10px] font-medium transition-all ${
+                    rightTab === tab.id
+                      ? "bg-background text-foreground border border-b-0 border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="w-3 h-3" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="mt-4 space-y-2 rounded-lg border border-border p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-semibold uppercase tracking-wide">Power Tools</p>
-              <button onClick={saveSnapshot} className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-1 text-[10px] border border-border"><Save className="w-3 h-3" /> Snapshot</button>
-            </div>
-            <textarea
-              value={importJSON}
-              onChange={(e) => setImportJSON(e.target.value)}
-              placeholder='Paste exported JSON (e.g. {"design": {...}})'
-              className="h-24 w-full rounded border border-border bg-background p-2 text-[10px] font-mono outline-none"
-            />
-            <button onClick={importFromJSON} className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px]"><Upload className="w-3 h-3" /> Import JSON</button>
-            {savedDesigns.length > 0 && (
-              <div className="space-y-1">
-                {savedDesigns.map((snapshot) => (
-                  <button
-                    key={snapshot.id}
-                    onClick={() => loadSnapshot(snapshot)}
-                    className="flex w-full items-center justify-between rounded border border-border px-2 py-1 text-[10px] hover:bg-secondary"
-                  >
-                    <span className="truncate">{snapshot.name}</span>
-                    <span className="text-muted-foreground">{new Date(snapshot.createdAt).toLocaleDateString()}</span>
-                  </button>
-                ))}
+          <div className="flex-1 overflow-auto p-4">
+            {/* Preview Tab */}
+            {rightTab === "preview" && (
+              <>
+                <AMMCurvePreview design={design} k={k} showBaseline comparisons={comparisonCurves} />
+
+                <div className="mt-4 space-y-2 rounded-lg border border-border p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide">Builder Insights</p>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="rounded border border-border p-2">Blocks: <strong>{stats.total}</strong></div>
+                    <div className="rounded border border-border p-2">Max Depth: <strong>{stats.maxDepth}</strong></div>
+                    <div className="rounded border border-border p-2">Root Curves: <strong>{stats.rootCurves}</strong></div>
+                    <div className="rounded border border-border p-2">Unresolved: <strong>{stats.unresolvedInputs}</strong></div>
+                    {stats.oracleBlocks > 0 && (
+                      <div className="rounded border border-yellow-500/30 p-2 text-yellow-500">Oracle: <strong>{stats.oracleBlocks}</strong></div>
+                    )}
+                    {stats.securityBlocks > 0 && (
+                      <div className="rounded border border-red-500/30 p-2 text-red-400">Guards: <strong>{stats.securityBlocks}</strong></div>
+                    )}
+                  </div>
+                  {stats.warnings.length === 0 ? (
+                    <p className="inline-flex items-center gap-1 text-[10px] text-emerald-500"><CheckCircle2 className="w-3 h-3" /> No structural warnings</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {stats.warnings.map((warning) => (
+                        <p key={warning} className="inline-flex items-center gap-1 text-[10px] text-warning"><AlertTriangle className="w-3 h-3" /> {warning}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 space-y-2 rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide">Power Tools</p>
+                    <button onClick={saveSnapshot} className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-1 text-[10px] border border-border"><Save className="w-3 h-3" /> Snapshot</button>
+                  </div>
+                  <textarea
+                    value={importJSON}
+                    onChange={(e) => setImportJSON(e.target.value)}
+                    placeholder='Paste exported JSON (e.g. {"design": {...}})'
+                    className="h-20 w-full rounded border border-border bg-background p-2 text-[10px] font-mono outline-none"
+                  />
+                  <button onClick={importFromJSON} className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px]"><Upload className="w-3 h-3" /> Import JSON</button>
+                  {savedDesigns.length > 0 && (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {savedDesigns.map((snapshot) => (
+                        <div key={snapshot.id} className="flex items-center gap-1">
+                          <button
+                            onClick={() => loadSnapshot(snapshot)}
+                            className="flex flex-1 items-center justify-between rounded border border-border px-2 py-1 text-[10px] hover:bg-secondary min-w-0"
+                          >
+                            <span className="truncate">{snapshot.name}</span>
+                            <span className="text-muted-foreground shrink-0 ml-1">{new Date(snapshot.createdAt).toLocaleDateString()}</span>
+                          </button>
+                          <button
+                            onClick={() => deleteSnapshot(snapshot.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                            title="Delete snapshot"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Simulate Tab */}
+            {rightTab === "simulate" && (
+              <AMMTradeSimulator design={design} k={k} />
+            )}
+
+            {/* Compare Tab */}
+            {rightTab === "compare" && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide">
+                  Curve Comparison
+                </p>
+                <p className="text-[9px] text-muted-foreground">
+                  Select saved snapshots to overlay on the curve preview. Toggle visibility below, then switch to the Preview tab to see overlays.
+                </p>
+
+                {savedDesigns.length === 0 ? (
+                  <div className="text-center py-6">
+                    <p className="text-[10px] text-muted-foreground">No saved snapshots yet.</p>
+                    <p className="text-[9px] text-muted-foreground mt-1">
+                      Save a snapshot first (Preview tab → Snapshot), then compare curves here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {savedDesigns.map((snapshot) => {
+                      const isActive = comparisonDesigns.some((c) => c.id === snapshot.id);
+                      return (
+                        <button
+                          key={snapshot.id}
+                          onClick={() => toggleComparison(snapshot)}
+                          className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-[10px] transition-colors ${
+                            isActive
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          {isActive ? <Eye className="w-3 h-3 text-primary shrink-0" /> : <EyeOff className="w-3 h-3 shrink-0" />}
+                          <span className="truncate flex-1 text-left">{snapshot.name}</span>
+                          <span className="text-[8px] shrink-0">
+                            {new Date(snapshot.createdAt).toLocaleDateString()}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {comparisonDesigns.length > 0 && (
+                  <div className="rounded border border-primary/20 bg-primary/5 p-2">
+                    <p className="text-[9px] text-primary font-medium">
+                      {comparisonDesigns.length} curve{comparisonDesigns.length > 1 ? "s" : ""} selected for overlay.
+                      Switch to Preview tab to see them.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setComparisonDesigns([]);
+                      }}
+                      className="text-[9px] text-muted-foreground hover:text-destructive mt-1"
+                    >
+                      Clear all overlays
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

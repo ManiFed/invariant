@@ -1,24 +1,34 @@
 import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 import { useChartColors } from "@/hooks/use-chart-theme";
 import {
   type AMMDesign,
+  type AMMBlockInstance,
   evaluateAMMCurve,
   compileAMMDesign,
 } from "@/lib/amm-blocks";
+
+interface ComparisonCurve {
+  name: string;
+  blocks: AMMBlockInstance[];
+  color?: string;
+}
 
 interface Props {
   design: AMMDesign;
   k?: number;
   showBaseline?: boolean;
+  comparisons?: ComparisonCurve[];
 }
 
-export default function AMMCurvePreview({ design, k = 10000, showBaseline = true }: Props) {
+const COMPARISON_COLORS = ["#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"];
+
+export default function AMMCurvePreview({ design, k = 10000, showBaseline = true, comparisons = [] }: Props) {
   const colors = useChartColors();
 
   const { curveData, baselineData, compiled } = useMemo(() => {
     const curveData = evaluateAMMCurve(design, k, 100);
-    
+
     // Baseline: constant product x * y = k
     const baselineData = curveData.map((p) => ({
       x: p.x,
@@ -30,9 +40,31 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
     return { curveData, baselineData, compiled };
   }, [design, k]);
 
-  // Find reasonable axis bounds
-  const maxX = curveData.length > 0 ? Math.max(...curveData.map((p) => p.x)) : 200;
-  const maxY = curveData.length > 0 ? Math.max(...curveData.map((p) => p.y)) : 200;
+  // Generate comparison curve data
+  const comparisonData = useMemo(() => {
+    return comparisons.map((comp, i) => {
+      const compDesign: AMMDesign = { id: `comp-${i}`, name: comp.name, blocks: comp.blocks };
+      return {
+        name: comp.name,
+        color: comp.color || COMPARISON_COLORS[i % COMPARISON_COLORS.length],
+        data: evaluateAMMCurve(compDesign, k, 100),
+      };
+    });
+  }, [comparisons, k]);
+
+  // Find reasonable axis bounds (including comparison curves)
+  const allPoints = [
+    ...curveData,
+    ...comparisonData.flatMap((c) => c.data),
+  ];
+  const maxX = allPoints.length > 0 ? Math.max(...allPoints.map((p) => p.x)) : 200;
+  const maxY = allPoints.length > 0 ? Math.max(...allPoints.map((p) => p.y)) : 200;
+
+  // Collect all security/oracle blocks for display
+  const specialBlocks = design.blocks.filter((b) => {
+    const cat = b.blockId.startsWith("guard_") ? "security" : b.blockId.startsWith("oracle_") ? "oracle" : null;
+    return cat !== null;
+  });
 
   return (
     <div className="flex flex-col">
@@ -54,6 +86,22 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
             Fee: {compiled.feeLogic}
           </p>
         )}
+        {specialBlocks.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {specialBlocks.map((b) => (
+              <span
+                key={b.uid}
+                className={`text-[8px] px-1.5 py-0.5 rounded-full border ${
+                  b.blockId.startsWith("guard_")
+                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                    : "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                }`}
+              >
+                {b.blockId.startsWith("guard_") ? "GUARD" : "ORACLE"}: {b.blockId.replace("guard_", "").replace("oracle_", "")}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Curve chart */}
@@ -62,9 +110,16 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
           <span className="text-[10px] font-semibold text-foreground">
             Curve Visualization
           </span>
-          <span className="text-[9px] text-muted-foreground">
-            k = {k.toLocaleString()}
-          </span>
+          <div className="flex items-center gap-2">
+            {comparisonData.length > 0 && (
+              <span className="text-[9px] text-muted-foreground">
+                +{comparisonData.length} overlay{comparisonData.length > 1 ? "s" : ""}
+              </span>
+            )}
+            <span className="text-[9px] text-muted-foreground">
+              k = {k.toLocaleString()}
+            </span>
+          </div>
         </div>
 
         <div className="h-[260px]">
@@ -99,6 +154,15 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
                 labelFormatter={(x) => `x = ${Number(x).toFixed(2)}`}
               />
 
+              {(comparisonData.length > 0 || showBaseline) && (
+                <Legend
+                  verticalAlign="top"
+                  height={20}
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: 9 }}
+                />
+              )}
+
               {/* Baseline (constant product) */}
               {showBaseline && baselineData.length > 0 && (
                 <Line
@@ -112,6 +176,21 @@ export default function AMMCurvePreview({ design, k = 10000, showBaseline = true
                   name="Baseline (xy=k)"
                 />
               )}
+
+              {/* Comparison curves */}
+              {comparisonData.map((comp) => (
+                <Line
+                  key={comp.name}
+                  data={comp.data}
+                  dataKey="y"
+                  type="monotone"
+                  stroke={comp.color}
+                  strokeWidth={1.5}
+                  strokeDasharray="6 3"
+                  dot={false}
+                  name={comp.name}
+                />
+              ))}
 
               {/* User's curve */}
               {curveData.length > 0 && (

@@ -27,6 +27,8 @@ function categoryBg(cat: AMMBlockCategory): string {
     fee: "from-cyan-500 to-teal-600",
     multiasset: "from-orange-500 to-amber-600",
     timevar: "from-indigo-500 to-purple-600",
+    oracle: "from-yellow-500 to-amber-500",
+    security: "from-red-600 to-rose-700",
   };
   return map[cat] || "from-gray-500 to-gray-600";
 }
