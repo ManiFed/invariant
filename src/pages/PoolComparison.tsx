@@ -296,8 +296,8 @@ const PoolComparison = () => {
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={slippageData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-                <XAxis dataKey="tradeSize" tick={{ fontSize: 10, fill: colors.text }} />
-                <YAxis tick={{ fontSize: 10, fill: colors.text }} unit="%" />
+                <XAxis dataKey="tradeSize" tick={{ fontSize: 10, fill: colors.tick }} />
+                <YAxis tick={{ fontSize: 10, fill: colors.tick }} unit="%" />
                 <Tooltip contentStyle={{ backgroundColor: colors.tooltipBg, border: `1px solid ${colors.grid}`, borderRadius: 8, fontSize: 11 }} />
                 {pools.map(pool => (
                   <Area key={pool.id} type="monotone" dataKey={pool.id} name={pool.name} stroke={pool.color} fill={pool.color} fillOpacity={0.1} strokeWidth={2} />
@@ -315,8 +315,8 @@ const PoolComparison = () => {
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={ilData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
-                <XAxis dataKey="priceRatio" tick={{ fontSize: 10, fill: colors.text }} label={{ value: "Price Ratio", position: "bottom", fontSize: 10, fill: colors.text }} />
-                <YAxis tick={{ fontSize: 10, fill: colors.text }} unit="%" />
+                <XAxis dataKey="priceRatio" tick={{ fontSize: 10, fill: colors.tick }} label={{ value: "Price Ratio", position: "bottom", fontSize: 10, fill: colors.tick }} />
+                <YAxis tick={{ fontSize: 10, fill: colors.tick }} unit="%" />
                 <Tooltip contentStyle={{ backgroundColor: colors.tooltipBg, border: `1px solid ${colors.grid}`, borderRadius: 8, fontSize: 11 }} />
                 {pools.map(pool => (
                   <Area key={pool.id} type="monotone" dataKey={pool.id} name={pool.name} stroke={pool.color} fill={pool.color} fillOpacity={0.1} strokeWidth={2} />
@@ -337,8 +337,8 @@ const PoolComparison = () => {
             <ResponsiveContainer width="100%" height={280}>
               <RadarChart data={radarData}>
                 <PolarGrid stroke={colors.grid} />
-                <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: colors.text }} />
-                <PolarRadiusAxis tick={{ fontSize: 9, fill: colors.text }} domain={[0, 100]} />
+                <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: colors.tick }} />
+                <PolarRadiusAxis tick={{ fontSize: 9, fill: colors.tick }} domain={[0, 100]} />
                 {pools.map(pool => (
                   <Radar key={pool.id} name={pool.name} dataKey={pool.id} stroke={pool.color} fill={pool.color} fillOpacity={0.15} strokeWidth={2} />
                 ))}
