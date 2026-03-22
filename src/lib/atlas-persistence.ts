@@ -98,10 +98,9 @@ interface SerializedPopulation {
 }
 
 function serializePopulation(p: PopulationState): SerializedPopulation {
-  const metricChampions: Record<ChampionMetric, SerializedCandidate | null> = {} as any;
-  for (const [k, v] of Object.entries(p.metricChampions)) {
-    metricChampions[k as ChampionMetric] = v ? serializeCandidate(v) : null;
-  }
+  const metricChampions = Object.fromEntries(
+    Object.entries(p.metricChampions).map(([k, v]) => [k, v ? serializeCandidate(v) : null])
+  ) as Record<ChampionMetric, SerializedCandidate | null>;
   return {
     regime: p.regime,
     candidates: p.candidates.map(serializeCandidate),
@@ -113,10 +112,9 @@ function serializePopulation(p: PopulationState): SerializedPopulation {
 }
 
 function deserializePopulation(s: SerializedPopulation): PopulationState {
-  const metricChampions: Record<ChampionMetric, Candidate | null> = {} as any;
-  for (const [k, v] of Object.entries(s.metricChampions)) {
-    metricChampions[k as ChampionMetric] = v ? deserializeCandidate(v) : null;
-  }
+  const metricChampions = Object.fromEntries(
+    Object.entries(s.metricChampions).map(([k, v]) => [k, v ? deserializeCandidate(v) : null])
+  ) as Record<ChampionMetric, Candidate | null>;
   return {
     regime: s.regime,
     candidates: s.candidates.map(deserializeCandidate),
