@@ -26,6 +26,7 @@ import MEVLab from "./pages/MEVLab";
 import CompilerLab from "./pages/CompilerLab";
 import AMMBuilderLab from "./pages/AMMBuilderLab";
 import Challenges from "./pages/Challenges";
+import Applications from "./pages/Applications";
 import NotFound from "./pages/NotFound";
 import FloatingAIChat from "./components/FloatingAIChat";
 import { AmmyContextProvider } from "./lib/ammy-context";
@@ -79,6 +80,7 @@ const App = () => (
             <Route path="/labs/mev" element={<MEVLab />} />
             <Route path="/labs/compiler" element={<CompilerLab />} />
             <Route path="/labs/amm-builder" element={<AMMBuilderLab />} />
+            <Route path="/applications" element={<Applications />} />
             <Route path="/challenges" element={<Navigate to="/learn?mode=challenges" replace />} />
             {/* Forecast Lab — separate service */}
             <Route path={forecastRoute()} element={<ForecastIndex />} />
