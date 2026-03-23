@@ -12,6 +12,7 @@ import {
   Puzzle,
   GitCompare,
   Keyboard,
+  Rocket,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { AsciiCurveHero } from "@/components/AsciiCurveHero";
@@ -107,6 +108,15 @@ const Index = () => {
             badge="New"
             badgeColor="border-warning/30 text-warning"
             onClick={() => navigate("/labs")}
+          />
+
+          <NavCard
+            title="Applications"
+            description="Deploy AMMs into a live testnet with customizable bot traders and real-time simulation"
+            icon={<Rocket className="w-5 h-5" />}
+            badge="New"
+            badgeColor="border-warning/30 text-warning"
+            onClick={() => navigate("/applications")}
           />
 
           <NavCard
